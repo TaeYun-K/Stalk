@@ -8,11 +8,6 @@ pipeline {
   }
 
   stages {
-    stage('Git Pull') {
-      steps {
-        git branch: 'main', url: 'https://github.com/your-user/your-repo.git'
-      }
-    }
 
     stage('Build JAR') {
       steps {
