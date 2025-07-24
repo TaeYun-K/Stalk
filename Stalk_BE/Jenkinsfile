@@ -8,7 +8,7 @@ pipeline {
   stages {
     stage('Build JAR') {
       steps {
-        dir('stalk_BE') {
+        dir('Stalk_BE') {
           sh './gradlew clean build'
         }
       }
@@ -16,7 +16,7 @@ pipeline {
 
     stage('Docker Build & Run') {
       steps {
-        dir('stalk_BE') {
+        dir('Stalk_BE') {
           sh '''
             docker stop stalk-be || true
             docker rm stalk-be || true
