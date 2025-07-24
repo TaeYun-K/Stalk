@@ -21,7 +21,7 @@ pipeline {
             docker stop stalk-be || true
             docker rm stalk-be || true
             docker build -t $DOCKER_IMAGE .
-            docker run -d -p 8080:8080 --name stalk-be $DOCKER_IMAGE
+            docker run -d -p 8081:8080 --name stalk-be $DOCKER_IMAGE
           '''
         }
       }
