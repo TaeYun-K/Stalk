@@ -11,13 +11,17 @@ pipeline {
 
     stage('Build JAR') {
       steps {
-        sh './gradlew clean build'
+        dir('stalk_BE') {
+          sh './gradlew clean build'
+        }
       }
     }
 
     stage('Docker Build') {
       steps {
-        sh 'docker build -t $DOCKER_IMAGE .'
+        dir('stalk_BE') {
+          sh 'docker build -t $DOCKER_IMAGE .'
+        }
       }
     }
 
