@@ -1,0 +1,51 @@
+pipeline {
+  agent any
+
+  environment {
+    DOCKER_IMAGE = "my-spring-app:latest"
+    EC2_HOST = "ec2-user@<EC2-IP>"
+    EC2_SSH_KEY = "~/.ssh/your-key.pem"
+  }
+
+  stages {
+    stage('Git Pull') {
+      steps {
+        git branch: 'main', url: 'https://github.com/your-user/your-repo.git'
+      }
+    }
+
+    stage('Build JAR') {
+      steps {
+        sh './gradlew clean build'
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        sh 'docker build -t $DOCKER_IMAGE .'
+      }
+    }
+
+    stage('Copy Image to EC2') {
+      steps {
+        sh '''
+          docker save -o spring-app.tar $DOCKER_IMAGE
+          scp -i $EC2_SSH_KEY -o StrictHostKeyChecking=no spring-app.tar $EC2_HOST:/home/ec2-user/
+        '''
+      }
+    }
+
+    stage('Run on EC2') {
+      steps {
+        sh '''
+          ssh -i $EC2_SSH_KEY -o StrictHostKeyChecking=no $EC2_HOST << EOF
+            docker load -i spring-app.tar
+            docker stop spring-app || true
+            docker rm spring-app || true
+            docker run -d -p 8080:8080 --name spring-app $DOCKER_IMAGE
+          EOF
+        '''
+      }
+    }
+  }
+}
