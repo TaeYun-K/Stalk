@@ -1,0 +1,30 @@
+pipeline {
+  agent any
+
+  environment {
+    DOCKER_IMAGE = "stalk-be:latest"
+  }
+
+  stages {
+    stage('Build JAR') {
+      steps {
+        dir('Stalk_BE') {
+          sh './gradlew clean build -x test'
+        }
+      }
+    }
+
+    stage('Docker Build & Run') {
+      steps {
+        dir('Stalk_BE') {
+          sh '''
+            docker stop stalk-be || true
+            docker rm stalk-be || true
+            docker build -t $DOCKER_IMAGE .
+            docker run -d -p 8081:8080 --name stalk-be $DOCKER_IMAGE
+          '''
+        }
+      }
+    }
+  }
+}
