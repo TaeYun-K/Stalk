@@ -20,7 +20,7 @@ pipeline {
 
           sh """
             echo "🚀 FE docker-compose 실행 중..."
-            docker compose -f ${COMPOSE_FILE} up -d --build
+            docker compose -f ${COMPOSE_FILE} up -d --build stalk-fe
           """
         }
       }
