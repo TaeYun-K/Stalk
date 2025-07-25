@@ -9,7 +9,7 @@ pipeline {
     stage('Docker Build & Run') {
       steps {
         // Secret file 로드 + 실제 resources 폴더에 복사
-        withCredentials([file(credentialsId: 'APP_CONFIG_FILE', variable: 'APP_PROPS_FILE')]) {
+        withCredentials([file(credentialsId: 'properties', variable: 'APP_PROPS_FILE')]) {
           dir('Stalk_BE') {
             sh '''
               echo "📦 application.properties 복사 중..."
