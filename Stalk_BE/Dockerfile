@@ -15,6 +15,9 @@ WORKDIR /app
 # 빌드된 JAR만 복사
 COPY --from=builder /app/build/libs/*.jar app.jar
 
+# application.properties 복사 (JAR 안에서 참조될 위치로)
+COPY application.properties /app/src/main/resources/application.properties
+
 EXPOSE 8081
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
