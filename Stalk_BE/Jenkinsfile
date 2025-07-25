@@ -28,6 +28,9 @@ pipeline {
                 echo "📦 application.properties 복사 중..."
                 rm -f application.properties
                 cp -f "$APP_PROPS_FILE" application.properties
+                ls -al Stalk_BE/application.properties
+                cat Stalk_BE/application.properties
+
               """
             }
 
@@ -37,6 +40,8 @@ pipeline {
 
               echo "🚀 도커 컴포즈로 빌드 및 실행..."
               docker compose -f ${COMPOSE_FILE} up -d --build stalk-be
+              docker exec -it stalk-be-dev cat /app/src/main/resources/application.properties
+
             """
           }
         }
