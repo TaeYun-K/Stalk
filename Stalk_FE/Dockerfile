@@ -1,22 +1,18 @@
-FROM node:18-alpine AS builder
+FROM node:18-alpine
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install
+
 COPY . .
+
 RUN npm run build
 
-FROM node:18-alpine
-WORKDIR /app
+# 정적 파일 서버 설치
 RUN npm install -g serve
-COPY --from=builder /app/dist ./dist
-
-# SPA 라우팅을 위한 설정 파일 생성
-RUN echo '{ \
-  "public": "dist", \
-  "rewrites": [ \
-    { "source": "**", "destination": "/index.html" } \
-  ] \
-}' > serve.json
 
 EXPOSE 3000
-CMD ["serve", "-c", "serve.json", "-l", "3000"]
+
+# dist 폴더의 빌드된 파일을 서빙
+CMD ["serve", "-s", "build", "-l", "3000"]
