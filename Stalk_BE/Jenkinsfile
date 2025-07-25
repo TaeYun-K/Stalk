@@ -10,7 +10,7 @@ pipeline {
       steps {
         script {
           // 변경된 파일 목록 가져오기
-          def changed = sh(script: "git diff --name-only HEAD~1 || true", returnStdout: true).trim()
+          def changed = sh(script: "git diff --name-only origin/${BRANCH_NAME}", returnStdout: true).trim()
 
           // Stalk_BE 디렉토리만 감지
           if (!changed.contains("Stalk_BE/")) {
@@ -26,6 +26,7 @@ pipeline {
             dir('Stalk_BE') {
               sh """
                 echo "📦 application.properties 복사 중..."
+                mkdir -p src/main/resources
                 cp \$APP_PROPS_FILE src/main/resources/application.properties
               """
             }
