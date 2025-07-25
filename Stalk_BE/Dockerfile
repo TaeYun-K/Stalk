@@ -16,7 +16,7 @@ WORKDIR /app
 COPY --from=builder /app/build/libs/*.jar app.jar
 
 # application.properties 복사 (JAR 안에서 참조될 위치로)
-COPY application.properties /app/src/main/resources/application.properties
+COPY application.properties /app/config/application.properties
 
 EXPOSE 8081
 
