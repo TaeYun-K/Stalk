@@ -26,7 +26,8 @@ pipeline {
             dir('Stalk_BE') {
               sh """
                 echo "📦 application.properties 복사 중..."
-                cp "\$APP_PROPS_FILE" application.properties
+                rm -f application.properties
+                cp -f "$APP_PROPS_FILE" application.properties
               """
             }
 
