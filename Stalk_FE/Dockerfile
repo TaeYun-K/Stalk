@@ -16,4 +16,4 @@ RUN ls -la node_modules/.bin && ls -la node_modules/vite
 EXPOSE 3000
 
 # 🔧 npx로 실행
-CMD ["npx", "vite", "preview", "--port", "3000"]
+CMD ["npx", "vite", "preview"]
