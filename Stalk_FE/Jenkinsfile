@@ -27,10 +27,10 @@ pipeline {
       }
     }
     
-    // stage('Deploy nginx') {
-    //   steps {
-    //       sh 'docker compose -f docker-compose.dev.yml up -d --no-deps nginx'
-    //     }
-    // }
+    stage('Deploy nginx') {
+      steps {
+          sh 'docker compose -f docker-compose.dev.yml up -d --no-deps nginx'
+        }
+    }
   }
 }
