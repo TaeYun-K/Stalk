@@ -2,32 +2,42 @@ pipeline {
   agent any
 
   environment {
-    DOCKER_IMAGE = "stalk-be:latest"
+    BRANCH_NAME = "${env.GIT_BRANCH}".replaceAll(".*/", "")
   }
 
   stages {
-    stage('Docker Build & Run') {
+    stage('Deploy BE') {
       steps {
-        // Secret file 로드 + 실제 resources 폴더에 복사
-        withCredentials([file(credentialsId: 'properties', variable: 'APP_PROPS_FILE')]) {
-          dir('Stalk_BE') {
-            sh '''
-              echo "📦 application.properties 복사 중..."
-              cp $APP_PROPS_FILE src/main/resources/application.properties
+        script {
+          // 변경된 파일 목록 가져오기
+          def changed = sh(script: "git diff --name-only origin/${BRANCH_NAME}", returnStdout: true).trim()
 
+          // Stalk_BE 디렉토리만 감지
+          if (!changed.contains("Stalk_BE/")) {
+            echo "🟡 BE 디렉토리 변경 없음 → 배포 생략"
+            return
+          }
+
+          def isProd = BRANCH_NAME == 'master'
+          def COMPOSE_FILE = isProd ? 'docker-compose.prod.yml' : 'docker-compose.dev.yml'
+          def CREDENTIAL_ID = isProd ? 'properties-prod' : 'properties-dev'
+
+          withCredentials([file(credentialsId: CREDENTIAL_ID, variable: 'APP_PROPS_FILE')]) {
+            dir('Stalk_BE') {
+              sh """
+                echo "📦 application.properties 복사 중..."
+                rm -f application.properties
+                cp -f "$APP_PROPS_FILE" application.properties
+              """
+            }
+
+            sh """
               echo "🛠️ 기존 컨테이너 정리..."
-              docker stop stalk-be || true
-              docker rm stalk-be || true
+              docker compose -f ${COMPOSE_FILE} down || true
 
-              echo "🐳 도커 빌드 시작..."
-              docker build -t $DOCKER_IMAGE .
-
-              echo "🚀 컨테이너 실행 중..."
-              docker run -d \
-                --add-host=host.docker.internal:host-gateway \
-                -p 8081:8081 \
-                --name stalk-be $DOCKER_IMAGE
-            '''
+              echo "🚀 도커 컴포즈로 빌드 및 실행..."
+              docker compose -f ${COMPOSE_FILE} up -d --build stalk-be
+            """
           }
         }
       }
