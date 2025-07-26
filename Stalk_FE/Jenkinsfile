@@ -11,7 +11,7 @@ pipeline {
         script {
           def changed = sh(script: "git diff --name-only HEAD~1 HEAD", returnStdout: true).trim()
 
-          필요하다면 FE 변경 여부로 배포 스킵 가능
+          //필요하다면 FE 변경 여부로 배포 스킵 가능
           if (!changed.contains("Stalk_FE/")) {
             echo "🟡 FE 디렉토리 변경 없음 → 배포 생략"
             return
