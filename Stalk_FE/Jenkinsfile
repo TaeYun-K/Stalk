@@ -29,7 +29,7 @@ pipeline {
     
     stage('Deploy nginx') {
        steps {
-          sh 'docker compose -f docker-compose.dev.yml up -d --build nginx stalk-fe-dev stalk-be-dev'
+          sh 'docker compose -f docker-compose.dev.yml up -d --build nginx stalk-fe stalk-be'
         }
     }
   }
