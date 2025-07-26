@@ -29,7 +29,14 @@ pipeline {
     
     stage('Deploy nginx') {
       steps {
-          sh 'docker compose -f docker-compose.dev.yml up -d --no-deps nginx'
+          def isProd = BRANCH_NAME == 'master'
+          def COMPOSE_FILE = isProd ? 'docker-compose.prod.yml' : 'docker-compose.dev.yml'
+          
+          sh """
+            echo "🛡️ nginx docker-compose 실행 중 (${COMPOSE_FILE})..."
+            docker compose -f ${COMPOSE_FILE} up -d --no-deps nginx
+          """
+          
         }
     }
   }
