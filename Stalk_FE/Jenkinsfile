@@ -9,7 +9,7 @@ pipeline {
     stage('Deploy FE') {
       steps {
         script {
-          def changed = sh(script: "git diff --name-only HEAD~1", returnStdout: true).trim()
+          def changed = sh(script: "git diff --name-only origin/${BRANCH_NAME}", returnStdout: true).trim()
 
           필요하다면 FE 변경 여부로 배포 스킵 가능
           if (!changed.contains("Stalk_FE/")) {
