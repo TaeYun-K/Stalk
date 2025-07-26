@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   stalk-be:
     container_name: stalk-be-prod
@@ -23,7 +21,7 @@ services:
       ports:
         - "3000:3000"
       extra_hosts:
-        -"host.docker.internal:host-gateway"          
+        - "host.docker.internal:host-gateway"          
       restart: always
 
   # docker-compose.prod.yml
@@ -31,7 +29,10 @@ services:
     image: nginx:latest
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/nginx.conf
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
-      - frontend
+      - stalk-be
+      - stalk-fe

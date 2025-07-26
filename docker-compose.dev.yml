@@ -1,5 +1,3 @@
-
-
 services:
   stalk-be:
     container_name: stalk-be-dev
