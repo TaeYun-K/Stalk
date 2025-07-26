@@ -35,3 +35,4 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
       - stalk-fe
+      - stalk-be
