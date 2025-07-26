@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   stalk-be:
@@ -37,5 +37,5 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/nginx.conf
       - ./nginx/ssl:/etc/letsencrypt
     depends_on:
-      - frontend
-      - backend
+      stalk-be: 
+      stalk-fe:  
