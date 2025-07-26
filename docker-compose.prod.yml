@@ -25,3 +25,13 @@ services:
       extra_hosts:
         -"host.docker.internal:host-gateway"          
       restart: always
+
+  # docker-compose.prod.yml
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/nginx.conf
+    depends_on:
+      - frontend
