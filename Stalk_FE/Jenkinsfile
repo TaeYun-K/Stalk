@@ -28,7 +28,7 @@ pipeline {
     }
     
     stage('Deploy nginx') {
-       steps {
+      steps {
           sh 'docker compose -f docker-compose.dev.yml up -d --no-deps nginx'
         }
     }
