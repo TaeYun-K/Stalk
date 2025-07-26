@@ -1,0 +1,38 @@
+services:
+  stalk-be:
+    container_name: stalk-be-dev
+    build:
+      context: ./Stalk_BE
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8081"  # 외부:내부 포트
+    volumes:
+      - ./stalk_BE/src:/app/src
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  
+    restart: always
+
+  stalk-fe:
+    container_name: stalk-fe-dev
+    build:
+      context: ./Stalk_FE
+    ports:
+      - "3001:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"        
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt
+    depends_on:
+      - stalk-fe
+      - stalk-be
