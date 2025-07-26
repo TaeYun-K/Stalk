@@ -14,15 +14,15 @@ services:
       - "host.docker.internal:host-gateway"      
     restart: always
 
-    stalk-fe:
-      container_name: stalk-fe-prod
-      build:
-        context: ./Stalk_FE
-      ports:
-        - "3000:3000"
-      extra_hosts:
-        - "host.docker.internal:host-gateway"          
-      restart: always
+  stalk-fe:
+    container_name: stalk-fe-prod
+    build:
+      context: ./Stalk_FE
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"          
+    restart: always
 
   # docker-compose.prod.yml
   nginx:
