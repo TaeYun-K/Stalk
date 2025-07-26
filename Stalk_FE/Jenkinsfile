@@ -11,6 +11,7 @@ pipeline {
         script {
           def changed = sh(script: "git diff --name-only HEAD~1", returnStdout: true).trim()
 
+          // 필요하다면 FE 변경 여부로 배포 스킵 가능
           // if (!changed.contains("Stalk_FE/")) {
           //   echo "🟡 FE 디렉토리 변경 없음 → 배포 생략"
           //   return
@@ -20,7 +21,7 @@ pipeline {
           def COMPOSE_FILE = isProd ? 'docker-compose.prod.yml' : 'docker-compose.dev.yml'
 
           sh """
-            echo "🚀 FE docker-compose 실행 중..."
+            echo "🚀 FE docker-compose 실행 중 (${COMPOSE_FILE})..."
             docker compose -f ${COMPOSE_FILE} up -d --build stalk-fe
           """
         }
@@ -38,6 +39,7 @@ pipeline {
             docker compose -f ${COMPOSE_FILE} up -d --no-deps nginx
           """
         }
+      }
     }
   }
 }
