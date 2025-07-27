@@ -13,6 +13,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
+    networks:
+      - stalk-dev-net
 
   stalk-fe:
     container_name: stalk-fe-dev
@@ -23,6 +25,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
+    networks:
+      - stalk-dev-net
 
   nginx:
     container_name: nginx-dev
@@ -34,3 +38,9 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
       - stalk-fe
+    networks:
+      - stalk-dev-net
+
+networks:
+  stalk-dev-net:
+    external: true

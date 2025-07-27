@@ -13,7 +13,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
-
+    networks:
+      - stalk-prod-net
   stalk-fe:
     container_name: stalk-fe-prod
     build:
@@ -23,6 +24,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
+    networks:
+      - stalk-prod-net
 
   # docker-compose.prod.yml
   nginx:
@@ -36,3 +39,9 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
       - stalk-fe
+    networks:
+      - stalk-prod-net
+
+networks:
+  stalk-prod-net:
+    external: true
