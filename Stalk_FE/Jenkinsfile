@@ -32,7 +32,7 @@ pipeline {
               }
             }
 
-            sh"""
+            sh """
                 echo "🗑️ 기존 FE 컨테이너 직접 삭제 (${CONTAINER})..."
                 docker rm -f ${CONTAINER} || true
 
