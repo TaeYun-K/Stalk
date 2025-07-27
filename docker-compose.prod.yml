@@ -15,6 +15,7 @@ services:
     restart: always
     networks:
       - stalk-prod-net
+
   stalk-fe:
     container_name: stalk-fe-prod
     build:
