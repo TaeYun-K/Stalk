@@ -35,5 +35,4 @@ services:
       - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf
       - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
-      - stalk-be
       - stalk-fe
