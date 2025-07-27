@@ -32,11 +32,12 @@ pipeline {
             }
 
             sh """
-              echo "🛠️ 기존 컨테이너 정리..."
-              docker compose -f ${COMPOSE_FILE} rm -sf stalk-be || true
-
-              echo "🚀 도커 컴포즈로 빌드 및 실행..."
-              docker compose -f ${COMPOSE_FILE} up -d --build stalk-be
+              echo "🚀 backend 강제 재생성 중 (${COMPOSE_FILE})..."
+              docker compose -f ${COMPOSE_FILE} up -d \\
+              --build \\
+              --force-recreate \\
+              --remove-orphans \\
+              stalk-be
             """
           }
         }
