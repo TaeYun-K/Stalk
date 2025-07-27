@@ -5,13 +5,13 @@ services:
       context: ./Stalk_BE
       dockerfile: Dockerfile
     ports:
-      - "8082:8081"  # 외부:내부 포트
+      - "8082:8081" # 외부:내부 포트
     volumes:
       - ./stalk_BE/src:/app/src
     environment:
       - SPRING_PROFILES_ACTIVE=dev
     extra_hosts:
-      - "host.docker.internal:host-gateway"  
+      - "host.docker.internal:host-gateway"
     restart: always
 
   stalk-fe:
@@ -21,7 +21,7 @@ services:
     ports:
       - "3001:3000"
     extra_hosts:
-      - "host.docker.internal:host-gateway"        
+      - "host.docker.internal:host-gateway"
     restart: always
 
   nginx:
@@ -34,4 +34,3 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
       - stalk-fe
-      - stalk-be
