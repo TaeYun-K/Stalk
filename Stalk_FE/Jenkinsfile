@@ -57,7 +57,7 @@ pipeline {
             docker rm -f ${CONTAINER} || true
 
             echo "🛡️ nginx docker-compose 실행 중 (${COMPOSE_FILE})..."
-            docker compose -f ${COMPOSE_FILE} up -d --no-deps nginx
+            docker compose -f ${COMPOSE_FILE} up -d nginx
           """
         }
       }
