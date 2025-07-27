@@ -42,5 +42,5 @@ services:
       - stalk-dev-net
 
 networks:
-  stalk-prod-net:
+  stalk-dev-net:
     external: true
