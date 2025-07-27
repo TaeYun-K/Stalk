@@ -11,7 +11,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
     extra_hosts:
-      - "host.docker.internal:host-gateway"      
+      - "host.docker.internal:host-gateway"
     restart: always
 
   stalk-fe:
@@ -21,7 +21,7 @@ services:
     ports:
       - "3000:3000"
     extra_hosts:
-      - "host.docker.internal:host-gateway"          
+      - "host.docker.internal:host-gateway"
     restart: always
 
   # docker-compose.prod.yml
@@ -29,6 +29,7 @@ services:
     container_name: nginx-prod
     image: nginx:latest
     ports:
+      - "80:80"
       - "443:443"
     volumes:
       - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf
