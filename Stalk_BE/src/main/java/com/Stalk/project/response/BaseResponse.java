@@ -1,9 +1,9 @@
 package com.Stalk.project.response;
 
-import static com.warrr.zipflex.global.response.BaseResponseStatus.SUCCESS;
-
 import com.Stalk.project.util.TypeCaster;
 import org.springframework.http.HttpStatus;
+
+import static com.Stalk.project.response.BaseResponseStatus.SUCCESS;
 
 public record BaseResponse<T>(HttpStatus httpStatus, Boolean isSuccess, String message, int code,
                 T result) {
@@ -32,7 +32,7 @@ public record BaseResponse<T>(HttpStatus httpStatus, Boolean isSuccess, String m
      *
      * @param status 응답 상태
      */
-    public BaseResponse(com.warrr.zipflex.global.response.BaseResponseStatus status) {
+    public BaseResponse(BaseResponseStatus status) {
         this(status.getHttpStatus(), false, status.getMessage(), status.getCode(),
                         TypeCaster.castMessage(status.getMessage()));
     }
@@ -43,7 +43,7 @@ public record BaseResponse<T>(HttpStatus httpStatus, Boolean isSuccess, String m
      * @param status 응답 상태
      * @param message 에러 메시지
      */
-    public BaseResponse(com.warrr.zipflex.global.response.BaseResponseStatus status, String message) {
+    public BaseResponse(BaseResponseStatus status, String message) {
         this(status.getHttpStatus(), false, message, status.getCode(),
                         TypeCaster.castMessage(status.getMessage()));
     }

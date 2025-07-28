@@ -2,7 +2,10 @@ package com.Stalk.project.advisor.service;
 
 import com.Stalk.project.advisor.dao.AdvisorMapper;
 import com.Stalk.project.advisor.dto.in.AdvisorListRequestDto;
+import com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto;
 import com.Stalk.project.advisor.dto.out.AdvisorResponseDto;
+import com.Stalk.project.exception.BaseException;
+import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,5 +43,55 @@ public class AdvisorService {
                 .pageSize(requestDto.getPageSize())
                 .pageNo(requestDto.getPageNo())
                 .build();
+    }
+    /**
+     * 어드바이저 상세 정보 조회
+     */
+    public AdvisorDetailResponseDto getAdvisorDetail(Long advisorId) {
+        // 1. 어드바이저 기본 정보 조회
+        AdvisorDetailResponseDto advisorDetail = advisorMapper.findAdvisorDetailById(advisorId);
+
+        if (advisorDetail == null) {
+            throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND); // 404 에러
+        }
+
+        // 2. 최신 리뷰 10개 조회
+        List<AdvisorDetailResponseDto.ReviewDto> reviews = advisorMapper.findLatestReviewsByAdvisorId(advisorId, 10);
+
+        // 3. 전체 리뷰 수 조회 (더보기 버튼 표시 여부 판단용)
+        int totalReviewCount = advisorMapper.countReviewsByAdvisorId(advisorId);
+        boolean hasMoreReviews = totalReviewCount > 10;
+
+        // 4. preferredTradeStyle enum을 한글로 변환
+        String preferredTradeStyleKorean = convertTradeStyleToKorean(advisorDetail.getPreferredTradeStyle());
+
+        // 5. 응답 DTO 구성
+        return AdvisorDetailResponseDto.builder()
+                .userId(advisorDetail.getUserId())
+                .name(advisorDetail.getName())
+                .profileImageUrl(advisorDetail.getProfileImageUrl())
+                .shortIntro(advisorDetail.getShortIntro())
+                .longIntro(advisorDetail.getLongIntro())
+                .preferredTradeStyle(preferredTradeStyleKorean)
+                .contact(advisorDetail.getContact())
+                .avgRating(advisorDetail.getAvgRating())
+                .reviewCount(advisorDetail.getReviewCount())
+                .reviews(reviews)
+                .hasMoreReviews(hasMoreReviews)
+                .build();
+    }
+
+    /**
+     * 투자 성향 enum을 한글로 변환
+     */
+    private String convertTradeStyleToKorean(String tradeStyle) {
+        if (tradeStyle == null) return null;
+
+        return switch (tradeStyle.toUpperCase()) {
+            case "SHORT" -> "단기";
+            case "MID" -> "중기";
+            case "LONG" -> "장기";
+            default -> tradeStyle;
+        };
     }
 }
