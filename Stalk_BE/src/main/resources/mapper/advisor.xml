@@ -92,4 +92,29 @@
           AND is_deleted = false
     </select>
 
+    <!-- advisor.xml에 추가할 쿼리들 -->
+
+    <!-- 전문가 차단 시간 조회 -->
+    <select id="getBlockedTimes" resultType="com.Stalk.project.advisor.dto.out.BlockedTimeDto">
+        SELECT
+            start_time as startTime,
+            end_time as endTime
+        FROM advisor_blocked_times
+        WHERE advisor_id = #{advisorId}
+          AND date = #{date}
+        ORDER BY start_time
+    </select>
+
+    <!-- 전문가 예약 시간 조회 -->
+    <select id="getReservedTimes" resultType="com.Stalk.project.advisor.dto.out.ReservedTimeDto">
+        SELECT
+            start_time as startTime,
+            end_time as endTime
+        FROM consultation_sessions
+        WHERE advisor_id = #{advisorId}
+          AND date = #{date}
+          AND status != 'CANCELLED'
+        ORDER BY start_time
+    </select>
+
 </mapper>
