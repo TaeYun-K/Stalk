@@ -33,11 +33,8 @@ pipeline {
             }
 
             sh """
-              echo "🗑️ 기존 FE 컨테이너 직접 삭제 (${CONTAINER})..."
-              docker rm -f ${CONTAINER} || true
-
               echo "🚀 도커 컴포즈로 빌드 및 실행..."
-              docker compose -f ${COMPOSE_FILE} up -d --build stalk-be
+              docker compose -f ${COMPOSE_FILE} up -d --build --force-recreate --remove-orphans stalk-be
             """
           }
         }
