@@ -33,8 +33,14 @@ pipeline {
             }
 
             sh """
-              echo "🚀 도커 컴포즈로 빌드 및 실행..."
-              docker compose -f ${COMPOSE_FILE} up -d --build --force-recreate --remove-orphans stalk-be
+                # 프로젝트 이름을 묶어두면 workspace가 바뀌어도 같은 그룹으로 인식
+                export COMPOSE_PROJECT_NAME=stalk-be-dev
+
+                echo "🔴 기존 BE 스택 정리(down + remove-orphans)…"
+                docker compose -f ${COMPOSE_FILE} down --remove-orphans
+
+                echo "🚀 BE 재배포(up + build + force-recreate)…"
+                docker compose -f ${COMPOSE_FILE} up -d --build --force-recreate stalk-be
             """
           }
         }
