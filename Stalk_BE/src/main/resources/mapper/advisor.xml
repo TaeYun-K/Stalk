@@ -34,7 +34,16 @@
             AND a.advisor_id > #{cursor}
         </if>
 
-        ORDER BY a.advisor_id ASC
+        ORDER BY
+        <choose>
+            <when test="sortBy != null and sortBy.name() == 'RATING'">
+                adi.avg_rating DESC, a.advisor_id ASC
+            </when>
+            <otherwise>
+                adi.review_counting DESC, a.advisor_id ASC
+            </otherwise>
+        </choose>
+
         LIMIT #{pageSize}
     </select>
 
