@@ -33,9 +33,15 @@ const ExpertDetailPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showReservationModal, setShowReservationModal] = useState<boolean>(false);
+  // 사용자 정보 (실제로는 API에서 가져올 데이터)
+  const userInfo = {
+    name: '김싸피',
+    contact: '010-0000-0000'
+  };
+
   const [reservationForm, setReservationForm] = useState({
-    name: '',
-    phone: '',
+    name: userInfo.name,
+    phone: userInfo.contact,
     requestDetails: ''
   });
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -113,6 +119,33 @@ const ExpertDetailPage: React.FC = () => {
     }
   };
 
+  // 연도만 추출하는 함수
+  const formatPeriod = (period: string): string => {
+    // "현재"가 포함된 경우
+    if (period.includes('현재')) {
+      const yearMatch = period.match(/(\d{4})년/);
+      if (yearMatch) {
+        return `${yearMatch[1]} - 현재`;
+      }
+      return '현재';
+    }
+    
+    // 연도 범위 추출 (예: "2018년 - 2020년" -> "2018 - 2020")
+    const yearRangeMatch = period.match(/(\d{4})년\s*-\s*(\d{4})년/);
+    if (yearRangeMatch) {
+      return `${yearRangeMatch[1]} - ${yearRangeMatch[2]}`;
+    }
+    
+    // 단일 연도 추출 (예: "2012년 6월" -> "2012")
+    const singleYearMatch = period.match(/(\d{4})년/);
+    if (singleYearMatch) {
+      return singleYearMatch[1];
+    }
+    
+    // 기타 경우 원본 반환
+    return period;
+  };
+
   // 현재 전문가 정보 가져오기
   const expert = expertsData[id || '1'] || expertsData['1'];
 
@@ -186,7 +219,7 @@ const ExpertDetailPage: React.FC = () => {
       // 예약 로직 구현
       alert('예약이 완료되었습니다!');
       setShowReservationModal(false);
-      navigate('/consultations');
+      navigate('/mypage?tab=내 상담 내역');
     } else {
       alert('이름과 휴대폰 번호를 입력해주세요.');
     }
@@ -264,29 +297,28 @@ const ExpertDetailPage: React.FC = () => {
           {/* Left Content */}
           <div className="flex-1">
             {/* Expert Header */}
-            <div className="flex items-start justify-between mb-8">
+            <div className="flex items-end justify-between mb-8 border-b border-gray-300 pb-5">
               <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  {expert.name} {expert.title}
-                </h1>
-                <p className="text-lg text-gray-600 italic mb-4">
+                <div className="flex flex-row items-end gap-2">
+                  <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
+                    {expert.name}
+                  </h1>
+                  <h3 className='text-left text-l font-semibold text-blue-500 mb-2'>{expert.title}</h3>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center mb-2 ml-4">
+                      <div className="flex text-yellow-400">
+                        ⭐
+                      </div>
+                      <span className="ml-2 font-semibold text-gray-900">{expert.rating}</span>
+                      <span className="text-gray-600 ml-4">리뷰 {expert.reviewCount}개</span>
+                    </div>
+                </div>
+                </div>
+                <p className="text-left text-lg text-gray-600 italic mb-4">
                   "{expert.tagline}"
                 </p>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center">
-                    <div className="flex text-yellow-400">
-                      {[...Array(5)].map((_, i) => (
-                        <span key={i} className={i < Math.floor(expert.rating) ? 'text-yellow-400' : 'text-gray-300'}>
-                          ⭐
-                        </span>
-                      ))}
-                    </div>
-                    <span className="ml-2 font-semibold text-gray-900">{expert.rating}</span>
-                  </div>
-                  <span className="text-gray-600">리뷰 {expert.reviewCount}개</span>
-                </div>
               </div>
-              <div className="w-48 h-48 rounded-2xl overflow-hidden shadow-lg">
+              <div className="w-48 h-48 rounded-2xl overflow-hidden">
                 <img 
                   src={expert.image} 
                   alt={expert.name}
@@ -296,66 +328,75 @@ const ExpertDetailPage: React.FC = () => {
             </div>
         
             {/* Expert Introduction */}
-            <section className="mb-8">
-              <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">전문가 소개</h2>
-              <p className="text-gray-700 leading-relaxed">{expert.introduction}</p>
+            <section className=" border-b border-gray-300 pb-8">
+              <header className='flex flex-row items-end space-x-3'>
+                <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">전문가 소개</h2>
+                <h3 className="text-left text-gray-500 text-sm mb-4">Expert Introduction</h3>
+              </header>
+              <p className="text-left text-gray-700 leading-loose">{expert.introduction}</p>
             </section>
-            <div className='flex flex-row mt-20'>
-            {/* Qualifications */}
-            <section className="mb-8  w-1/2">
-              <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">자격 증명</h2>
-              <ul className="space-y-2">
-                {expert.qualifications.map((qualification, index) => (
-                  <li key={index} className="flex items-center">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
-                    <span className="text-gray-700">{qualification}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <div className='flex flex-row mt-8 border-b border-gray-300 pb-8'>
+              {/* Qualifications */}
+              <section className="mb-8  w-1/2">
+                <div className='flex flex-row items-end space-x-3 mb-4'>
+                  <h2 className="text-left text-2xl font-bold text-gray-900">자격 증명</h2>
+                  <p className="text-left text-gray-500 text-sm">Certifications</p>
+                </div>
+                <ul className="space-y-4">
+                  {expert.qualifications.map((qualification, index) => (
+                    <li key={index} className="flex items-center">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
+                      <span className="text-gray-700">{qualification}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-            {/* Experience */}
-            <section className="mb-8 w-1/2">
-              <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">경력사항</h2>
-              <div className="space-y-4">
-                {expert.experience.map((exp, index) => (
-                  <div key={index} className="flex">
-                    <div className="w-32 text-sm text-left text-gray-500 font-medium">
-                      {exp.period}
+              {/* Experience */}
+              <section className="w-1/2">
+                <div className="flex flex-row items-end space-x-3 mb-4">
+                  <h2 className="text-left text-2xl font-bold text-gray-900">학력 및 경력사항</h2>
+                  <p className="text-left text-gray-500 text-sm">Education & Professional Experience</p>
+                </div>
+                <div className="space-y-4">
+                  {expert.experience.map((exp, index) => (
+                    <div key={index} className="flex">
+                      <div className="w-32 text-sm text-left text-gray-500 font-medium">
+                        {formatPeriod(exp.period)}
+                      </div>
+                      <div className="text-left flex-1 text-gray-700">
+                        {exp.position}
+                      </div>
                     </div>
-                    <div className="text-left flex-1 text-gray-700">
-                      {exp.position}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
             </div>
             {/* Reviews */}
-            <section>
+            <section className="mt-8">
               <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">리뷰</h2>
               <div className="space-y-6">
                 {reviews.map((review) => (
-                  <div key={review.id} className="bg-gray-50 rounded-lg p-6">
+                  <div key={review.id} className="py-6">
                     <div className="flex items-center mb-3">
                       <span className="text-2xl mr-3">{review.avatar}</span>
                       <div>
-                        <div className="font-medium text-gray-900">{review.username}</div>
-                        <div className="text-sm text-gray-500">{review.date}</div>
+                        <div className="font-medium text-gray-90 font-semibold">{review.username}</div>
+                        <div className="text-left text-sm text-gray-500">{review.date}</div>
                       </div>
                     </div>
                     <p className="text-left text-gray-700 leading-relaxed">{review.content}</p>
                   </div>
                 ))}
               </div>
-              <button className="mt-4 text-blue-600 hover:text-blue-700 font-medium">
+              <button className="mt-4 text-gray-600 bg-gray-200 py-3 px-6 rounded-full hover:text-blue-700 hover:bg-blue-200 hover:font-semibold font-medium">
                 더보기
               </button>
             </section>
           </div>
 
           {/* Right Sidebar - Reservation */}
-          <div className="text-left w-80 flex-shrink-0">
+          <div className="text-left w-80 flex-shrink-0 ml-4">
             <div className="fixed top-32 right-30 w-80 z-10">
               <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">
                 <h3 className="text-xl font-bold text-gray-900 mb-4">예약 유의사항</h3>
@@ -376,7 +417,14 @@ const ExpertDetailPage: React.FC = () => {
               </div>
               
               <button
-                onClick={() => setShowReservationModal(true)}
+                onClick={() => {
+                  setReservationForm({
+                    name: userInfo.name,
+                    phone: userInfo.contact,
+                    requestDetails: ''
+                  });
+                  setShowReservationModal(true);
+                }}
                 className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg"
               >
                 예약하기
@@ -389,7 +437,7 @@ const ExpertDetailPage: React.FC = () => {
       {/* Reservation Modal */}
       {showReservationModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg border-2 border-dashed border-blue-300 max-w-md w-full shadow-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-lg border-2 border border-blue-300 max-w-md w-full shadow-lg max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center p-8 pb-4">
               <h3 className="text-2xl font-bold text-gray-900">예약하기</h3>
               <button
@@ -400,33 +448,33 @@ const ExpertDetailPage: React.FC = () => {
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto px-8 pr-6">
+            <div className="flex-1 overflow-y-auto px-8 pr-6 scrollbar-hide">
               <form className="space-y-6 pb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">이름</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={reservationForm.name}
-                    onChange={handleInputChange}
-                    placeholder="김싸피"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">이름</label>
+                                      <input
+                      type="text"
+                      name="name"
+                      value={reservationForm.name}
+                      onChange={handleInputChange}
+                      placeholder="김싸피"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">휴대폰 번호</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={reservationForm.phone}
-                    onChange={handleInputChange}
-                    placeholder="010 0000 0000"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">휴대폰 번호</label>
+                                      <input
+                      type="tel"
+                      name="phone"
+                      value={reservationForm.phone}
+                      onChange={handleInputChange}
+                      placeholder="010-0000-0000"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">상담 일자</label>
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 일자</label>
                   
                   {/* Month Navigation */}
                   <div className="flex items-center justify-between mb-4">
@@ -451,7 +499,7 @@ const ExpertDetailPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleToday}
-                        className="px-3 py-1 text-sm bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100"
+                        className="px-3 py-1 text-sm bg-blue-50 text-blue-600 border border-blue-200 rounded-full hover:bg-blue-100"
                       >
                         Today
                       </button>
@@ -482,7 +530,7 @@ const ExpertDetailPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">상담 시간</label>
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 시간</label>
                   <div className="grid grid-cols-3 gap-2">
                     {timeSlots.map((time) => (
                       <button
@@ -505,15 +553,15 @@ const ExpertDetailPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">상담 요청 사항</label>
-                  <textarea
-                    name="requestDetails"
-                    value={reservationForm.requestDetails}
-                    onChange={handleInputChange}
-                    placeholder="상담 요청 사항을 입력하세요."
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  />
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 요청 사항</label>
+                                      <textarea
+                      name="requestDetails"
+                      value={reservationForm.requestDetails}
+                      onChange={handleInputChange}
+                      placeholder="상담 요청 사항을 입력하세요."
+                      rows={4}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring focus:ring-blue-500 focus:ring-2 focus:outline focus:outline-blue-500 resize-none"
+                    />
                 </div>
               </form>
             </div>

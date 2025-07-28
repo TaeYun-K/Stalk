@@ -1,14 +1,21 @@
 import React from 'react';
-import { BrowserRouter as Router,Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import '@/App.css';
+
+// Context
+import { WatchlistProvider } from '@/context/WatchlistContext';
 
 // Components
 import Navbar from '@/components/navbar';
+import HomePageNavbar from '@/components/homepage-navbar';
 import Sidebar from '@/components/sidebar';
 import Footer from '@/components/footer';
+import ScrollToTop from '@/components/ScrollToTop';
 
 // Pages
 import HomePage from '@/pages/home-page';
+
+import AdminPage from '@/pages/admin-page';
 
 import LoginPage from '@/pages/login-page';
 import SignupPage from '@/pages/signup-page';
@@ -27,14 +34,14 @@ import SignupChoicePage from '@/pages/signup-choice-page';
 import SearchPage from '@/pages/search-page';
 
 // Navbar를 숨길 페이지 목록
-const hideNavbarRoutes: string[] = ['/login', '/signup', '/SignupChoicePage', '/signup-complete'];
+const hideNavbarRoutes: string[] = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete'];
 
 
 // Sidebar를 보여줄 페이지 목록 (모든 페이지에 적용)
 const showSidebarRoutes: string[] = [
   '/', 
   '/experts', 
- 
+  '/admin',
   '/community', 
   '/products', 
   '/mypage', 
@@ -51,7 +58,7 @@ const showSidebarRoutes: string[] = [
 ];
 
 // Footer를 숨길 페이지 목록
-const hideFooterRoutes: string[] = ['/login', '/signup', '/SignupChoicePage', '/signup-complete'];
+const hideFooterRoutes: string[] = ['/SignupChoicePage', '/login'];
 
 const AppContent: React.FC = () => {
   const location = useLocation();
@@ -65,12 +72,14 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="App min-h-screen bg-white flex flex-col">
-      {showNavbar && <Navbar />}
+      {location.pathname === '/' ? <HomePageNavbar /> : showNavbar && <Navbar />}
       <div className="flex flex-1 overflow-hidden">
         <div className={`flex-1 ${showSidebar ? 'mr-0' : ''} flex flex-col`}>
           <main className="flex-1 overflow-auto">
             <Routes>
               {/* Public Routes */}
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
@@ -80,10 +89,9 @@ const AppContent: React.FC = () => {
               <Route path="/search" element={<SearchPage />} />
               
               {/* Protected Routes */}
-              <Route path="/home-logged-in" element={<HomePage />} />
               <Route path="/experts" element={<ExpertsPage />} />
               <Route path="/community" element={<CommunityPage />} />
-              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products" element={<div className="p-4"><h1>상품 조회</h1></div>} />
               <Route path="/mypage" element={<MyPage />} />
               
               <Route path="/write-post" element={<WritePostPage />} />
@@ -112,7 +120,10 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <Router>
-      <AppContent />
+      <ScrollToTop />
+      <WatchlistProvider>
+        <AppContent />
+      </WatchlistProvider>
     </Router>
   );
 };

@@ -1,15 +1,18 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import stalkLogoBlue from '@/assets/Stalk_logo_blue.svg';
+import { useNavigate, useLocation } from 'react-router-dom';
+import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 
 interface NewNavbarProps {
   userType?: string;
-  onUserTypeChange?: (type: string) => void;
+  onUserTypeChange?: (userType: string) => void;
   showUserTypeToggle?: boolean;
 }
 
 const NewNavbar: React.FC<NewNavbarProps> = ({ userType = 'general', onUserTypeChange = () => {}, showUserTypeToggle = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // userType is used in conditional rendering below
 
   return (
     <nav className="w-full h-20 flex items-center justify-between relative px-5 mb-10">
@@ -52,12 +55,15 @@ const NewNavbar: React.FC<NewNavbarProps> = ({ userType = 'general', onUserTypeC
           </div>
         )}
         
-        <button 
-          onClick={() => navigate('/login')}
-          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-6 py-2.5 rounded-2xl text-sm transition-all duration-300 transform hover:scale-105"
-        >
-          로그인
-        </button>
+        {/* 로그인 페이지가 아닐 때만 로그인 버튼 표시 */}
+        {location.pathname !== '/login' && (
+          <button 
+            onClick={() => navigate('/login')}
+            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-6 py-2.5 rounded-2xl text-sm transition-all duration-300 transform hover:scale-105"
+          >
+            로그인
+          </button>
+        )}
       </div>
     </nav>
   );
