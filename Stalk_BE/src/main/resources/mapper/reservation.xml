@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.reservation.dao.ReservationMapper">
+
+  <!-- 전문가 존재 및 승인 여부 확인 -->
+  <insert id="createConsultationReservation">
+    INSERT INTO consultation_sessions (user_id,
+                                       advisor_id,
+                                       date,
+                                       start_time,
+                                       end_time,
+                                       request_message,
+                                       sessionId,
+                                       video_url,
+                                       status,
+                                       created_at)
+    VALUES (#{userId},
+            #{advisorUserId},
+            #{date},
+            #{startTime},
+            #{endTime},
+            #{requestMessage},
+            NULL,
+            NULL,
+            'PENDING',
+            NOW())
+  </insert>
+
+  <!-- 전문가 차단 시간 확인 -->
+  <select id="isTimeSlotBlocked" resultType="Boolean">
+    SELECT EXISTS(SELECT 1
+                  FROM advisor_blocked_times abt
+                  WHERE abt.advisor_id = #{advisorUserId}
+                    AND abt.date = #{date}
+                    AND (
+                    (#{startTime} <![CDATA[>=]]> abt.start_time AND #{startTime} <![CDATA[<]]> abt.end_time)
+                      OR (#{endTime} <![CDATA[>]]> abt.start_time AND #{endTime} <![CDATA[<=]]> abt.end_time)
+                      OR (#{startTime} <![CDATA[<=]]> abt.start_time AND #{endTime} <![CDATA[>=]]> abt.end_time)
+                    ))
+  </select>
+
+  <!-- 기존 예약 존재 여부 확인 -->
+  <select id="isTimeSlotReserved" resultType="Boolean">
+    SELECT EXISTS(SELECT 1
+                  FROM consultation_sessions cs
+                  WHERE cs.advisor_id = #{advisorUserId}
+                    AND cs.date = #{date}
+                    AND cs.status IN ('PENDING', 'APPROVED')
+                    AND (
+                    (#{startTime} <![CDATA[>=]]> cs.start_time AND #{startTime} <![CDATA[<]]> cs.end_time)
+                      OR (#{endTime} <![CDATA[>]]> cs.start_time AND #{endTime} <![CDATA[<=]]> cs.end_time)
+                      OR (#{startTime} <![CDATA[<=]]> cs.start_time AND #{endTime} <![CDATA[>=]]> cs.end_time)
+                    ))
+  </select>
+
+  <!-- 상담 예약 생성 -->
+  <select id="isAdvisorExistsAndApproved" resultType="Boolean">
+    SELECT EXISTS(SELECT 1
+                  FROM advisor a
+                         INNER JOIN users u ON a.advisor_id = u.id
+                  WHERE u.id = #{advisorUserId}
+                    AND a.is_approved = true)
+  </select>
+
+  <!-- 마지막 생성된 예약 ID 조회 -->
+  <select id="getLastInsertId" resultType="Long">
+    SELECT LAST_INSERT_ID()
+  </select>
+
+</mapper>
