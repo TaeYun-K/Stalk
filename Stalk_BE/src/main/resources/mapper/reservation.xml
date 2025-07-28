@@ -124,4 +124,52 @@
         OFFSET #{pageRequest.offset}
     </select>
 
+    <!-- 예약 상세 조회 (취소 가능 여부 확인용) -->
+    <select id="findReservationForCancel" resultType="com.Stalk.project.reservation.dao.ReservationCancelCheckDto">
+        SELECT
+            cs.id,
+            cs.user_id as userId,
+            cs.advisor_id as advisorId,
+            cs.date,
+            TIME_FORMAT(cs.start_time, '%H:%i') as startTime,
+            cs.status,
+            au.name as advisorName,
+            cu.name as clientName
+        FROM consultation_sessions cs
+                 INNER JOIN users au ON cs.advisor_id = au.id
+                 INNER JOIN users cu ON cs.user_id = cu.id
+        WHERE cs.id = #{reservationId}
+    </select>
+
+    <!-- 예약 취소 처리 -->
+    <update id="cancelReservation">
+        UPDATE consultation_sessions
+        SET
+            status = 'CANCELED',
+            canceled_by = #{canceledBy},
+            cancel_reason = #{cancelReason},
+            cancel_memo = #{cancelMemo},
+            canceled_at = #{canceledAt}
+        WHERE id = #{reservationId}
+    </update>
+
+    <!-- 알림 생성 -->
+    <insert id="createNotification">
+        INSERT INTO notifications (
+            user_id,
+            type,
+            title,
+            message,
+            related_id,
+            created_at
+        ) VALUES (
+                     #{userId},
+                     #{type},
+                     #{title},
+                     #{message},
+                     #{relatedId},
+                     NOW()
+                 )
+    </insert>
+
 </mapper>

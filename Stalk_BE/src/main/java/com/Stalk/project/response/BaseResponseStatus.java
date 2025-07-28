@@ -90,7 +90,13 @@ public enum BaseResponseStatus {
   SELF_RESERVATION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, false, 1308, "본인에게는 예약할 수 없습니다."),
   TIME_SLOT_BLOCKED(HttpStatus.CONFLICT, false, 1309, "해당 시간은 전문가가 차단한 시간입니다."),
   TIME_SLOT_ALREADY_RESERVED(HttpStatus.CONFLICT, false, 1310, "해당 시간대에 이미 예약이 존재합니다."),
-  RESERVATION_CREATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1311, "예약 생성에 실패했습니다.");
+  RESERVATION_CREATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1311, "예약 생성에 실패했습니다."),
+  RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1312, "예약을 찾을 수 없습니다."),
+  RESERVATION_NOT_CANCELABLE(HttpStatus.BAD_REQUEST, false, 1313, "취소할 수 없는 예약입니다."),
+  SAME_DAY_CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, false, 1314, "당일 취소는 불가능합니다."),
+  ALREADY_CANCELED_RESERVATION(HttpStatus.BAD_REQUEST, false, 1315, "이미 취소된 예약입니다."),
+  UNAUTHORIZED_CANCEL_REQUEST(HttpStatus.FORBIDDEN, false, 1316, "해당 예약을 취소할 권한이 없습니다."),
+  CANCEL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1317, "예약 취소 처리에 실패했습니다.");
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;

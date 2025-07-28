@@ -1,13 +1,16 @@
 package com.Stalk.project.reservation.controller;
 
 import com.Stalk.project.reservation.dto.in.ConsultationReservationRequestDto;
+import com.Stalk.project.reservation.dto.in.ReservationCancelRequestDto;
 import com.Stalk.project.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.reservation.service.ReservationService;
 import com.Stalk.project.response.BaseResponse;
 import com.Stalk.project.util.CursorPage;
 import com.Stalk.project.util.PageRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -65,5 +68,28 @@ public class ReservationController {
                     reservationService.getReservationList(currentUserId, pageRequest);
 
     return new BaseResponse<>(result);
+  }
+
+  /**
+   * 예약 취소
+   */
+  @PutMapping("/{reservationId}/cancel")
+  @Operation(summary = "예약 취소", description = "예약을 취소합니다. (당일 취소 불가, PENDING 상태만 취소 가능)")
+  @ApiResponses(value = {
+                  @ApiResponse(responseCode = "200", description = "취소 성공"),
+                  @ApiResponse(responseCode = "400", description = "잘못된 요청 (당일 취소, 이미 취소된 예약 등)"),
+                  @ApiResponse(responseCode = "403", description = "취소 권한 없음"),
+                  @ApiResponse(responseCode = "404", description = "예약을 찾을 수 없음")
+  })
+  public BaseResponse<ReservationCancelResponseDto> cancelReservation(
+                  @PathVariable @Parameter(description = "취소할 예약 ID", example = "101") Long reservationId,
+                  @RequestBody @Valid ReservationCancelRequestDto requestDto) {
+
+    // TODO: 실제 구현 시에는 JWT에서 사용자 ID 추출
+    Long currentUserId = 1001L; // Mock 사용자 ID
+
+    ReservationCancelResponseDto
+                    response = reservationService.cancelReservation(reservationId, currentUserId, requestDto);
+    return new BaseResponse<>(response);
   }
 }

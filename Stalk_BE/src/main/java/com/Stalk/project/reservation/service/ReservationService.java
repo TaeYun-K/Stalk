@@ -1,9 +1,12 @@
 package com.Stalk.project.reservation.service;
 
 import com.Stalk.project.exception.BaseException;
+import com.Stalk.project.reservation.dao.ReservationCancelCheckDto;
 import com.Stalk.project.reservation.dao.ReservationMapper;
 import com.Stalk.project.reservation.dto.in.ConsultationReservationRequestDto;
+import com.Stalk.project.reservation.dto.in.ReservationCancelRequestDto;
 import com.Stalk.project.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
@@ -13,10 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -150,6 +150,103 @@ public class ReservationService {
     }
   }
 
+  /**
+   * 예약 취소
+   */
+  public ReservationCancelResponseDto cancelReservation(Long reservationId, Long currentUserId, ReservationCancelRequestDto requestDto) {
+
+    // 1. 예약 존재 및 기본 정보 확인
+    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(reservationId);
+    if (reservation == null) {
+      throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
+    }
+
+    // 2. 취소 권한 확인 (본인이 관련된 예약인지)
+    if (!reservation.getUserId().equals(currentUserId) && !reservation.getAdvisorId().equals(currentUserId)) {
+      throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
+    }
+
+    // 3. 취소 가능한 상태인지 확인 (PENDING 상태만 취소 가능)
+    if (!"PENDING".equals(reservation.getStatus())) {
+      if ("CANCELED".equals(reservation.getStatus())) {
+        throw new BaseException(BaseResponseStatus.ALREADY_CANCELED_RESERVATION);
+      } else {
+        throw new BaseException(BaseResponseStatus.RESERVATION_NOT_CANCELABLE);
+      }
+    }
+
+    // 4. 당일 취소 방지 (전날까지만 취소 가능)
+    LocalDate reservationDate = LocalDate.parse(reservation.getDate());
+    LocalDate today = LocalDate.now();
+    if (!reservationDate.isAfter(today)) {
+      throw new BaseException(BaseResponseStatus.SAME_DAY_CANCEL_NOT_ALLOWED);
+    }
+
+    // 5. 예약 취소 처리
+    LocalDateTime canceledAt = LocalDateTime.now();
+    int updateResult = reservationMapper.cancelReservation(
+                    reservationId,
+                    currentUserId,
+                    requestDto.getCancelReason(),
+                    requestDto.getCancelMemo(),
+                    canceledAt
+    );
+
+    if (updateResult == 0) {
+      throw new BaseException(BaseResponseStatus.CANCEL_REQUEST_FAILED);
+    }
+
+    // 6. 상대방에게 알림 생성
+    createCancelNotification(reservation, currentUserId);
+
+    // 7. 응답 생성
+    String canceledAtFormatted = canceledAt.atZone(ZoneId.of("Asia/Seoul"))
+                    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+    return new ReservationCancelResponseDto(
+                    reservationId,
+                    canceledAtFormatted,
+                    "예약이 성공적으로 취소되었습니다."
+    );
+  }
+
+  /**
+   * 취소 알림 생성
+   */
+  private void createCancelNotification(ReservationCancelCheckDto reservation, Long canceledBy) {
+    // 취소한 사람이 일반 사용자면 → 전문가에게 알림
+    // 취소한 사람이 전문가면 → 일반 사용자에게 알림
+
+    Long targetUserId;
+    String canceledByName;
+    String targetName;
+
+    if (reservation.getUserId().equals(canceledBy)) {
+      // 일반 사용자가 취소 → 전문가에게 알림
+      targetUserId = reservation.getAdvisorId();
+      canceledByName = reservation.getClientName();
+      targetName = reservation.getAdvisorName();
+    } else {
+      // 전문가가 취소 → 일반 사용자에게 알림
+      targetUserId = reservation.getUserId();
+      canceledByName = reservation.getAdvisorName();
+      targetName = reservation.getClientName();
+    }
+
+    String title = "상담 예약이 취소되었습니다";
+    String message = String.format("%s님이 %s %s 상담 예약을 취소하였습니다.",
+                    canceledByName,
+                    reservation.getDate(),
+                    reservation.getStartTime());
+
+    reservationMapper.createNotification(
+                    targetUserId,
+                    "RESERVATION_CANCELED",
+                    title,
+                    message,
+                    reservation.getId()
+    );
+  }
 
   public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId, PageRequestDto pageRequest) {
 
