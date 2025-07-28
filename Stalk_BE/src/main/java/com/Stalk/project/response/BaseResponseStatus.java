@@ -76,7 +76,13 @@ public enum BaseResponseStatus {
      */
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1201, "존재하지 않는 리뷰입니다."),
     NO_REVIEW_MODIFY_AUTHORITY(HttpStatus.FORBIDDEN, false, 1202, "리뷰 수정 권한이 없습니다."),
-    ALREADY_REVIEWED(HttpStatus.CONFLICT, false, 1203, "이미 해당 어드바이저에 대한 리뷰를 작성하셨습니다.");
+    ALREADY_REVIEWED(HttpStatus.CONFLICT, false, 1203, "이미 해당 어드바이저에 대한 리뷰를 작성하셨습니다."),
+
+    /**
+     * 1300: Reservation 에러.
+     */
+    INVALID_DATE_PAST(HttpStatus.BAD_REQUEST, false, 1301, "과거 날짜는 조회할 수 없습니다."),
+    SAME_DAY_RESERVATION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, false, 1302, "당일 예약은 불가능합니다. 하루 전까지만 예약 가능합니다.");
 
     private final HttpStatus httpStatus;
     private final boolean isSuccess;

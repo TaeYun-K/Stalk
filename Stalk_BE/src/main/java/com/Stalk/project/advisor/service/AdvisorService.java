@@ -2,15 +2,20 @@ package com.Stalk.project.advisor.service;
 
 import com.Stalk.project.advisor.dao.AdvisorMapper;
 import com.Stalk.project.advisor.dto.in.AdvisorListRequestDto;
-import com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto;
-import com.Stalk.project.advisor.dto.out.AdvisorResponseDto;
+import com.Stalk.project.advisor.dto.out.*;
 import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -93,5 +98,158 @@ public class AdvisorService {
             case "LONG" -> "장기";
             default -> tradeStyle;
         };
+    }
+
+
+    /**
+     * 전문가의 예약 가능한 시간 슬롯 조회 (디버깅 버전)
+     */
+    public AvailableTimeSlotsResponseDto getAvailableTimeSlots(Long advisorId, LocalDate date) {
+        System.out.println("=== 시간 슬롯 조회 시작 ===");
+        System.out.println("advisorId: " + advisorId + ", date: " + date);
+
+        // 1. 기본 검증
+        validateDateAndAdvisor(advisorId, date);
+
+        // 2. 주말인 경우 빈 배열 반환
+        if (isWeekend(date)) {
+            return AvailableTimeSlotsResponseDto.builder()
+                    .date(date)
+                    .timeSlots(new ArrayList<>())
+                    .build();
+        }
+
+        // 3. 기본 시간 슬롯 생성 (09:00 ~ 20:00, 1시간 간격)
+        List<LocalTime> baseTimeSlots = generateBaseTimeSlots();
+        System.out.println("기본 시간 슬롯: " + baseTimeSlots);
+
+        // 4. 차단된 시간과 예약된 시간 조회
+        List<BlockedTimeDto> blockedTimes = advisorMapper.getBlockedTimes(advisorId, date);
+        List<ReservedTimeDto> reservedTimes = advisorMapper.getReservedTimes(advisorId, date);
+
+        System.out.println("차단된 시간 조회 결과: " + blockedTimes);
+        System.out.println("예약된 시간 조회 결과: " + reservedTimes);
+
+        // 5. 차단/예약된 시간 Set으로 변환 (각각 별도 메서드로 처리)
+        Set<LocalTime> blockedTimeSet = convertBlockedTimesToSet(blockedTimes);
+        Set<LocalTime> reservedTimeSet = convertReservedTimesToSet(reservedTimes);
+
+        System.out.println("변환된 차단 시간 Set: " + blockedTimeSet);
+        System.out.println("변환된 예약 시간 Set: " + reservedTimeSet);
+
+        // 6. 시간 슬롯별 가용성 판단
+        List<AvailableTimeSlotsResponseDto.TimeSlot> timeSlots = baseTimeSlots.stream()
+                .map(time -> createTimeSlot(time, blockedTimeSet, reservedTimeSet))
+                .collect(Collectors.toList());
+
+        System.out.println("최종 시간 슬롯 결과:");
+        timeSlots.forEach(slot ->
+                System.out.println("  " + slot.getTime() + " - available: " + slot.getIsAvailable() +
+                        ", blocked: " + slot.getIsBlocked() + ", reserved: " + slot.getIsReserved())
+        );
+        System.out.println("=== 시간 슬롯 조회 완료 ===");
+
+        return AvailableTimeSlotsResponseDto.builder()
+                .date(date)
+                .timeSlots(timeSlots)
+                .build();
+    }
+
+    /**
+     * 날짜와 전문가 검증
+     */
+    private void validateDateAndAdvisor(Long advisorId, LocalDate date) {
+        // 과거 날짜 체크
+        if (date.isBefore(LocalDate.now())) {
+            throw new BaseException(BaseResponseStatus.INVALID_DATE_PAST);
+        }
+
+        // 당일 예약 불가 체크
+        if (date.equals(LocalDate.now())) {
+            throw new BaseException(BaseResponseStatus.SAME_DAY_RESERVATION_NOT_ALLOWED);
+        }
+
+        // 전문가 존재 여부 확인
+        try {
+            AdvisorDetailResponseDto advisor = getAdvisorDetail(advisorId);
+            if (advisor == null) {
+                throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+            }
+        } catch (Exception e) {
+            throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+        }
+    }
+
+    /**
+     * 주말 여부 확인
+     */
+    private boolean isWeekend(LocalDate date) {
+        DayOfWeek dayOfWeek = date.getDayOfWeek();
+        return dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+    }
+
+    /**
+     * 기본 시간 슬롯 생성 (09:00 ~ 20:00)
+     */
+    private List<LocalTime> generateBaseTimeSlots() {
+        List<LocalTime> timeSlots = new ArrayList<>();
+        for (int hour = 9; hour < 21; hour++) { // 09:00 ~ 20:00 (21시 제외)
+            timeSlots.add(LocalTime.of(hour, 0));
+        }
+        return timeSlots;
+    }
+
+    /**
+     * 차단된 시간을 LocalTime Set으로 변환
+     */
+    private Set<LocalTime> convertBlockedTimesToSet(List<BlockedTimeDto> blockedTimes) {
+        return blockedTimes.stream()
+                .flatMap(blocked -> {
+                    // 시작 시간부터 종료 시간까지의 모든 시간 생성
+                    List<LocalTime> times = new ArrayList<>();
+                    LocalTime current = blocked.getStartTime();
+                    while (current.isBefore(blocked.getEndTime())) {
+                        times.add(current);
+                        current = current.plusHours(1);
+                    }
+                    return times.stream();
+                })
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 예약된 시간을 LocalTime Set으로 변환
+     */
+    private Set<LocalTime> convertReservedTimesToSet(List<ReservedTimeDto> reservedTimes) {
+        return reservedTimes.stream()
+                .flatMap(reserved -> {
+                    // 시작 시간부터 종료 시간까지의 모든 시간 생성
+                    List<LocalTime> times = new ArrayList<>();
+                    LocalTime current = reserved.getStartTime();
+                    while (current.isBefore(reserved.getEndTime())) {
+                        times.add(current);
+                        current = current.plusHours(1);
+                    }
+                    return times.stream();
+                })
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 개별 시간 슬롯 생성
+     */
+    private AvailableTimeSlotsResponseDto.TimeSlot createTimeSlot(LocalTime time,
+                                                                  Set<LocalTime> blockedTimes,
+                                                                  Set<LocalTime> reservedTimes) {
+        boolean isBlocked = blockedTimes.contains(time);
+        boolean isReserved = reservedTimes.contains(time);
+        boolean isAvailable = !isBlocked && !isReserved;
+
+        return AvailableTimeSlotsResponseDto.TimeSlot.builder()
+                .time(time.toString()) // "09:00" 형식으로 변환
+                .isAvailable(isAvailable)
+                .isReserved(isReserved)
+                .isBlocked(isBlocked)
+                .build();
     }
 }
