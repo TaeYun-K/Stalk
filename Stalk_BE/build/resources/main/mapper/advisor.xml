@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.advisor.dao.AdvisorMapper">
+
+    <select id="findAllAdvisorsSummary" parameterType="com.Stalk.project.advisor.dto.in.AdvisorListRequestDto"
+            resultType="com.Stalk.project.advisor.dto.out.AdvisorResponseDto">
+        SELECT
+        a.advisor_id as id,
+        u.name as name,
+        a.profile_image_url as profileImageUrl,
+        adi.preferred_trade_style as preferredStyle,
+        adi.short_intro as shortIntro,
+        adi.avg_rating as averageRating,
+        adi.review_counting as reviewCount,
+        a.consultation_fee as consultationFee,
+        a.is_approved as isApproved,
+        a.created_at as createdAt
+        FROM advisor a
+        INNER JOIN users u ON a.advisor_id = u.id
+        LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+        WHERE 1=1
+        AND a.is_approved = 1
+
+        <if test="preferredTradeStyle != null and preferredTradeStyle.size() > 0">
+            AND adi.preferred_trade_style IN
+            <foreach item="style" collection="preferredTradeStyle" open="(" separator="," close=")">
+                #{style}
+            </foreach>
+        </if>
+
+        <if test="cursor != null and cursor > 0">
+            AND a.advisor_id > #{cursor}
+        </if>
+
+        ORDER BY a.advisor_id ASC
+        LIMIT #{pageSize}
+    </select>
+
+</mapper>
