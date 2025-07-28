@@ -1,20 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import stalkLogoBlue from '@/assets/Stalk_logo_blue.svg';
 
 const ExpertsPage = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('recent');
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
 
-  const categories = [
-    { id: 'all', name: '전체', icon: '👥' },
-    { id: 'stock', name: '주식', icon: '📈' },
-    { id: 'fund', name: '펀드', icon: '💰' },
-    { id: 'crypto', name: '암호화폐', icon: '₿' },
-    { id: 'realestate', name: '부동산', icon: '🏠' },
-    { id: 'insurance', name: '보험', icon: '🛡️' }
-  ];
+
 
   const experts = [
     {
@@ -51,83 +45,171 @@ const ExpertsPage = () => {
     return matchesCategory && matchesSearch;
   });
 
+  // 정렬 적용
+  const sortedExperts = [...filteredExperts].sort((a, b) => {
+    if (sortBy === 'recent') {
+      // 최근 등록순 (ID 기준, 높은 ID가 최근)
+      return b.id - a.id;
+    } else if (sortBy === 'many reviews') {
+      // 리뷰 많은순
+      return b.reviews - a.reviews;
+    }
+    return 0;
+  });
+
+  const handleKeywordClick = (keyword: string) => {
+    if (keyword === '전체') {
+      // 전체 클릭 시 모든 선택 해제
+      setSelectedKeywords([]);
+    } else {
+      // 전체가 아닌 키워드 클릭 시 다중 선택
+      setSelectedKeywords(prev => {
+        if (prev.includes(keyword)) {
+          // 이미 선택된 키워드면 제거
+          return prev.filter(k => k !== keyword);
+        } else {
+          // 선택되지 않은 키워드면 추가
+          return [...prev, keyword];
+        }
+      });
+    }
+  };
+
   const handleExpertClick = (expertId: number) => {
     navigate(`/expert-detail/${expertId}`);
   };
 
   return (
+    // 추천 키워드 및 정렬 ---------------------------------------------------------------------
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center">
-            <img src={stalkLogoBlue} alt="Stalk" className="h-8" />
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <a href="#" className="text-gray-700 hover:text-blue-600 transition-colors">투자 전문가</a>
-            <a href="#" className="text-gray-700 hover:text-blue-600 transition-colors">상품 조회</a>
-            <a href="#" className="text-gray-700 hover:text-blue-600 transition-colors">커뮤니티</a>
-          </nav>
-
-          {/* Search Bar */}
-          <div className="flex-1 max-w-md mx-8">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="원하는 투자 전문가를 검색해보세요"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <svg className="absolute right-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </div>
-
-          {/* User Profile Icon */}
-          <div className="w-8 h-8 bg-orange-400 rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-medium">👤</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Filter/Keyword Section */}
+      {/* 카테고리 */}
+      <div className="max-w-7xl mt-16 mx-auto px-6 py-8">
+        {/* Filter/Keywords Section */}
         <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <span className="text-gray-700 font-medium">추천 키워드</span>
-            <div className="flex space-x-2">
-              <button className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium hover:bg-blue-200 transition-colors">
-                입문자 대상
-              </button>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors">
-                중급자 대상
-              </button>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors">
-                상급자 대상
-              </button>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors">
-                기술적 분석
-              </button>
-            </div>
+          {/* Keywords Section */}
+          <div className="flex items-center space-x-4 flex-1 min-w-0">
+            <span className="text-gray-700 font-medium whitespace-nowrap">추천 키워드</span>
+                          <div 
+                className="flex space-x-2 overflow-x-auto hide-scrollbar"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  const container = e.currentTarget;
+                  container.scrollLeft += e.deltaY;
+                }}
+              >
+                <button 
+                  onClick={() => handleKeywordClick('전체')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.length === 0 
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  전체
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('입문자 대상')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('입문자 대상')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  입문자 대상
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('중급자 대상')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('중급자 대상')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  중급자 대상
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('상급자 대상')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('상급자 대상')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  상급자 대상
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('단기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('단기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  단기
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('중단기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('중단기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  중단기
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('중기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('중기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  중기
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('중장기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('중장기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  중장기
+                </button>
+                <button 
+                  onClick={() => handleKeywordClick('장기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedKeywords.includes('장기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  장기
+                </button>
+              </div>
           </div>
-          <div className="flex space-x-4">
-            <button className="text-blue-600 hover:text-blue-700 font-medium">전체보기</button>
-            <button className="text-blue-600 hover:text-blue-700 font-medium">리뷰 많은 순</button>
+          <div className='flex flex-row items-center gap-2 flex-shrink-0'>
+            <label className='text-gray-700 font-medium whitespace-nowrap' htmlFor="sorting">정렬: </label>
+            <select
+              id="sorting"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="text-sm text-gray-500 px-4 py-3"
+            >
+              <option value="recent">최근 등록순</option>
+              <option value="many reviews">리뷰 많은순</option>
+            </select>
           </div>
         </div>
 
+        {/* 전문가 프로필 목록 --------------------------------------------------------------------- */}
         {/* Expert Profiles */}
         <div className="space-y-6">
-          {filteredExperts.map((expert) => (
+          {sortedExperts.map((expert) => (
             <div 
               key={expert.id} 
-              className="bg-white rounded-lg p-6 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 cursor-pointer"
+              className="bg-white rounded-lg py-10 px-12 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 cursor-pointer"
               onClick={() => handleExpertClick(expert.id)}
             >
               <div className="flex items-start justify-between">
@@ -137,31 +219,27 @@ const ExpertsPage = () => {
                     {expert.tags.map((tag, tagIndex) => (
                       <span
                         key={tagIndex}
-                        className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-medium"
+                        className="text-blue-500 py-1 text-xs font-semibold"
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
 
-                  {/* Name and Title */}
-                  <div className="mb-3 flex flex-row gap-2">
-                    <h3 className="text-left text-xl font-extrabold text-gray-900">{expert.name} </h3>
-                    <p className="text-left text-gray-600">{expert.title}</p>
+                  {/* Name and Title & Rating and Reviews */}
+                  <div className="mb-3 flex flex-row items-end gap-2">
+                    <h3 className="text-left text-2xl font-extrabold text-gray-900">{expert.name} </h3>
+                    <p className="text-left text-blue-600">{expert.title}</p>
+                    <div className="flex items-center ml-4">
+                      <div className="flex text-yellow-400">
+                        ⭐
+                      </div>
+                      <span className="ml-2 font-semibold text-gray-900">{expert.rating}</span>
+                      <span className="ml-4 text-gray-600">리뷰 {expert.reviews}개</span>
+                    </div>
                   </div>
 
-                  {/* Rating and Reviews */}
-                  <div className="flex items-center mb-3">
-                    <div className="flex text-yellow-400">
-                      {[...Array(5)].map((_, i) => (
-                        <span key={i} className={i < Math.floor(parseFloat(expert.rating)) ? 'text-yellow-400' : 'text-gray-300'}>
-                          ⭐
-                        </span>
-                      ))}
-                    </div>
-                    <span className="ml-2 font-semibold text-gray-900">{expert.rating}</span>
-                    <span className="ml-2 text-gray-600">리뷰 {expert.reviews}개</span>
-                  </div>
+
 
                   {/* Description */}
                   <p className="text-lg font- text-left text-gray-700 mb-4">{expert.description}</p>
@@ -201,7 +279,7 @@ const ExpertsPage = () => {
         </div>
 
         {/* No Results */}
-        {filteredExperts.length === 0 && (
+        {sortedExperts.length === 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">🔍</div>
             <h3 className="text-2xl font-semibold text-gray-900 mb-2">검색 결과가 없습니다</h3>

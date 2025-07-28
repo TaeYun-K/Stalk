@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
-import certificationExample from '@/assets/certification_example.svg';
-import stalkLogoBlue from '@/assets/Stalk_logo_blue.svg';
+import certificationExample from '@/assets/images/dummy/certification_example.svg';
+import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -14,6 +14,14 @@ const SignupPage = () => {
   const [passwordsMatch, setPasswordsMatch] = useState(true);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showThirdPartyModal, setShowThirdPartyModal] = useState(false);
+  // 자격증 정보를 위한 인터페이스
+  interface QualificationData {
+    qualification: string;
+    certificateNumber: string;
+    birthDate: string;
+    verificationNumber: string;
+  }
+
   const [formData, setFormData] = useState({
     userId: '',
     name: '',
@@ -25,11 +33,15 @@ const SignupPage = () => {
     emailDomain: '',
     verificationCode: '',
     userType: 'general',
-    profilePhoto: null,
-    qualification: '',
-    certificateNumber: '',
-    birthDate: '',
-    verificationNumber: '',
+    profilePhoto: null as File | null,
+    qualifications: [
+      {
+        qualification: '',
+        certificateNumber: '',
+        birthDate: '',
+        verificationNumber: ''
+      }
+    ] as QualificationData[],
     termsAgreement: false,
     privacyAgreement: false,
     thirdPartyAgreement: false
@@ -46,7 +58,7 @@ const SignupPage = () => {
 
   // 타이머 효과
   useEffect(() => {
-    let interval = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (isTimerActive && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft(timeLeft - 1);
@@ -54,27 +66,29 @@ const SignupPage = () => {
     } else if (timeLeft === 0) {
       setIsTimerActive(false);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isTimerActive, timeLeft]);
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}분 ${secs.toString().padStart(2, '0')}초`;
   };
 
-  const handleUserTypeChange = (type) => {
+  const handleUserTypeChange = (type: string) => {
     setUserType(type);
     setFormData(prev => ({ ...prev, userType: type }));
     navigate(`/signup?type=${type}`);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     navigate('/signup-complete');
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -94,13 +108,77 @@ const SignupPage = () => {
     }
   };
 
+
+
+  const handleQualificationChange = (e: React.ChangeEvent<HTMLInputElement>, index: number, field: keyof QualificationData) => {
+    const { value } = e.target;
+    const newQualifications = [...formData.qualifications];
+    newQualifications[index][field] = value;
+    
+    // 마지막 폼에서 입력이 시작되면 새로운 빈 폼 추가
+    if (index === formData.qualifications.length - 1 && value.trim() !== '') {
+      newQualifications.push({
+        qualification: '',
+        certificateNumber: '',
+        birthDate: '',
+        verificationNumber: ''
+      });
+    }
+    
+    setFormData({
+      ...formData,
+      qualifications: newQualifications
+    });
+  };
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    // 자격증 관련 필드인지 확인
+    if (name.startsWith('qualification_')) {
+      const index = parseInt(name.split('_')[1]);
+      const newQualifications = [...formData.qualifications];
+      newQualifications[index].qualification = value;
+      
+      // 마지막 폼에서 선택이 시작되면 새로운 빈 폼 추가
+      if (index === formData.qualifications.length - 1 && value !== '') {
+        newQualifications.push({
+          qualification: '',
+          certificateNumber: '',
+          birthDate: '',
+          verificationNumber: ''
+        });
+      }
+      
+      setFormData({
+        ...formData,
+        qualifications: newQualifications
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
+  };
+
+  const removeQualification = (index: number) => {
+    if (formData.qualifications.length > 1) {
+      const newQualifications = formData.qualifications.filter((_, i) => i !== index);
+      setFormData({
+        ...formData,
+        qualifications: newQualifications
+      });
+    }
+  };
+
   const handleSendVerification = () => {
     setIsTimerActive(true);
     setTimeLeft(300);
     setIsEmailSent(true);
   };
 
-  const handleAllTermsAgreement = (checked) => {
+  const handleAllTermsAgreement = (checked: boolean) => {
     setFormData({
       ...formData,
       privacyAgreement: checked,
@@ -110,7 +188,7 @@ const SignupPage = () => {
   };
 
   // 개별 약관 체크 시 전체 동의 자동 체크
-  const handleIndividualAgreement = (name, checked) => {
+  const handleIndividualAgreement = (name: string, checked: boolean) => {
     const newFormData = {
       ...formData,
       [name]: checked
@@ -142,7 +220,7 @@ const SignupPage = () => {
 
       <div className="w-full max-w-6xl mx-auto px-4 py-8">
         {/* Signup Form */}
-        <div className="bg-white rounded-3xl p-8 shadow-lg border border-gray-200">
+        <div className="bg-white rounded-3xl py-12 px-16 shadow-lg border border-gray-200">
           {/* Title */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">회원가입</h1>
@@ -152,9 +230,9 @@ const SignupPage = () => {
             {/* Profile Photo Section (Expert only) */}
             {userType === 'expert' && (
               <div className="border-b border-gray-200 pb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">프로필 사진</h3>
+                <h3 className="text-lg font-semibold text-gray-900 text-left mb-4">프로필 사진</h3>
                 <div className="flex items-start space-x-6">
-                  <div className="w-24 h-32 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-300">
+                  <div className="aspect-[3/4] w-1/6 max-w-[250px] bg-gray-100 rounded-lg flex items-center justify-center border border-gray-300">
                     {formData.profilePhoto ? (
                       <img src={URL.createObjectURL(formData.profilePhoto)} alt="Profile" className="w-120 h-160 rounded-lg object-cover" />
                     ) : (
@@ -163,37 +241,41 @@ const SignupPage = () => {
                       </svg>
                     )}
                   </div>
-                  <div className="flex-1 flex flex-col">
-                    <div className="mb-3 flex flex-row justify-between">
+                  <div className="w-5/6 flex-1 flex flex-col gap-4">
+                    <div className="w-full mb-3 flex flex-row justify-between">
                       <input
                         type="text"
                         readOnly
                         value={formData.profilePhoto ? formData.profilePhoto.name : ''}
-                        className="w-3/4 px-3 py-3 border border-gray-300 rounded text-sm bg-gray-50 focus:outline-none"
+                        className="w-4/6 px-4 py-3 border border-gray-300 rounded text-m bg-gray-50 focus:outline-none"
                         placeholder="파일명"
                       />
-                      <div className="flex space-x-2 mb-4">
+                      <div className="w-2/6 flex space-x-2">
+                        
+                        {/* 파일 등록 버튼 */}
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => setFormData({...formData, profilePhoto: e.target.files[0]})}
+                          onChange={(e) => setFormData({...formData, profilePhoto: e.target.files?.[0] || null})}
                           className="hidden"
                           id="profilePhoto"
                         />
-                        <label htmlFor="profilePhoto" className="bg-blue-500 text-white px-4 py-3 rounded text-sm cursor-pointer hover:bg-blue-600 transition-colors">
+                        <label htmlFor="profilePhoto" className="w-full bg-blue-500 text-white px-4 py-3 rounded text-m cursor-pointer hover:bg-blue-600 hover:font-bold transition-colors">
                           파일 등록
                         </label>
+
+                        {/* 파일 삭제 버튼 */}
                         <button
                           type="button"
                           onClick={() => setFormData({...formData, profilePhoto: null})}
-                          className="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600 transition-colors"
+                          className="w-full bg-red-500 text-white px-4 py-3 rounded text-m hover:bg-red-600 hover:font-bold transition-colors"
                         >
                           파일 삭제
                         </button>
                       </div>
                     </div>
                     
-                    <div className="text-xs text-gray-500 space-y-1 text-left">
+                    <div className="text-m text-gray-500 space-y-1 text-left flex flex-col gap-2">
                       <p>• 프로필 사진은 300x400px 사이즈를 권장합니다.</p>
                       <p>• 파일 형식은 JPGE(.jpg, .jpeg) 또는 PNG(.png)만 지원합니다.</p>
                       <p>• 업로드 파일 용량은 2MB 이하만 가능합니다.</p>
@@ -204,15 +286,15 @@ const SignupPage = () => {
             )}
 
             {/* Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
               {/* Left Column */}
               <div className="space-y-6">
                 {/* User ID */}
                 <div className='flex flex-row items-center mb-2'>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2 text-left w-1/6">
+                  <h3 className="text-sm font-medium text-gray-700 w-2/6 text-left">
                     아이디
                   </h3>
-                  <div className="flex space-x-2">
+                  <div className="w-full flex space-x-2">
                     <input
                       type="text"
                       id="userId"
@@ -225,7 +307,7 @@ const SignupPage = () => {
                     />
                     <button
                       type="button"
-                      className="bg-blue-500 text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors whitespace-nowrap"
+                      className="bg-blue-500 text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-blue-600 hover:font-bold transition-colors whitespace-nowrap"
                     >
                       중복확인
                     </button>
@@ -234,7 +316,7 @@ const SignupPage = () => {
 
                 {/* Name */}
                 <div className="flex flex-row items-center mb-2">
-                <h3 className="text-sm font-medium text-gray-700 w-1/6 text-left">
+                <h3 className="text-sm font-medium text-gray-700 w-2/6 text-left">
                   이름
                 </h3>
                 <input
@@ -243,7 +325,7 @@ const SignupPage = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
                   placeholder="이름을 입력해주세요"
                   required
                 />
@@ -252,10 +334,10 @@ const SignupPage = () => {
 
                 {/* Nickname */}
                 <div className='flex flex-row items-center mb-2'>
-                  <h3 className="text-sm font-medium text-gray-700 w-1/6 text-left">
+                  <h3 className="text-sm font-medium text-gray-700 w-2/6 text-left">
                     닉네임
                   </h3>
-                  <div className="flex space-x-2">
+                  <div className="w-full flex space-x-2">
                     <input
                       type="text"
                       id="nickname"
@@ -268,7 +350,7 @@ const SignupPage = () => {
                     />
                     <button
                       type="button"
-                      className="bg-blue-500 text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors whitespace-nowrap"
+                      className="bg-blue-500 text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-blue-600 hover:font-bold transition-colors whitespace-nowrap"
                     >
                       중복확인
                     </button>
@@ -277,7 +359,7 @@ const SignupPage = () => {
 
                 {/* Password */}
                 <div className='flex flex-row items-center mb-2'>
-                  <h3 className="text-sm font-medium text-gray-700 w-1/6 text-left">
+                  <h3 className="text-sm font-medium text-gray-700 w-2/6 text-left">
                     비밀번호
                   </h3>
                   <input
@@ -286,58 +368,61 @@ const SignupPage = () => {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-5/6 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
                     placeholder="비밀번호를 입력해주세요"
                     required
                   />
                 </div>
 
                 {/* Confirm Password */}
-                <div className='flex flex-row items-center mb-2 gap-3'>
-                  <h3 className="w-1/6 text-sm font-medium text-gray-700 mb-2 text-left">
+                <div className='flex flex-row items-center mb-2'>
+                  <h3 className="w-2/6 text-sm font-medium text-gray-700 mb-2 text-left">
                     비밀번호 확인
                   </h3>
-                  <input
-                    type="password"
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300 ${
-                      !passwordsMatch && formData.confirmPassword 
-                        ? 'border-red-500 focus:border-red-500' 
-                        : 'border-gray-300 focus:border-blue-500'
-                    }`}
-                    placeholder="비밀번호를 한 번 더 입력해주세요"
-                    required
-                  />
-                  {formData.password && formData.confirmPassword && passwordsMatch && (
-                    <div className="flex items-center space-x-2 mt-2 text-green-600 justify-start">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-sm">입력한 비밀번호와 일치합니다.</span>
-                    </div>
-                  )}
-                  {!passwordsMatch && formData.confirmPassword && (
-                    <div className="flex items-center space-x-2 mt-2 text-red-600 justify-start">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <span className="text-sm">비밀번호가 일치하지 않습니다.</span>
-                    </div>
-                  )}
+                  <div className="relative w-full">
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300 ${
+                        !passwordsMatch && formData.confirmPassword 
+                          ? 'border-red-500 focus:border-red-500' 
+                          : 'border-gray-300 focus:border-blue-500'
+                      }`}
+                      placeholder="비밀번호를 한 번 더 입력해주세요"
+                      required
+                    />
+                    {/* 비밀번호 확인 메시지 - 절대 위치로 배치 */}
+                    {formData.password && formData.confirmPassword && (
+                      <div className="left-0 top-full mt-6 z-10">
+                        {passwordsMatch ? (
+                          <div className="flex items-center space-x-2 text-green-600">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="text-sm">입력한 비밀번호와 일치합니다.</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-2 text-red-600">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            <span className="text-sm">비밀번호가 일치하지 않습니다.</span>
+                          </div>
+                                                )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                
-                
               </div>
 
               {/* Right Column */}
               <div className="space-y-6">
                 {/* Contact */}
                 <div className='flex flex-row items-center mb-2'>
-                    <h3 className="w-1/6 text-sm font-medium text-gray-700 mb-2 text-left">
+                    <h3 className="w-2/6 text-sm font-medium text-gray-700 mb-2 text-left">
                       연락처
                     </h3>
                     <input
@@ -352,15 +437,12 @@ const SignupPage = () => {
                     />
                   </div>
                 {/* Email */}
-                <div className='flex flex-row items-center mb-2'>
-                  <h3 className="w-1/6 text-sm font-medium text-gray-700 mb-2 text-left">
+                <div className='flex flex-row items-start mb-2'>
+                  <h3 className="mt-3 w-2/6 text-sm font-medium text-gray-700 mb-2 text-left">
                     이메일
                   </h3>
-                  
-                  
-                  
-                    <div>
-                      <div className="flex space-x-2 mb-2">
+                    <div className="flex flex-col w-full gap-2">
+                      <div className="w-full flex space-x-2">
                         <input
                           type="text"
                           id="email"
@@ -374,11 +456,11 @@ const SignupPage = () => {
                         <span className="flex items-center px-3 text-gray-500 font-medium">@</span>
                         
                       </div>
-                        <div className="flex justify-end gap-3">
+                        <div className="w-full flex justify-end gap-3">
                         <select
                         name="emailDomain"
                         value={formData.emailDomain}
-                        onChange={handleChange}
+                        onChange={handleSelectChange}
                         className={`flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300 ${
                           formData.emailDomain === '' ? 'text-gray-400' : 'text-black'
                         }`}
@@ -398,7 +480,7 @@ const SignupPage = () => {
                       <button
                           type="button"
                           onClick={handleSendVerification}
-                          className="w-full bg-gray-200 text-gray-600 px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 hover:text-gray-800 transition-colors"
+                          className="w-full bg-gray-200 text-gray-600 px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 hover:text-gray-800 hover:font-bold transition-colors"
                         >
                           {isEmailSent ? '인증번호 재발송' : '인증번호 보내기'}
                         </button>
@@ -407,37 +489,39 @@ const SignupPage = () => {
                 </div>
 
                 {/* Email Verification */}
-                <div className='flex flex-row items-center mb-2'>
-                  <div className="w-1/6 text-sm text-gray-600 mb-2 text-left">
+                <div className='flex flex-row items-start mb-2'>
+                  <div className="mt-3 w-2/6 text-sm text-gray-600 mb-2 text-left">
                     {isTimerActive ? `${formatTime(timeLeft)} 안에 인증을 완료하세요` : '인증하기'}
                   </div>
-                  <div className="flex flex-col ">
+                  <div className="flex flex-col w-full gap-2">
                     <input
                       type="text"
                       id="verificationCode"
                       name="verificationCode"
                       value={formData.verificationCode}
                       onChange={handleChange}
-                      className="px-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
+                      className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
                       placeholder="6자리 인증번호"
-                      maxLength="6"
+                      maxLength={6}
                     />
+                      {formData.verificationCode && (
+                        <div className="flex items-center space-x-2 mt-2 text-green-600 justify-start">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="text-sm">정상적으로 인증되었습니다.</span>
+                        </div>
+                      )}
                     <button
                       type="button"
-                      className="bg-gray-200 text-gray-600 px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 hover:text-gray-800 transition-colors whitespace-nowrap"
+                      className="bg-gray-200 text-gray-600 px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 hover:text-gray-800 hover:font-bold transition-colors whitespace-nowrap"
                     >
                       인증하기
                     </button>
                   </div>
-                  {formData.verificationCode && (
-                    <div className="flex items-center space-x-2 mt-2 text-green-600 justify-start">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-sm">정상적으로 인증되었습니다.</span>
-                    </div>
-                  )}
                 </div>
+
+
 
                 
               </div>
@@ -451,82 +535,87 @@ const SignupPage = () => {
                   <img 
                     src={certificationExample} 
                     alt="Certificate Example" 
-                    className="w-full max-w-2xl mx-auto border border-gray-300 rounded-lg"
+                    className="w-full max-w-2xl mx-auto"
                   />
                 </div>
 
                 {/* Instructions */}
-                <div className="mx-20 pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
-                  <ul className="text-left  text-sm text-gray-700 space-y-1">
+                <div className="w-full pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
+                  <ul className="text-left text-sm text-gray-700 space-y-3 py-3">
                     <li>• 위 합격증 원본대조 번호 입력 방식을 보고 아래 창에 입력해주세요.</li>
                     <li>• 입력 시 하이픈('-') 없이 숫자만 입력하시기 바랍니다.</li>
                   </ul>
                 </div>
 
                 {/* Form 제목 라벨 */}
-                <div className="grid grid-cols-4 gap-4 mb-1 w-full">
-                  <h4 className="text-sm font-medium text-gray-700 text-left">전문 자격명</h4>
-                  <h4 className="text-sm font-medium text-gray-700 text-left col-span-3">합격증 원본대조 번호</h4>
-                </div>
+                
 
-                {/* Form 입력 부분 */}
-                <div className="grid grid-cols-4 gap-4 w-full">
-                  {/* Select */}
-                  <div>
-                    <select
-                      name="qualification"
-                      value={formData.qualification}
-                      onChange={handleChange}
-                      className="text-sm text-gray-500 w-full h-3/4 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">전문 자격을 선택하세요</option>
-                      <option value="financial_advisor">금융투자상담사</option>
-                      <option value="securities_analyst">증권분석사</option>
-                      <option value="cfa">CFA</option>
-                      <option value="cpa">CPA</option>
-                    </select>
+                {/* 자격증 폼들 */}
+                {formData.qualifications.map((qualification, index) => (
+                  <div key={index} className="w-full flex flex-row gap-4 mb-4">
+                    {/* Select */}
+                    <div className='w-1/4 flex flex-col gap-3'>
+                      <h3 className="text-left pl-5">전문 자격명</h3>
                     
-                  </div>
+                      <div className='w-full'>
+                        <select
+                          name={`qualification_${index}`}
+                          value={qualification.qualification}
+                          onChange={handleSelectChange}
+                          className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="">전문 자격을 선택하세요</option>
+                          <option value="financial_advisor">금융투자상담사</option>
+                          <option value="securities_analyst">증권분석사</option>
+                          <option value="cfa">CFA</option>
+                          <option value="cpa">CPA</option>
+                        </select>
+                      </div>
+                    </div>
 
-                  {/* Input 1 */}
-                  <div className="flex flex-col">
-                    <input
-                      type="text"
-                      name="certificateNumber"
-                      value={formData.certificateNumber}
-                      onChange={handleChange}
-                      placeholder="없이 숫자만 입력"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">중앙에 위치한 합격증 번호</p>
-                  </div>
+                    {/* Input 1 */}
+                    <div className='w-3/4 flex flex-col gap-3'>
+                      <h3 className='text-left pl-5'>인증번호 입력</h3>
+                      <div className='grid grid-cols-3 gap-4'>
+                      {/* Input 1 */}
+                        <div className="flex flex-col">
+                          <input
+                            type="text"
+                            value={qualification.certificateNumber}
+                            onChange={(e) => handleQualificationChange(e, index, 'certificateNumber')}
+                            placeholder="('-') 없이 숫자만 입력"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">중앙에 위치한 합격증 번호</p>
+                        </div>
 
-                  {/* Input 2 */}
-                  <div className="flex flex-col">
-                    <input
-                      type="text"
-                      name="birthDate"
-                      value={formData.birthDate}
-                      onChange={handleChange}
-                      placeholder="없이 숫자만 입력"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">합격증에 표기된 생년월일</p>
-                  </div>
+                        {/* Input 2 */}
+                        <div className="flex flex-col">
+                          <input
+                            type="text"
+                            value={qualification.birthDate}
+                            onChange={(e) => handleQualificationChange(e, index, 'birthDate')}
+                            placeholder="('-') 없이 숫자만 입력"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">합격증에 표기된 생년월일</p>
+                        </div>
 
-                  {/* Input 3 */}
-                  <div className="flex flex-col">
-                    <input
-                      type="text"
-                      name="verificationNumber"
-                      value={formData.verificationNumber}
-                      onChange={handleChange}
-                      placeholder="없이 숫자만 입력"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">하단 발급번호의 마지막 6자리</p>
+                        {/* Input 3 */}
+                        <div className="flex flex-col">
+                          <input
+                            type="text"
+                            value={qualification.verificationNumber}
+                            onChange={(e) => handleQualificationChange(e, index, 'verificationNumber')}
+                            placeholder="('-') 없이 숫자만 입력"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">하단 발급번호의 마지막 6자리</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             )}
 
@@ -549,7 +638,7 @@ const SignupPage = () => {
                     htmlFor="privacyAgreement"
                     className="text-sm text-gray-700 cursor-pointer"
                   >
-                    개인정보 수집·이용 동의
+                    (필수) 개인정보 수집·이용 동의
                   </label>
                   <button 
                     type="button" 
@@ -565,7 +654,7 @@ const SignupPage = () => {
               
 
               {/* 개인정보 제3자 제공 동의 */}
-              <div className="flex items-start space-x-3">
+              <div className="flex items-start space-x-3 py-2">
                 <input
                   id="thirdPartyAgreement"
                   name="thirdPartyAgreement"
@@ -581,7 +670,7 @@ const SignupPage = () => {
                     htmlFor="thirdPartyAgreement"
                     className="text-sm text-gray-700 cursor-pointer"
                   >
-                    개인정보 제3자 제공 동의
+                    (필수) 개인정보 제3자 제공 동의
                   </label>
                   <button 
                     type="button" 
@@ -597,7 +686,7 @@ const SignupPage = () => {
               <hr className="my-2 border-gray-200" />
 
               {/* 필수 약관 전체 동의 */}
-              <div className="flex items-start space-x-3">
+              <div className="flex items-start space-x-3 py-2">
                 <input
                   id="termsAgreement"
                   name="termsAgreement"
@@ -611,11 +700,10 @@ const SignupPage = () => {
                     htmlFor="termsAgreement"
                     className="text-sm font-medium text-gray-700 cursor-pointer"
                   >
-                    필수 약관에 모두 동의
+                    (필수) 필수 약관에 모두 동의
                   </label>
                 </div>
               </div>
-              <hr className="my-2 border-gray-200" />
 
               {/* 제출 버튼 */}
               <div className="text-center mt-6">
@@ -631,7 +719,7 @@ const SignupPage = () => {
                   회원가입 완료
                 </button>
                 {!isAllTermsAgreed && (
-                  <p className="text-red-500 text-sm mt-2">
+                  <p className="text-red-500 text-sm mt-5">
                     필수 약관에 모두 동의해주세요.
                   </p>
                 )}
@@ -706,7 +794,10 @@ const SignupPage = () => {
             {/* 모달 푸터 */}
             <div className="flex justify-end p-6 border-t border-gray-200">
               <button
-                onClick={() => setShowPrivacyModal(false)}
+                onClick={() => {
+                  handleIndividualAgreement('privacyAgreement', true);
+                  setShowPrivacyModal(false);
+                }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 확인
@@ -769,7 +860,10 @@ const SignupPage = () => {
             {/* 모달 푸터 */}
             <div className="flex justify-end p-6 border-t border-gray-200">
               <button
-                onClick={() => setShowThirdPartyModal(false)}
+                onClick={() => {
+                  handleIndividualAgreement('thirdPartyAgreement', true);
+                  setShowThirdPartyModal(false);
+                }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 확인

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useNavigate } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 
@@ -42,7 +42,7 @@ const SignupComplete = () => {
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <button
-                onClick={() => navigate('/home-logged-in')}
+                onClick={() => navigate('/')}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300"
               >
                 Stalk 이용하기(홈페이지)

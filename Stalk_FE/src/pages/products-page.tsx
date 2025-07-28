@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useWatchlist } from '@/context/WatchlistContext';
 
 const ProductsPage = () => {
-  const navigate = useNavigate();
+  const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -183,7 +183,7 @@ const ProductsPage = () => {
                           product.change > 0 
                             ? 'bg-red-100 text-red-800' 
                             : product.change < 0 
-                            ? 'bg-blue-100 text-blue-800' 
+                            ? 'bg-blue-100 text-blue-700' 
                             : 'bg-gray-100 text-gray-800'
                         }`}>
                           {product.change > 0 ? '↗' : product.change < 0 ? '↘' : '→'}
@@ -195,8 +195,26 @@ const ProductsPage = () => {
                       <td className="px-6 py-4 text-right text-gray-600 font-medium">{product.volume}</td>
                       <td className="px-6 py-4 text-right text-gray-600 font-medium">{product.marketCap}</td>
                       <td className="px-6 py-4 text-center">
-                        <button className="group text-gray-400 hover:text-red-500 transition-all duration-300 transform hover:scale-110">
-                          <svg className="w-6 h-6 group-hover:fill-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button 
+                          className={`group transition-all duration-300 transform hover:scale-110 ${
+                            isInWatchlist(product.code) 
+                              ? 'text-red-500' 
+                              : 'text-gray-400 hover:text-red-500'
+                          }`}
+                          onClick={() => {
+                            if (isInWatchlist(product.code)) {
+                              removeFromWatchlist(product.code);
+                            } else {
+                              addToWatchlist({
+                                code: product.code,
+                                name: product.name,
+                                price: product.price,
+                                change: product.change
+                              });
+                            }
+                          }}
+                        >
+                          <svg className={`w-6 h-6 ${isInWatchlist(product.code) ? 'fill-current' : 'group-hover:fill-current'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
                         </button>
@@ -244,7 +262,7 @@ const ProductsPage = () => {
             <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-modern border border-white/20">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">거래량</h3>
-                <span className="text-blue-600 font-bold">+15.3%</span>
+                                        <span className="text-blue-500 font-bold">+15.3%</span>
               </div>
               <div className="text-2xl font-bold text-gray-900">1.2조원</div>
               <div className="text-sm text-gray-600">전일 대비 +158억원</div>
