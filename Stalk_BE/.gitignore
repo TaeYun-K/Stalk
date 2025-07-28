@@ -57,6 +57,10 @@ cmake-build-*/
 # IntelliJ
 out/
 
+#dto.out ignore 방지
+!src/main/java/com/example/dto/out/
+!src/main/java/com/example/dto/out/**
+
 # mpeltonen/sbt-idea plugin
 .idea_modules/
 
