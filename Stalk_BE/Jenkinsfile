@@ -10,7 +10,7 @@ pipeline {
       steps {
         script {
           // 변경된 파일 목록 가져오기
-          def changed = sh(script: "git diff --name-only origin/${BRANCH_NAME}", returnStdout: true).trim()
+          def changed = sh(script: "git diff --name-only HEAD~1 HEAD", returnStdout: true).trim()
 
           // Stalk_BE 디렉토리만 감지
           if (!changed.contains("Stalk_BE/")) {
@@ -33,7 +33,7 @@ pipeline {
             }
 
             sh """
-              echo "🗑️ 기존 FE 컨테이너 직접 삭제 (${CONTAINER})..."
+              echo "🗑️ 기존 BE 컨테이너 직접 삭제 (${CONTAINER})..."
               docker rm -f ${CONTAINER} || true
 
               echo "🚀 도커 컴포즈로 빌드 및 실행..."

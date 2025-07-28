@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.advisor.dao.AdvisorMapper">
+
+    <select id="findAllAdvisorsSummary" parameterType="com.Stalk.project.advisor.dto.in.AdvisorListRequestDto"
+            resultType="com.Stalk.project.advisor.dto.out.AdvisorResponseDto">
+        SELECT
+        a.advisor_id as id,
+        u.name as name,
+        a.profile_image_url as profileImageUrl,
+        adi.preferred_trade_style as preferredStyle,
+        adi.short_intro as shortIntro,
+        adi.avg_rating as averageRating,
+        adi.review_counting as reviewCount,
+        a.consultation_fee as consultationFee,
+        a.is_approved as isApproved,
+        a.created_at as createdAt
+        FROM advisor a
+        INNER JOIN users u ON a.advisor_id = u.id
+        LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+        WHERE 1=1
+        AND a.is_approved = 1
+
+        <if test="preferredTradeStyle != null and preferredTradeStyle.size() > 0">
+            AND adi.preferred_trade_style IN
+            <foreach item="style" collection="preferredTradeStyle" open="(" separator="," close=")">
+                #{style}
+            </foreach>
+        </if>
+
+        <if test="cursor != null and cursor > 0">
+            AND a.advisor_id > #{cursor}
+        </if>
+
+        ORDER BY
+        <choose>
+            <when test="sortBy != null and sortBy.name() == 'RATING'">
+                adi.avg_rating DESC, a.advisor_id ASC
+            </when>
+            <otherwise>
+                adi.review_counting DESC, a.advisor_id ASC
+            </otherwise>
+        </choose>
+
+        LIMIT #{pageSize}
+    </select>
+
+    <!-- advisor.xml에 추가할 쿼리들 -->
+
+    <!-- 어드바이저 상세 정보 조회 -->
+    <select id="findAdvisorDetailById" resultType="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto">
+        SELECT
+            a.advisor_id as userId,
+            u.name as name,
+            a.profile_image_url as profileImageUrl,
+            adi.short_intro as shortIntro,
+            adi.long_intro as longIntro,
+            adi.preferred_trade_style as preferredTradeStyle,
+            u.contact as contact,
+            adi.avg_rating as avgRating,
+            adi.review_counting as reviewCount
+        FROM advisor a
+                 INNER JOIN users u ON a.advisor_id = u.id
+                 LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+        WHERE a.advisor_id = #{advisorId}
+          AND a.is_approved = true
+    </select>
+
+    <!-- 어드바이저의 최신 리뷰 조회 -->
+    <select id="findLatestReviewsByAdvisorId" resultType="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
+        SELECT
+            ar.id as reviewId,
+            u.nickname as nickname,
+            ar.rating as rating,
+            ar.content as content,
+            DATE_FORMAT(ar.created_at, '%Y-%m-%dT%H:%i:%s') as createdAt
+        FROM advisor_reviews ar
+                 INNER JOIN users u ON ar.user_id = u.id
+        WHERE ar.advisor_id = #{advisorId}
+          AND ar.is_deleted = false
+        ORDER BY ar.created_at DESC
+            LIMIT #{limit}
+    </select>
+
+    <!-- 어드바이저의 전체 리뷰 수 조회 -->
+    <select id="countReviewsByAdvisorId" resultType="int">
+        SELECT COUNT(*)
+        FROM advisor_reviews
+        WHERE advisor_id = #{advisorId}
+          AND is_deleted = false
+    </select>
+
+    <!-- advisor.xml에 추가할 쿼리들 -->
+
+    <!-- 전문가 차단 시간 조회 -->
+    <select id="getBlockedTimes" resultType="com.Stalk.project.advisor.dto.out.BlockedTimeDto">
+        SELECT
+            start_time as startTime,
+            end_time as endTime
+        FROM advisor_blocked_times
+        WHERE advisor_id = #{advisorId}
+          AND date = #{date}
+        ORDER BY start_time
+    </select>
+
+    <!-- 전문가 예약 시간 조회 -->
+    <select id="getReservedTimes" resultType="com.Stalk.project.advisor.dto.out.ReservedTimeDto">
+        SELECT
+            start_time as startTime,
+            end_time as endTime
+        FROM consultation_sessions
+        WHERE advisor_id = #{advisorId}
+          AND date = #{date}
+          AND status != 'CANCELLED'
+        ORDER BY start_time
+    </select>
+
+</mapper>
