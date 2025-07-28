@@ -2,8 +2,11 @@ package com.Stalk.project.reservation.controller;
 
 import com.Stalk.project.reservation.dto.in.ConsultationReservationRequestDto;
 import com.Stalk.project.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.reservation.service.ReservationService;
 import com.Stalk.project.response.BaseResponse;
+import com.Stalk.project.util.CursorPage;
+import com.Stalk.project.util.PageRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -46,6 +49,20 @@ public class ReservationController {
         requestDto);
 
     log.info("상담 예약 성공: reservationId={}", result.getReservationId());
+
+    return new BaseResponse<>(result);
+  }
+
+  @GetMapping
+  @Operation(summary = "예약 내역 조회", description = "현재 로그인한 사용자의 예약 내역을 조회합니다.")
+  public BaseResponse<CursorPage<ReservationDetailResponseDto>> getReservationList(
+                  @ModelAttribute PageRequestDto pageRequest) {
+
+    // Mock 사용자 ID (실제로는 인증에서 가져와야 함)
+    Long currentUserId = 1001L;
+
+    CursorPage<ReservationDetailResponseDto> result =
+                    reservationService.getReservationList(currentUserId, pageRequest);
 
     return new BaseResponse<>(result);
   }

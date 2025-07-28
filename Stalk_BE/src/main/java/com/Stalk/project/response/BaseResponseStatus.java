@@ -30,7 +30,7 @@ public enum BaseResponseStatus {
   NO_EXIST_USER(HttpStatus.NOT_FOUND, false, 404, "존재하지 않는 사용자입니다."),
 
   DATABASE_CONSTRAINT_VIOLATION(HttpStatus.CONFLICT, false, 409, "데이터베이스 제약 조건을 위반했습니다. "
-      + "(유니크 키 중복, 외래 키 위반, NOT NULL 위반 등에서 발생합니다.)"),
+                  + "(유니크 키 중복, 외래 키 위반, NOT NULL 위반 등에서 발생합니다.)"),
 
   /**
    * 500: 기타 에러.
@@ -56,7 +56,7 @@ public enum BaseResponseStatus {
    * 900: Comment 에러.
    */
   NO_COMMENT_MODIFY_AUTHORITY(HttpStatus.FORBIDDEN, false, 903,
-      "댓글 수정 권한이 없습니다. 관리자에게 문의해주시기 바랍니다."),
+                  "댓글 수정 권한이 없습니다. 관리자에게 문의해주시기 바랍니다."),
   NO_EXIST_COMMENT(HttpStatus.NOT_FOUND, false, 904, "존재하지 않는 댓글입니다."),
 
   /**
@@ -91,7 +91,6 @@ public enum BaseResponseStatus {
   TIME_SLOT_BLOCKED(HttpStatus.CONFLICT, false, 1309, "해당 시간은 전문가가 차단한 시간입니다."),
   TIME_SLOT_ALREADY_RESERVED(HttpStatus.CONFLICT, false, 1310, "해당 시간대에 이미 예약이 존재합니다."),
   RESERVATION_CREATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1311, "예약 생성에 실패했습니다.");
-
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;

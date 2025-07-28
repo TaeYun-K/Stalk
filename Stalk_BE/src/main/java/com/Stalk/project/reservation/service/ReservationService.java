@@ -4,7 +4,10 @@ import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.reservation.dao.ReservationMapper;
 import com.Stalk.project.reservation.dto.in.ConsultationReservationRequestDto;
 import com.Stalk.project.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.response.BaseResponseStatus;
+import com.Stalk.project.util.CursorPage;
+import com.Stalk.project.util.PageRequestDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -144,5 +148,49 @@ public class ReservationService {
     if (isReserved != null && isReserved) {
       throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
     }
+  }
+
+
+  public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId, PageRequestDto pageRequest) {
+
+    // 1. 사용자 존재 및 role 확인
+    String userRole = reservationMapper.getUserRole(userId);
+    if (userRole == null) {
+      throw new BaseException(BaseResponseStatus.NO_EXIST_USER);
+    }
+
+    // 2. 사용자 타입에 따라 다른 쿼리 실행
+    List<ReservationDetailResponseDto> reservations;
+
+    if ("ADVISOR".equals(userRole)) {
+      // 전문가인 경우: advisor_id 조회 후 해당 전문가의 예약 내역 조회
+      Long advisorId = reservationMapper.getAdvisorIdByUserId(userId);
+      if (advisorId == null) {
+        throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+      }
+      reservations = reservationMapper.findAdvisorReservations(advisorId, pageRequest);
+    } else {
+      // 일반 사용자인 경우: user_id로 예약 내역 조회
+      reservations = reservationMapper.findUserReservations(userId, pageRequest);
+    }
+
+    // 3. CursorPage 생성
+    boolean hasNext = reservations.size() > pageRequest.getPageSize();
+    if (hasNext) {
+      reservations.remove(reservations.size() - 1); // 마지막 요소 제거
+    }
+
+    Long nextCursor = null;
+    if (hasNext && !reservations.isEmpty()) {
+      nextCursor = reservations.get(reservations.size() - 1).getReservationId();
+    }
+
+    return CursorPage.<ReservationDetailResponseDto>builder()
+                    .content(reservations)
+                    .nextCursor(nextCursor)
+                    .hasNext(hasNext)
+                    .pageSize(pageRequest.getPageSize())
+                    .pageNo(pageRequest.getPageNo())
+                    .build();
   }
 }
