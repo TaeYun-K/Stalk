@@ -11,9 +11,16 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3001,
     open: true,
-    host: true
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'https://i13e205.p.ssafy.io:8443',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   build: {
     outDir: 'build',

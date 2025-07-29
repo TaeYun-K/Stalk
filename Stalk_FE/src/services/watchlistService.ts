@@ -1,5 +1,7 @@
 import { WatchlistItem } from '@/types';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
 class WatchlistService {
   // 사용자의 관심종목 목록 조회
   static async getUserWatchlist(_userId: string): Promise<WatchlistItem[]> {
