@@ -23,7 +23,6 @@ repositories {
     mavenCentral()
 }
 
-
 dependencies {
     // Web + Security + WebSocket
     implementation 'org.springframework.boot:spring-boot-starter-web'
