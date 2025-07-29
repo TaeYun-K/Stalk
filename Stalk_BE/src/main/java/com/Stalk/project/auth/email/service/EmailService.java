@@ -65,11 +65,6 @@ public class EmailService {
             return true;
         }
 
-        // 로그 출력 (시간 확인용)
-        System.out.println("▶ [검증 시작]");
-        System.out.println("서버 현재 시간(LocalDateTime.now()): " + LocalDateTime.now());
-        System.out.println("DB 저장 만료 시간(expires_at): " + ev.getExpiresAt());
-
         if (ev.getExpiresAt() == null || ev.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("인증 코드가 만료되었거나 유효하지 않습니다.");
         }
