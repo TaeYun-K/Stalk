@@ -1,8 +1,8 @@
-package com.Stalk.project.auth.controller;
+package com.Stalk.project.auth.mock.controller;
 
-import com.Stalk.project.auth.dto.MockUser;
-import com.Stalk.project.auth.dto.in.LoginRequestDto;
-import com.Stalk.project.auth.dto.out.LoginResponseDto;
+import com.Stalk.project.auth.mock.dto.MockUser;
+import com.Stalk.project.auth.mock.dto.in.LoginRequestDto;
+import com.Stalk.project.auth.mock.dto.out.LoginResponseDto;
 import com.Stalk.project.response.BaseResponse;
 import com.Stalk.project.response.BaseResponseStatus;
 import io.swagger.v3.oas.annotations.Operation;
