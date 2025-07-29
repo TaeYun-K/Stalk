@@ -14,30 +14,28 @@ import java.util.List;
 public interface ReservationMapper {
 
   /**
-   * 전문가 존재 및 승인 여부 확인
+   * 전문가 존재 및 승인 여부 확인 ReservationService에서 isApprovedAdvisor() 로 호출
    */
-  Boolean isAdvisorExistsAndApproved(@Param("advisorUserId") Long advisorUserId);
+  Boolean isApprovedAdvisor(@Param("advisorUserId") Long advisorUserId);
 
   /**
-   * 전문가 차단 시간 확인
+   * 전문가 차단 시간 확인 ReservationService에서 isTimeBlocked() 로 호출 (시간 범위 체크)
    */
-  Boolean isTimeSlotBlocked(@Param("advisorUserId") Long advisorUserId,
+  Boolean isTimeBlocked(@Param("advisorUserId") Long advisorUserId,
       @Param("date") LocalDate date,
-      @Param("startTime") LocalTime startTime,
-      @Param("endTime") LocalTime endTime);
+      @Param("startTime") LocalTime startTime);
 
   /**
-   * 기존 예약 존재 여부 확인
+   * 기존 예약 존재 여부 확인 ReservationService에서 isTimeAlreadyReserved() 로 호출 (시간 범위 체크)
    */
-  Boolean isTimeSlotReserved(@Param("advisorUserId") Long advisorUserId,
+  Boolean isTimeAlreadyReserved(@Param("advisorUserId") Long advisorUserId,
       @Param("date") LocalDate date,
-      @Param("startTime") LocalTime startTime,
-      @Param("endTime") LocalTime endTime);
+      @Param("startTime") LocalTime startTime);
 
   /**
-   * 상담 예약 생성
+   * 상담 예약 생성 ReservationService에서 insertConsultationReservation() 로 호출
    */
-  int createConsultationReservation(@Param("userId") Long userId,
+  int insertConsultationReservation(@Param("userId") Long userId,
       @Param("advisorUserId") Long advisorUserId,
       @Param("date") LocalDate date,
       @Param("startTime") LocalTime startTime,
@@ -63,15 +61,15 @@ public interface ReservationMapper {
    * 전문가의 예약 내역 조회 (전문가용)
    */
   List<ReservationDetailResponseDto> findAdvisorReservations(
-                  @Param("advisorId") Long advisorId,
-                  @Param("pageRequest") PageRequestDto pageRequest);
+      @Param("advisorId") Long advisorId,
+      @Param("pageRequest") PageRequestDto pageRequest);
 
   /**
    * 일반 사용자의 예약 내역 조회 (일반 사용자용)
    */
   List<ReservationDetailResponseDto> findUserReservations(
-                  @Param("userId") Long userId,
-                  @Param("pageRequest") PageRequestDto pageRequest);
+      @Param("userId") Long userId,
+      @Param("pageRequest") PageRequestDto pageRequest);
 
   /**
    * 예약 상세 조회 (취소 가능 여부 확인용)
@@ -82,17 +80,17 @@ public interface ReservationMapper {
    * 예약 취소 처리
    */
   int cancelReservation(@Param("reservationId") Long reservationId,
-                  @Param("canceledBy") Long canceledBy,
-                  @Param("cancelReason") CancelReason cancelReason,
-                  @Param("cancelMemo") String cancelMemo,
-                  @Param("canceledAt") LocalDateTime canceledAt);
+      @Param("canceledBy") Long canceledBy,
+      @Param("cancelReason") CancelReason cancelReason,
+      @Param("cancelMemo") String cancelMemo,
+      @Param("canceledAt") LocalDateTime canceledAt);
 
   /**
    * 알림 생성
    */
   int createNotification(@Param("userId") Long userId,
-                  @Param("type") String type,
-                  @Param("title") String title,
-                  @Param("message") String message,
-                  @Param("relatedId") Long relatedId);
+      @Param("type") String type,
+      @Param("title") String title,
+      @Param("message") String message,
+      @Param("relatedId") Long relatedId);
 }

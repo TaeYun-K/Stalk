@@ -1,13 +1,14 @@
 package com.Stalk.project.reservation.service;
 
-import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.reservation.dao.ReservationCancelCheckDto;
 import com.Stalk.project.reservation.dao.ReservationMapper;
+import com.Stalk.project.reservation.dto.in.CancelReason;
 import com.Stalk.project.reservation.dto.in.ConsultationReservationRequestDto;
 import com.Stalk.project.reservation.dto.in.ReservationCancelRequestDto;
 import com.Stalk.project.reservation.dto.out.ConsultationReservationResponseDto;
 import com.Stalk.project.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
+import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
 import com.Stalk.project.util.PageRequestDto;
@@ -16,157 +17,212 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.*;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Slf4j
+@Transactional
 public class ReservationService {
 
-  // 운영시간 상수
-  private static final LocalTime BUSINESS_START_TIME = LocalTime.of(9, 0);
-  private static final LocalTime BUSINESS_END_TIME = LocalTime.of(20, 0);
   private final ReservationMapper reservationMapper;
 
-  @Transactional
+  /**
+   * 상담 예약 생성 (토큰 기반 인증 적용)
+   *
+   * @param currentUserId 현재 로그인한 사용자 ID (토큰에서 추출)
+   * @param requestDto    예약 요청 정보
+   * @return 예약 생성 결과
+   */
   public ConsultationReservationResponseDto createConsultationReservation(
-      ConsultationReservationRequestDto requestDto) {
+      Long currentUserId, ConsultationReservationRequestDto requestDto) {
 
-    // TODO: JWT에서 사용자 ID 추출 (현재는 Mock)
-    Long currentUserId = 1001L;
+    log.info("상담 예약 생성 시작: userId={}, advisorUserId={}",
+        currentUserId, requestDto.getAdvisorUserId());
 
-    // 1. 기본 데이터 파싱 및 검증
-    LocalDate reservationDate = parseAndValidateDate(requestDto.getDate());
-    LocalTime startTime = parseAndValidateTime(requestDto.getTime());
-    LocalTime endTime = startTime.plusHours(1); // 1시간 단위
+    // 1. 입력값 파싱
+    LocalDate requestDate = LocalDate.parse(requestDto.getDate());
+    LocalTime requestTime = LocalTime.parse(requestDto.getTime());
 
     // 2. 비즈니스 규칙 검증
-    validateBusinessRules(currentUserId, requestDto.getAdvisorUserId(),
-        reservationDate, startTime, endTime);
+    validateReservationRequest(currentUserId, requestDto.getAdvisorUserId(), requestDate,
+        requestTime);
 
     // 3. 예약 생성
-    int result = reservationMapper.createConsultationReservation(
-        currentUserId,
-        requestDto.getAdvisorUserId(),
-        reservationDate,
-        startTime,
-        endTime,
-        requestDto.getRequestMessage()
-    );
+    Long reservationId = createReservation(currentUserId, requestDto, requestDate, requestTime);
 
-    if (result == 0) {
-      throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
-    }
+    // 4. 응답 생성
+    ZonedDateTime scheduledTime = ZonedDateTime.of(requestDate, requestTime,
+        ZoneId.of("Asia/Seoul"));
 
-    // 4. 생성된 예약 ID 조회
-    Long reservationId = reservationMapper.getLastInsertId();
-
-    // 5. ISO 8601 형식으로 일시 생성
-    LocalDateTime scheduledDateTime = LocalDateTime.of(reservationDate, startTime);
-    String scheduledTime =
-        scheduledDateTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "+09:00";
+    log.info("상담 예약 생성 완료: userId={}, reservationId={}", currentUserId, reservationId);
 
     return ConsultationReservationResponseDto.builder()
         .reservationId(reservationId)
-        .scheduledTime(scheduledTime)
+        .scheduledTime(scheduledTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
         .build();
   }
 
-  private LocalDate parseAndValidateDate(String dateStr) {
-    try {
-      return LocalDate.parse(dateStr);
-    } catch (DateTimeParseException e) {
-      throw new BaseException(BaseResponseStatus.PAST_DATE_NOT_ALLOWED);
-    }
-  }
-
-  private LocalTime parseAndValidateTime(String timeStr) {
-    try {
-      LocalTime time = LocalTime.parse(timeStr);
-
-      // 정시 여부 확인
-      if (time.getMinute() != 0 || time.getSecond() != 0) {
-        throw new BaseException(BaseResponseStatus.INVALID_TIME_FORMAT);
-      }
-
-      return time;
-    } catch (DateTimeParseException e) {
-      throw new BaseException(BaseResponseStatus.INVALID_TIME_FORMAT);
-    }
-  }
-
-  private void validateBusinessRules(Long userId, Long advisorUserId,
-      LocalDate date, LocalTime startTime, LocalTime endTime) {
-
+  /**
+   * 예약 요청 검증
+   */
+  private void validateReservationRequest(Long currentUserId, Long advisorUserId,
+      LocalDate requestDate, LocalTime requestTime) {
     LocalDate today = LocalDate.now();
 
     // 1. 과거 날짜 검증
-    if (date.isBefore(today)) {
+    if (requestDate.isBefore(today)) {
       throw new BaseException(BaseResponseStatus.PAST_DATE_NOT_ALLOWED);
     }
 
-    // 2. 당일 예약 불가
-    if (date.equals(today)) {
+    // 2. 당일 예약 방지
+    if (requestDate.equals(today)) {
       throw new BaseException(BaseResponseStatus.SAME_DAY_RESERVATION_NOT_ALLOWED_NEW);
     }
 
-    // 3. 주말 예약 불가
-    DayOfWeek dayOfWeek = date.getDayOfWeek();
+    // 3. 주말 검증
+    DayOfWeek dayOfWeek = requestDate.getDayOfWeek();
     if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
       throw new BaseException(BaseResponseStatus.WEEKEND_RESERVATION_NOT_ALLOWED);
     }
 
-    // 4. 운영시간 검증
-    if (startTime.isBefore(BUSINESS_START_TIME) || endTime.isAfter(BUSINESS_END_TIME)) {
+    // 4. 운영시간 검증 (09:00~20:00)
+    if (requestTime.isBefore(LocalTime.of(9, 0)) || requestTime.isAfter(LocalTime.of(19, 0))) {
       throw new BaseException(BaseResponseStatus.OUTSIDE_BUSINESS_HOURS);
     }
 
     // 5. 전문가 존재 및 승인 여부 확인
-    Boolean advisorExists = reservationMapper.isAdvisorExistsAndApproved(advisorUserId);
-    if (advisorExists == null || !advisorExists) {
+    if (!reservationMapper.isApprovedAdvisor(advisorUserId)) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
     // 6. 본인 예약 방지
-    if (userId.equals(advisorUserId)) {
+    // advisor 테이블에서 advisor_id = user_id 관계를 이용
+    if (currentUserId.equals(advisorUserId)) {
       throw new BaseException(BaseResponseStatus.SELF_RESERVATION_NOT_ALLOWED);
     }
 
     // 7. 차단 시간 확인
-    Boolean isBlocked = reservationMapper.isTimeSlotBlocked(advisorUserId, date, startTime,
-        endTime);
-    if (isBlocked != null && isBlocked) {
+    if (reservationMapper.isTimeBlocked(advisorUserId, requestDate, requestTime)) {
       throw new BaseException(BaseResponseStatus.TIME_SLOT_BLOCKED);
     }
 
-    // 8. 기존 예약 확인
-    Boolean isReserved = reservationMapper.isTimeSlotReserved(advisorUserId, date, startTime,
-        endTime);
-    if (isReserved != null && isReserved) {
+    // 8. 중복 예약 확인
+    if (reservationMapper.isTimeAlreadyReserved(advisorUserId, requestDate, requestTime)) {
       throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
     }
   }
 
   /**
-   * 예약 취소
+   * 예약 생성 (DB 저장)
    */
-  public ReservationCancelResponseDto cancelReservation(Long reservationId, Long currentUserId, ReservationCancelRequestDto requestDto) {
+  private Long createReservation(Long currentUserId, ConsultationReservationRequestDto requestDto,
+      LocalDate requestDate, LocalTime requestTime) {
+    try {
+      LocalTime endTime = requestTime.plusHours(1);
 
-    // 1. 예약 존재 및 기본 정보 확인
-    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(reservationId);
+      int insertResult = reservationMapper.insertConsultationReservation(
+          currentUserId,  // 토큰에서 추출한 사용자 ID 사용
+          requestDto.getAdvisorUserId(),
+          requestDate,
+          requestTime,
+          endTime,
+          requestDto.getRequestMessage()
+      );
+
+      if (insertResult <= 0) {
+        throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
+      }
+
+      Long reservationId = reservationMapper.getLastInsertId();
+      if (reservationId == null) {
+        throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
+      }
+
+      return reservationId;
+
+    } catch (BaseException e) {
+      throw e;
+    } catch (Exception e) {
+      log.error("예약 생성 중 예상치 못한 오류", e);
+      throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
+    }
+  }
+
+  /**
+   * 예약 내역 조회 (사용자 타입별 동적 처리)
+   */
+  @Transactional(readOnly = true)
+  public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId,
+      PageRequestDto pageRequest) {
+    log.info("예약 내역 조회 시작: userId={}", userId);
+
+    // 1. 사용자 role 조회
+    String userRole = reservationMapper.getUserRole(userId);
+    if (userRole == null) {
+      throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
+    }
+
+    List<ReservationDetailResponseDto> reservations;
+
+    // 2. 역할별 예약 내역 조회
+    if ("ADVISOR".equals(userRole)) {
+      // 전문가: advisor_id 조회 후 해당 전문가의 예약 내역
+      Long advisorId = reservationMapper.getAdvisorIdByUserId(userId);
+      if (advisorId == null) {
+        throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+      }
+      reservations = reservationMapper.findAdvisorReservations(advisorId, pageRequest);
+    } else {
+      // 일반 사용자: user_id로 직접 예약 내역 조회
+      reservations = reservationMapper.findUserReservations(userId, pageRequest);
+    }
+
+    // 3. CursorPage 처리
+    boolean hasNext = reservations.size() > pageRequest.getPageSize();
+    if (hasNext) {
+      reservations.remove(reservations.size() - 1);
+    }
+
+    log.info("예약 내역 조회 완료: userId={}, count={}", userId, reservations.size());
+
+    return CursorPage.<ReservationDetailResponseDto>builder()
+        .content(reservations)
+        .nextCursor(null)
+        .hasNext(hasNext)
+        .pageSize(pageRequest.getPageSize())
+        .pageNo(pageRequest.getPageNo())
+        .build();
+  }
+
+  /**
+   * 예약 취소 처리
+   */
+  public ReservationCancelResponseDto cancelReservation(Long reservationId, Long currentUserId,
+      ReservationCancelRequestDto requestDto) {
+    log.info("예약 취소 시작: reservationId={}, userId={}", reservationId, currentUserId);
+
+    // 1. 예약 조회 및 검증
+    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(
+        reservationId);
     if (reservation == null) {
       throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
     }
 
-    // 2. 취소 권한 확인 (본인이 관련된 예약인지)
-    if (!reservation.getUserId().equals(currentUserId) && !reservation.getAdvisorId().equals(currentUserId)) {
+    // 2. 취소 권한 확인
+    if (!currentUserId.equals(reservation.getUserId()) && !currentUserId.equals(
+        reservation.getAdvisorId())) {
       throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
     }
 
-    // 3. 취소 가능한 상태인지 확인 (PENDING 상태만 취소 가능)
+    // 3. 취소 가능 상태 확인
     if (!"PENDING".equals(reservation.getStatus())) {
       if ("CANCELED".equals(reservation.getStatus())) {
         throw new BaseException(BaseResponseStatus.ALREADY_CANCELED_RESERVATION);
@@ -175,119 +231,78 @@ public class ReservationService {
       }
     }
 
-    // 4. 당일 취소 방지 (전날까지만 취소 가능)
-    LocalDate reservationDate = LocalDate.parse(reservation.getDate());
+    // 4. 당일 취소 방지
     LocalDate today = LocalDate.now();
-    if (!reservationDate.isAfter(today)) {
+    if (reservation.getDate().equals(today) || reservation.getDate().isBefore(today)) {
       throw new BaseException(BaseResponseStatus.SAME_DAY_CANCEL_NOT_ALLOWED);
     }
 
     // 5. 예약 취소 처리
     LocalDateTime canceledAt = LocalDateTime.now();
     int updateResult = reservationMapper.cancelReservation(
-                    reservationId,
-                    currentUserId,
-                    requestDto.getCancelReason(),
-                    requestDto.getCancelMemo(),
-                    canceledAt
-    );
+        reservationId, currentUserId, requestDto.getCancelReason(),
+        requestDto.getCancelMemo(), canceledAt);
 
-    if (updateResult == 0) {
+    if (updateResult <= 0) {
       throw new BaseException(BaseResponseStatus.CANCEL_REQUEST_FAILED);
     }
 
-    // 6. 상대방에게 알림 생성
+    // 6. 상대방 알림 생성
     createCancelNotification(reservation, currentUserId);
 
-    // 7. 응답 생성
-    String canceledAtFormatted = canceledAt.atZone(ZoneId.of("Asia/Seoul"))
-                    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+    log.info("예약 취소 완료: reservationId={}, userId={}", reservationId, currentUserId);
 
-    return new ReservationCancelResponseDto(
-                    reservationId,
-                    canceledAtFormatted,
-                    "예약이 성공적으로 취소되었습니다."
-    );
+    return ReservationCancelResponseDto.builder()
+        .reservationId(reservationId)
+        .canceledAt(canceledAt.atZone(ZoneId.of("Asia/Seoul"))
+            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        .message("예약이 성공적으로 취소되었습니다.")
+        .build();
   }
 
   /**
    * 취소 알림 생성
    */
   private void createCancelNotification(ReservationCancelCheckDto reservation, Long canceledBy) {
-    // 취소한 사람이 일반 사용자면 → 전문가에게 알림
-    // 취소한 사람이 전문가면 → 일반 사용자에게 알림
+    try {
+      // 알림 대상 결정 (취소한 사람이 아닌 상대방)
+      Long notificationTargetUserId;
+      String canceledByName;
 
-    Long targetUserId;
-    String canceledByName;
-    String targetName;
-
-    if (reservation.getUserId().equals(canceledBy)) {
-      // 일반 사용자가 취소 → 전문가에게 알림
-      targetUserId = reservation.getAdvisorId();
-      canceledByName = reservation.getClientName();
-      targetName = reservation.getAdvisorName();
-    } else {
-      // 전문가가 취소 → 일반 사용자에게 알림
-      targetUserId = reservation.getUserId();
-      canceledByName = reservation.getAdvisorName();
-      targetName = reservation.getClientName();
-    }
-
-    String title = "상담 예약이 취소되었습니다";
-    String message = String.format("%s님이 %s %s 상담 예약을 취소하였습니다.",
-                    canceledByName,
-                    reservation.getDate(),
-                    reservation.getStartTime());
-
-    reservationMapper.createNotification(
-                    targetUserId,
-                    "RESERVATION_CANCELED",
-                    title,
-                    message,
-                    reservation.getId()
-    );
-  }
-
-  public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId, PageRequestDto pageRequest) {
-
-    // 1. 사용자 존재 및 role 확인
-    String userRole = reservationMapper.getUserRole(userId);
-    if (userRole == null) {
-      throw new BaseException(BaseResponseStatus.NO_EXIST_USER);
-    }
-
-    // 2. 사용자 타입에 따라 다른 쿼리 실행
-    List<ReservationDetailResponseDto> reservations;
-
-    if ("ADVISOR".equals(userRole)) {
-      // 전문가인 경우: advisor_id 조회 후 해당 전문가의 예약 내역 조회
-      Long advisorId = reservationMapper.getAdvisorIdByUserId(userId);
-      if (advisorId == null) {
-        throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+      if (canceledBy.equals(reservation.getUserId())) {
+        // 일반 사용자가 취소 → 전문가에게 알림
+        notificationTargetUserId = reservation.getAdvisorId();
+        canceledByName = reservation.getClientName();
+      } else {
+        // 전문가가 취소 → 일반 사용자에게 알림
+        notificationTargetUserId = reservation.getUserId();
+        canceledByName = reservation.getAdvisorName();
       }
-      reservations = reservationMapper.findAdvisorReservations(advisorId, pageRequest);
-    } else {
-      // 일반 사용자인 경우: user_id로 예약 내역 조회
-      reservations = reservationMapper.findUserReservations(userId, pageRequest);
-    }
 
-    // 3. CursorPage 생성
-    boolean hasNext = reservations.size() > pageRequest.getPageSize();
-    if (hasNext) {
-      reservations.remove(reservations.size() - 1); // 마지막 요소 제거
-    }
+      // 알림 메시지 생성
+      String notificationMessage = String.format(
+          "%s님이 %s %s 상담 예약을 취소하였습니다.",
+          canceledByName,
+          reservation.getDate(),
+          reservation.getStartTime()
+      );
 
-    Long nextCursor = null;
-    if (hasNext && !reservations.isEmpty()) {
-      nextCursor = reservations.get(reservations.size() - 1).getReservationId();
-    }
+      // 알림 저장
+      reservationMapper.createNotification(
+          notificationTargetUserId,
+          "RESERVATION_CANCELED",
+          "예약 취소 알림",
+          notificationMessage,
+          reservation.getId()
+      );
 
-    return CursorPage.<ReservationDetailResponseDto>builder()
-                    .content(reservations)
-                    .nextCursor(nextCursor)
-                    .hasNext(hasNext)
-                    .pageSize(pageRequest.getPageSize())
-                    .pageNo(pageRequest.getPageNo())
-                    .build();
+      log.info("취소 알림 생성 완료: targetUserId={}, message={}",
+          notificationTargetUserId, notificationMessage);
+
+    } catch (Exception e) {
+      log.error("알림 생성 중 오류 (예약 취소는 성공): reservationId={}",
+          reservation.getId(), e);
+      // 알림 생성 실패해도 예약 취소 자체는 성공으로 처리
+    }
   }
 }

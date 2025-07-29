@@ -30,7 +30,7 @@ public enum BaseResponseStatus {
   NO_EXIST_USER(HttpStatus.NOT_FOUND, false, 404, "존재하지 않는 사용자입니다."),
 
   DATABASE_CONSTRAINT_VIOLATION(HttpStatus.CONFLICT, false, 409, "데이터베이스 제약 조건을 위반했습니다. "
-                  + "(유니크 키 중복, 외래 키 위반, NOT NULL 위반 등에서 발생합니다.)"),
+      + "(유니크 키 중복, 외래 키 위반, NOT NULL 위반 등에서 발생합니다.)"),
 
   /**
    * 500: 기타 에러.
@@ -56,7 +56,7 @@ public enum BaseResponseStatus {
    * 900: Comment 에러.
    */
   NO_COMMENT_MODIFY_AUTHORITY(HttpStatus.FORBIDDEN, false, 903,
-                  "댓글 수정 권한이 없습니다. 관리자에게 문의해주시기 바랍니다."),
+      "댓글 수정 권한이 없습니다. 관리자에게 문의해주시기 바랍니다."),
   NO_EXIST_COMMENT(HttpStatus.NOT_FOUND, false, 904, "존재하지 않는 댓글입니다."),
 
   /**
@@ -115,6 +115,9 @@ public enum BaseResponseStatus {
   INVALID_TOKEN(HttpStatus.UNAUTHORIZED, false, 2008, "유효하지 않은 토큰입니다."),
   EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, false, 2009, "만료된 토큰입니다."),
   TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, false, 2010, "토큰이 없습니다."),
+  // ===== 토큰/인증 관련 에러 (2100번대) =====
+  MISSING_TOKEN(HttpStatus.UNAUTHORIZED, false, 2101, "인증 토큰이 필요합니다."),
+  INVALID_TOKEN_FORMAT(HttpStatus.UNAUTHORIZED, false, 2102, "토큰 형식이 올바르지 않습니다."),
 
   // 로그아웃
   LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
