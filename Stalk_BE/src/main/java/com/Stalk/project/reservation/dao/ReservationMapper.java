@@ -1,9 +1,14 @@
 package com.Stalk.project.reservation.dao;
 
+import com.Stalk.project.reservation.dto.in.CancelReason;
+import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
+import com.Stalk.project.util.PageRequestDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 @Mapper
 public interface ReservationMapper {
@@ -43,4 +48,51 @@ public interface ReservationMapper {
    * 마지막 생성된 예약 ID 조회
    */
   Long getLastInsertId();
+
+  /**
+   * 사용자 role 조회
+   */
+  String getUserRole(@Param("userId") Long userId);
+
+  /**
+   * 사용자 ID로 advisor_id 조회
+   */
+  Long getAdvisorIdByUserId(@Param("userId") Long userId);
+
+  /**
+   * 전문가의 예약 내역 조회 (전문가용)
+   */
+  List<ReservationDetailResponseDto> findAdvisorReservations(
+                  @Param("advisorId") Long advisorId,
+                  @Param("pageRequest") PageRequestDto pageRequest);
+
+  /**
+   * 일반 사용자의 예약 내역 조회 (일반 사용자용)
+   */
+  List<ReservationDetailResponseDto> findUserReservations(
+                  @Param("userId") Long userId,
+                  @Param("pageRequest") PageRequestDto pageRequest);
+
+  /**
+   * 예약 상세 조회 (취소 가능 여부 확인용)
+   */
+  ReservationCancelCheckDto findReservationForCancel(@Param("reservationId") Long reservationId);
+
+  /**
+   * 예약 취소 처리
+   */
+  int cancelReservation(@Param("reservationId") Long reservationId,
+                  @Param("canceledBy") Long canceledBy,
+                  @Param("cancelReason") CancelReason cancelReason,
+                  @Param("cancelMemo") String cancelMemo,
+                  @Param("canceledAt") LocalDateTime canceledAt);
+
+  /**
+   * 알림 생성
+   */
+  int createNotification(@Param("userId") Long userId,
+                  @Param("type") String type,
+                  @Param("title") String title,
+                  @Param("message") String message,
+                  @Param("relatedId") Long relatedId);
 }
