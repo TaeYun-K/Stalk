@@ -3,15 +3,25 @@ package com.Stalk.project.community.service;
 import com.Stalk.project.auth.mock.util.TokenUtils;
 import com.Stalk.project.community.dao.CommunityMapper;
 import com.Stalk.project.community.dto.in.CommunityPostCreateRequestDto;
+import com.Stalk.project.community.dto.in.CommunityPostDetailRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostListRequestDto;
+import com.Stalk.project.community.dto.in.CommunityPostUpdateRequestDto;
 import com.Stalk.project.community.dto.in.PostCategory;
+import com.Stalk.project.community.dto.out.CommunityCommentDto;
 import com.Stalk.project.community.dto.out.CommunityPostCreateResponseDto;
+import com.Stalk.project.community.dto.out.CommunityPostDeleteResponseDto;
+import com.Stalk.project.community.dto.out.CommunityPostDetailDto;
+import com.Stalk.project.community.dto.out.CommunityPostPermissionDto;
 import com.Stalk.project.community.dto.out.CommunityPostSummaryDto;
+import com.Stalk.project.community.dto.out.CommunityPostUpdateResponseDto;
 import com.Stalk.project.community.dto.out.WritePermissionResponseDto;
 import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
 
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +35,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)
 public class CommunityService {
 
   private final CommunityMapper communityMapper;
@@ -194,5 +203,143 @@ public class CommunityService {
     if (requestDto.getPageSize() < 1 || requestDto.getPageSize() > 50) {
       throw new IllegalArgumentException("페이지 크기는 1~50 사이여야 합니다.");
     }
+  }
+
+  /**
+   * 커뮤니티 글 상세 조회
+   */
+  public CommunityPostDetailDto getCommunityPostDetail(Long postId,
+      CommunityPostDetailRequestDto requestDto) {
+    // 1. 글 상세 정보 조회
+    CommunityPostDetailDto postDetail = communityMapper.findCommunityPostDetail(postId);
+
+    if (postDetail == null) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    // 2. 댓글 목록 조회 (페이징 적용)
+    List<CommunityCommentDto> comments = communityMapper.findCommunityPostComments(
+        postId,
+        requestDto.getCommentOffset(),
+        requestDto.getCommentLimitPlusOne()
+    );
+
+    // 3. hasNext 판단 및 마지막 항목 제거
+    boolean hasNext = comments.size() > requestDto.getCommentPageSize();
+    if (hasNext) {
+      comments.remove(comments.size() - 1);
+    }
+
+    // 4. CursorPage로 댓글 래핑
+    CursorPage<CommunityCommentDto> commentPage = CursorPage.<CommunityCommentDto>builder()
+        .content(comments)
+        .nextCursor(hasNext ? (long) (requestDto.getCommentPageNo() + 1) : null)
+        .hasNext(hasNext)
+        .pageSize(requestDto.getCommentPageSize())
+        .pageNo(requestDto.getCommentPageNo())
+        .build();
+
+    // 5. 댓글 페이지 정보를 글 상세 정보에 설정
+    postDetail.setComments(commentPage);
+
+    return postDetail;
+  }
+
+  /**
+   * 커뮤니티 글 수정
+   */
+  public CommunityPostUpdateResponseDto updateCommunityPost(
+      Long postId,
+      Long currentUserId,
+      String currentUserRole,
+      CommunityPostUpdateRequestDto requestDto
+  ) {
+    // 1. 글 존재 및 권한 확인
+    CommunityPostPermissionDto permission = communityMapper.findPostPermission(postId);
+
+    if (permission == null) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    if (permission.isDeleted()) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    if (!permission.hasPermission(currentUserId, currentUserRole)) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_ACCESS_DENIED);
+    }
+
+    // 2. 권한별 카테고리 제한 확인
+    if ("USER".equals(currentUserRole) && requestDto.getCategory() != PostCategory.QUESTION) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_ACCESS_DENIED);
+    }
+
+    // 3. 글 수정 실행
+    int updatedRows = communityMapper.updateCommunityPost(
+        postId,
+        requestDto.getTitle(),
+        requestDto.getContent(),
+        requestDto.getCategory().name()
+    );
+
+    if (updatedRows == 0) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_ACCESS_DENIED);
+    }
+
+    // 4. 응답 생성
+    return CommunityPostUpdateResponseDto.builder()
+        .postId(postId)
+        .updatedAt(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
+            .format(ZonedDateTime.now(ZoneId.of("Asia/Seoul"))))
+        .message("글이 성공적으로 수정되었습니다.")
+        .build();
+  }
+
+  /**
+   * 커뮤니티 글 삭제
+   */
+  public CommunityPostDeleteResponseDto deleteCommunityPost(
+      Long postId,
+      Long currentUserId,
+      String currentUserRole
+  ) {
+    // 1. 글 존재 및 권한 확인
+    CommunityPostPermissionDto permission = communityMapper.findPostPermission(postId);
+
+    if (permission == null) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    if (permission.isDeleted()) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    if (!permission.hasPermission(currentUserId, currentUserRole)) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_ACCESS_DENIED);
+    }
+
+    // 2. 트랜잭션으로 댓글 삭제 후 글 삭제
+    try {
+      // 2-1. 글에 달린 모든 댓글 물리적 삭제
+      communityMapper.deleteAllCommentsOfPost(postId);
+
+      // 2-2. 글 논리적 삭제
+      int deletedRows = communityMapper.deleteCommunityPost(postId);
+
+      if (deletedRows == 0) {
+        throw new BaseException(BaseResponseStatus.POST_DELETE_FAILED);
+      }
+
+    } catch (Exception e) {
+      throw new BaseException(BaseResponseStatus.POST_DELETE_FAILED);
+    }
+
+    // 3. 응답 생성
+    return CommunityPostDeleteResponseDto.builder()
+        .postId(postId)
+        .deletedAt(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
+            .format(ZonedDateTime.now(ZoneId.of("Asia/Seoul"))))
+        .message("글이 성공적으로 삭제되었습니다.")
+        .build();
   }
 }
