@@ -96,7 +96,28 @@ public enum BaseResponseStatus {
   SAME_DAY_CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, false, 1314, "당일 취소는 불가능합니다."),
   ALREADY_CANCELED_RESERVATION(HttpStatus.BAD_REQUEST, false, 1315, "이미 취소된 예약입니다."),
   UNAUTHORIZED_CANCEL_REQUEST(HttpStatus.FORBIDDEN, false, 1316, "해당 예약을 취소할 권한이 없습니다."),
-  CANCEL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1317, "예약 취소 처리에 실패했습니다.");
+  CANCEL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1317, "예약 취소 처리에 실패했습니다."),
+
+  // ===== 인증 관련 에러 코드 (2000번대) =====
+
+  // 로그인 실패
+  INVALID_USER_JWT(HttpStatus.UNAUTHORIZED, false, 2001, "권한이 없는 유저의 접근입니다."),
+  LOGIN_FAILED(HttpStatus.UNAUTHORIZED, false, 2002, "아이디 또는 비밀번호가 올바르지 않습니다."),
+  INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, false, 2003, "비밀번호가 올바르지 않습니다."),
+  USER_NOT_FOUND(HttpStatus.NOT_FOUND, false, 2004, "존재하지 않는 사용자입니다."),
+
+  // 계정 상태 관련
+  ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, false, 2005, "비활성화된 계정입니다."),
+  ADVISOR_NOT_APPROVED(HttpStatus.FORBIDDEN, false, 2006, "승인되지 않은 전문가 계정입니다."),
+  UNAUTHORIZED_ROLE(HttpStatus.FORBIDDEN, false, 2007, "해당 역할로 로그인할 권한이 없습니다."),
+
+  // 토큰 관련
+  INVALID_TOKEN(HttpStatus.UNAUTHORIZED, false, 2008, "유효하지 않은 토큰입니다."),
+  EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, false, 2009, "만료된 토큰입니다."),
+  TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, false, 2010, "토큰이 없습니다."),
+
+  // 로그아웃
+  LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;
