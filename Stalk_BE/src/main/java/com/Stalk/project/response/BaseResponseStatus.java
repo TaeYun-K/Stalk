@@ -119,6 +119,14 @@ public enum BaseResponseStatus {
   MISSING_TOKEN(HttpStatus.UNAUTHORIZED, false, 2101, "인증 토큰이 필요합니다."),
   INVALID_TOKEN_FORMAT(HttpStatus.UNAUTHORIZED, false, 2102, "토큰 형식이 올바르지 않습니다."),
 
+  INVALID_CATEGORY(HttpStatus.BAD_REQUEST, false, 1401, "유효하지 않은 카테고리입니다."),
+  INVALID_PAGE_NUMBER(HttpStatus.BAD_REQUEST, false, 1402, "페이지 번호는 1 이상이어야 합니다."),
+  INVALID_PAGE_SIZE(HttpStatus.BAD_REQUEST, false, 1403, "페이지 크기는 1~50 사이여야 합니다."),
+  COMMUNITY_POST_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1404, "존재하지 않는 게시글입니다."),
+  COMMUNITY_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1405, "해당 게시글에 접근할 권한이 없습니다."),
+  COMMUNITY_WRITE_PERMISSION_DENIED(HttpStatus.FORBIDDEN, false, 1406, "해당 카테고리에 글을 작성할 권한이 없습니다."),
+  COMMUNITY_POST_CREATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1407, "글 작성에 실패했습니다."),
+
   // 로그아웃
   LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
 
