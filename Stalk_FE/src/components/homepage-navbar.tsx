@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
+import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { isLoggedIn, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -79,38 +80,7 @@ const HomePageNavbar: React.FC = () => {
     setIsInputActive(false); // 입력창에서 마우스가 빠져나갔을 때 비활성화
   };
 
-  // 로그인 상태 확인
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-
-  useEffect(() => {
-    const fromPath = ['/mypage', '/settings', '/consultations', '/favorites'].some(path =>
-      location.pathname.startsWith(path)
-    );
-
-    const fromLocalStorage = localStorage.getItem('isLoggedIn') === 'true';
-
-    setIsLoggedIn(fromPath || fromLocalStorage);
-  }, [location.pathname]);
-
-  // localStorage 변경 감지
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const fromPath = ['/mypage', '/settings', '/consultations', '/favorites'].some(path =>
-        location.pathname.startsWith(path)
-      );
-      const fromLocalStorage = localStorage.getItem('isLoggedIn') === 'true';
-      setIsLoggedIn(fromPath || fromLocalStorage);
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    
-    // 컴포넌트 마운트 시에도 확인
-    handleStorageChange();
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [location.pathname]);
+  // AuthContext에서 로그인 상태를 가져오므로 별도의 로그인 상태 관리 제거
 
   // 로그인 상태가 변경될 때 프로필 이미지 가져오기
   useEffect(() => {
@@ -281,17 +251,15 @@ const HomePageNavbar: React.FC = () => {
                     </button>
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
-                      onClick={() => {
-                        // 1. 로그인 상태 제거
-                        localStorage.removeItem('isLoggedIn');
-
-                        // 2. 상태 초기화
-                        setShowProfileMenu(false);
-                        setIsLoggedIn(false); // 이 state는 useState로 선언되어 있어야 함
-
-                        // 3. 홈으로 이동
-                        navigate('/');
-                        window.scrollTo({ top: 0, behavior: 'smooth'});
+                      onClick={async () => {
+                        try {
+                          await logout();
+                          setShowProfileMenu(false);
+                          navigate('/');
+                          window.scrollTo({ top: 0, behavior: 'smooth'});
+                        } catch (error) {
+                          console.error('로그아웃 실패:', error);
+                        }
                       }}
                       className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3"
                     >
