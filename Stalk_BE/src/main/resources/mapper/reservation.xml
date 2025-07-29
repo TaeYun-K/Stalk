@@ -69,4 +69,107 @@
     SELECT LAST_INSERT_ID()
   </select>
 
+    <!-- 사용자 role 조회 -->
+    <select id="getUserRole" resultType="String">
+        SELECT role
+        FROM users
+        WHERE id = #{userId}
+    </select>
+
+    <!-- 사용자 ID로 advisor_id 조회 -->
+    <select id="getAdvisorIdByUserId" resultType="Long">
+        SELECT advisor_id
+        FROM advisor
+        WHERE advisor_id = #{userId}
+          AND is_approved = 1
+    </select>
+
+    <!-- 전문가의 예약 내역 조회 (전문가용) -->
+    <select id="findAdvisorReservations" resultType="com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto">
+        SELECT
+            cs.id as reservationId,
+            cs.date as consultationDate,
+            TIME_FORMAT(cs.start_time, '%H:%i') as consultationTime,
+            cs.request_message as requestMessage,
+            u.name as clientName,
+            u.id as clientUserId,
+            cs.status,
+            DATE_FORMAT(cs.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+        FROM consultation_sessions cs
+                 INNER JOIN users u ON cs.user_id = u.id
+        WHERE cs.advisor_id = #{advisorId}
+        ORDER BY cs.created_at DESC
+            LIMIT #{pageRequest.limitPlusOne}
+        OFFSET #{pageRequest.offset}
+    </select>
+
+    <!-- 일반 사용자의 예약 내역 조회 (일반 사용자용) -->
+    <select id="findUserReservations" resultType="com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto">
+        SELECT
+            cs.id as reservationId,
+            cs.date as consultationDate,
+            TIME_FORMAT(cs.start_time, '%H:%i') as consultationTime,
+            cs.request_message as requestMessage,
+            u.name as advisorName,
+            u.id as advisorUserId,
+            a.profile_image_url as profileImageUrl,
+            cs.status,
+            DATE_FORMAT(cs.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+        FROM consultation_sessions cs
+                 INNER JOIN advisor a ON cs.advisor_id = a.advisor_id
+                 INNER JOIN users u ON cs.advisor_id = u.id
+        WHERE cs.user_id = #{userId}
+        ORDER BY cs.created_at DESC
+            LIMIT #{pageRequest.limitPlusOne}
+        OFFSET #{pageRequest.offset}
+    </select>
+
+    <!-- 예약 상세 조회 (취소 가능 여부 확인용) -->
+    <select id="findReservationForCancel" resultType="com.Stalk.project.reservation.dao.ReservationCancelCheckDto">
+        SELECT
+            cs.id,
+            cs.user_id as userId,
+            cs.advisor_id as advisorId,
+            cs.date,
+            TIME_FORMAT(cs.start_time, '%H:%i') as startTime,
+            cs.status,
+            au.name as advisorName,
+            cu.name as clientName
+        FROM consultation_sessions cs
+                 INNER JOIN users au ON cs.advisor_id = au.id
+                 INNER JOIN users cu ON cs.user_id = cu.id
+        WHERE cs.id = #{reservationId}
+    </select>
+
+    <!-- 예약 취소 처리 -->
+    <update id="cancelReservation">
+        UPDATE consultation_sessions
+        SET
+            status = 'CANCELED',
+            canceled_by = #{canceledBy},
+            cancel_reason = #{cancelReason},
+            cancel_memo = #{cancelMemo},
+            canceled_at = #{canceledAt}
+        WHERE id = #{reservationId}
+    </update>
+
+    <!-- 알림 생성 -->
+    <insert id="createNotification">
+        INSERT INTO notifications (
+            user_id,
+            type,
+            title,
+            message,
+            related_id,
+            created_at
+        ) VALUES (
+                     #{userId},
+                     #{type},
+                     #{title},
+                     #{message},
+                     #{relatedId},
+                     NOW()
+                 )
+    </insert>
+
 </mapper>

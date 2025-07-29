@@ -1,21 +1,25 @@
 package com.Stalk.project.reservation.service;
 
 import com.Stalk.project.exception.BaseException;
+import com.Stalk.project.reservation.dao.ReservationCancelCheckDto;
 import com.Stalk.project.reservation.dao.ReservationMapper;
 import com.Stalk.project.reservation.dto.in.ConsultationReservationRequestDto;
+import com.Stalk.project.reservation.dto.in.ReservationCancelRequestDto;
 import com.Stalk.project.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.reservation.dto.out.ReservationCancelResponseDto;
+import com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.response.BaseResponseStatus;
+import com.Stalk.project.util.CursorPage;
+import com.Stalk.project.util.PageRequestDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -144,5 +148,146 @@ public class ReservationService {
     if (isReserved != null && isReserved) {
       throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
     }
+  }
+
+  /**
+   * 예약 취소
+   */
+  public ReservationCancelResponseDto cancelReservation(Long reservationId, Long currentUserId, ReservationCancelRequestDto requestDto) {
+
+    // 1. 예약 존재 및 기본 정보 확인
+    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(reservationId);
+    if (reservation == null) {
+      throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
+    }
+
+    // 2. 취소 권한 확인 (본인이 관련된 예약인지)
+    if (!reservation.getUserId().equals(currentUserId) && !reservation.getAdvisorId().equals(currentUserId)) {
+      throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
+    }
+
+    // 3. 취소 가능한 상태인지 확인 (PENDING 상태만 취소 가능)
+    if (!"PENDING".equals(reservation.getStatus())) {
+      if ("CANCELED".equals(reservation.getStatus())) {
+        throw new BaseException(BaseResponseStatus.ALREADY_CANCELED_RESERVATION);
+      } else {
+        throw new BaseException(BaseResponseStatus.RESERVATION_NOT_CANCELABLE);
+      }
+    }
+
+    // 4. 당일 취소 방지 (전날까지만 취소 가능)
+    LocalDate reservationDate = LocalDate.parse(reservation.getDate());
+    LocalDate today = LocalDate.now();
+    if (!reservationDate.isAfter(today)) {
+      throw new BaseException(BaseResponseStatus.SAME_DAY_CANCEL_NOT_ALLOWED);
+    }
+
+    // 5. 예약 취소 처리
+    LocalDateTime canceledAt = LocalDateTime.now();
+    int updateResult = reservationMapper.cancelReservation(
+                    reservationId,
+                    currentUserId,
+                    requestDto.getCancelReason(),
+                    requestDto.getCancelMemo(),
+                    canceledAt
+    );
+
+    if (updateResult == 0) {
+      throw new BaseException(BaseResponseStatus.CANCEL_REQUEST_FAILED);
+    }
+
+    // 6. 상대방에게 알림 생성
+    createCancelNotification(reservation, currentUserId);
+
+    // 7. 응답 생성
+    String canceledAtFormatted = canceledAt.atZone(ZoneId.of("Asia/Seoul"))
+                    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+    return new ReservationCancelResponseDto(
+                    reservationId,
+                    canceledAtFormatted,
+                    "예약이 성공적으로 취소되었습니다."
+    );
+  }
+
+  /**
+   * 취소 알림 생성
+   */
+  private void createCancelNotification(ReservationCancelCheckDto reservation, Long canceledBy) {
+    // 취소한 사람이 일반 사용자면 → 전문가에게 알림
+    // 취소한 사람이 전문가면 → 일반 사용자에게 알림
+
+    Long targetUserId;
+    String canceledByName;
+    String targetName;
+
+    if (reservation.getUserId().equals(canceledBy)) {
+      // 일반 사용자가 취소 → 전문가에게 알림
+      targetUserId = reservation.getAdvisorId();
+      canceledByName = reservation.getClientName();
+      targetName = reservation.getAdvisorName();
+    } else {
+      // 전문가가 취소 → 일반 사용자에게 알림
+      targetUserId = reservation.getUserId();
+      canceledByName = reservation.getAdvisorName();
+      targetName = reservation.getClientName();
+    }
+
+    String title = "상담 예약이 취소되었습니다";
+    String message = String.format("%s님이 %s %s 상담 예약을 취소하였습니다.",
+                    canceledByName,
+                    reservation.getDate(),
+                    reservation.getStartTime());
+
+    reservationMapper.createNotification(
+                    targetUserId,
+                    "RESERVATION_CANCELED",
+                    title,
+                    message,
+                    reservation.getId()
+    );
+  }
+
+  public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId, PageRequestDto pageRequest) {
+
+    // 1. 사용자 존재 및 role 확인
+    String userRole = reservationMapper.getUserRole(userId);
+    if (userRole == null) {
+      throw new BaseException(BaseResponseStatus.NO_EXIST_USER);
+    }
+
+    // 2. 사용자 타입에 따라 다른 쿼리 실행
+    List<ReservationDetailResponseDto> reservations;
+
+    if ("ADVISOR".equals(userRole)) {
+      // 전문가인 경우: advisor_id 조회 후 해당 전문가의 예약 내역 조회
+      Long advisorId = reservationMapper.getAdvisorIdByUserId(userId);
+      if (advisorId == null) {
+        throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+      }
+      reservations = reservationMapper.findAdvisorReservations(advisorId, pageRequest);
+    } else {
+      // 일반 사용자인 경우: user_id로 예약 내역 조회
+      reservations = reservationMapper.findUserReservations(userId, pageRequest);
+    }
+
+    // 3. CursorPage 생성
+    boolean hasNext = reservations.size() > pageRequest.getPageSize();
+    if (hasNext) {
+      reservations.remove(reservations.size() - 1); // 마지막 요소 제거
+    }
+
+    Long nextCursor = null;
+    if (hasNext && !reservations.isEmpty()) {
+      nextCursor = reservations.get(reservations.size() - 1).getReservationId();
+    }
+
+    return CursorPage.<ReservationDetailResponseDto>builder()
+                    .content(reservations)
+                    .nextCursor(nextCursor)
+                    .hasNext(hasNext)
+                    .pageSize(pageRequest.getPageSize())
+                    .pageNo(pageRequest.getPageNo())
+                    .build();
   }
 }
