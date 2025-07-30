@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
+import { useAuth } from '@/context/AuthContext';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 import profileCat from '@/assets/images/profiles/Profile_cat.svg';
 import profileCheek from '@/assets/images/profiles/Profile_cheek.svg';
@@ -21,6 +22,7 @@ interface ConsultationItem {
 
 const MyPage = () => {
   const [searchParams] = useSearchParams();
+  const { userInfo } = useAuth();
   const [activeTab, setActiveTab] = useState('내 정보');
   const [consultationTab, setConsultationTab] = useState('상담 전');
 
@@ -40,8 +42,8 @@ const MyPage = () => {
   // 상담일지 관련 상태
   const [selectedConsultation, setSelectedConsultation] = useState<ConsultationItem | null>(null);
   
-  // 전문가 여부 확인 (DB 연결 전 임시 변수)
-  const isExpert = true; // true: 전문가, false: 일반 사용자
+  // 사용자 역할에 따른 전문가 여부 확인
+  const isExpert = userInfo?.role === 'ADVISOR';
   
   // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -49,16 +51,6 @@ const MyPage = () => {
   const [showProfileEditModal, setShowProfileEditModal] = useState(false);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [showImageUploadModal, setShowImageUploadModal] = useState(false);
-  
-  const userInfo = {
-    userId: 'ssafy_kim',
-    name: '김싸피',
-    contact: '010-0000-0000',
-    email: 'ssafy@samsung.com',
-    nickname: '김싸피',
-    qualification: '투자자산운용사',
-    isApproved: true
-  };
 
   // Form states
   const [passwordForm, setPasswordForm] = useState({
@@ -68,13 +60,13 @@ const MyPage = () => {
   });
   
   const [editInfoForm, setEditInfoForm] = useState({
-    name: userInfo.name,
-    contact: userInfo.contact,
-    email: userInfo.email
+    name: userInfo?.userName || '',
+    contact: '010-0000-0000', // 기본값 설정
+    email: 'ssafy@samsung.com' // 기본값 설정
   });
   
   const [profileForm, setProfileForm] = useState({
-    nickname: userInfo.nickname,
+    nickname: userInfo?.userName || '',
     selectedAvatar: 'fox' // 기본값을 fox로 설정 (현재 표시되는 이미지)
   });
   
@@ -380,36 +372,32 @@ const MyPage = () => {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center py-1">
                       <span className="text-gray-600">아이디</span>
-                      <span className="text-gray-900 font-medium">{userInfo.userId}</span>
+                      <span className="text-gray-900 font-medium">{userInfo?.userId || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
                       <span className="text-gray-600">이름</span>
-                      <span className="text-gray-900 font-medium">{userInfo.name}</span>
+                      <span className="text-gray-900 font-medium">{userInfo?.userName || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
                       <span className="text-gray-600">휴대폰 번호</span>
-                      <span className="text-gray-900 font-medium">{userInfo.contact}</span>
+                      <span className="text-gray-900 font-medium">{editInfoForm.contact}</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
                       <span className="text-gray-600">이메일 주소</span>
-                      <span className="text-gray-900 font-medium">{userInfo.email}</span>
+                      <span className="text-gray-900 font-medium">{editInfoForm.email}</span>
                     </div>
                     {isExpert && (
                       <div className="flex justify-between items-center py-3">
                         <span className="text-gray-600">전문 자격 증명</span>
                         <div className="flex items-center space-x-2">
-                          <span className="text-gray-900 font-medium">{userInfo.qualification}</span>
-                          {userInfo.isApproved && (
-                            <>
-                              <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                              <span className="text-blue-600 text-sm font-medium">승인</span>
-                              <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </>
-                          )}
+                          <span className="text-gray-900 font-medium">투자자산운용사</span>
+                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-blue-600 text-sm font-medium">승인</span>
+                          <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
                         </div>
                       </div>
                     )}
