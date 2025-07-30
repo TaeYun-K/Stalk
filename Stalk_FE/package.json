@@ -11,6 +11,8 @@
   "scripts": {
     "start": "vite",
     "dev": "vite",
+    "dev:docker": "VITE_API_URL=https://i13e205.p.ssafy.io:8443/api vite",
+    "dev:local": "VITE_API_URL=http://localhost:8081/api vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",

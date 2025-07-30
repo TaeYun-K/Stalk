@@ -1,7 +1,9 @@
 import { SignupFormData, User, LoginRequest, LoginResponse, BaseApiResponse } from '@/types';
-import { setCookie, getCookie, removeCookie } from '@/utils/cookieUtils';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+// 메모리에 토큰 저장을 위한 변수들
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+let userInfo: any = null;
 
 interface EmailVerificationRequest {
   email: string;
@@ -16,19 +18,53 @@ class AuthService {
   // 로그인
   static async login(data: LoginRequest): Promise<LoginResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      // 입력 데이터 검증
+      if (!data.userId || !data.password) {
+        throw new Error('아이디와 비밀번호를 모두 입력해주세요.');
+      }
+      
+      // 공백 제거
+      const cleanData = {
+        userId: data.userId.trim(),
+        password: data.password.trim()
+      };
+      
+      console.log('로그인 요청 데이터:', cleanData);
+      console.log('로그인 요청 URL:', `/api/auth/login`);
+      console.log('요청 본문:', JSON.stringify(cleanData));
+      
+      const response = await fetch(`/api/auth/login`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
           'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
         },
-        credentials: 'include', // CORS 쿠키 포함
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanData),
       });
 
       if (!response.ok) {
+        console.error('API 응답 오류:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url
+        });
+        
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        console.error('에러 응답 데이터:', errorData);
+        
+        // Spring Boot 기본 에러 응답 처리
+        if (errorData.error === 'Bad Request' && errorData.status === 400) {
+          console.error('Spring Boot 검증 실패 - 요청 데이터:', cleanData);
+          throw new Error('입력 데이터가 올바르지 않습니다. 아이디와 비밀번호를 확인해주세요.');
+        }
+        
+        // 백엔드 커스텀 에러 메시지가 있는 경우
+        if (errorData.message) {
+          throw new Error(errorData.message);
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result: BaseApiResponse<LoginResponse> = await response.json();
@@ -37,24 +73,24 @@ class AuthService {
         throw new Error(result.message);
       }
 
-      // Access Token과 Refresh Token을 쿠키에 저장
-      setCookie('accessToken', result.result.accessToken, 1); // 1일
-      setCookie('refreshToken', result.result.refreshToken, 7); // 7일
+      // Access Token과 Refresh Token을 메모리에 저장
+      accessToken = result.result.accessToken;
+      refreshToken = result.result.refreshToken;
       
-      // 사용자 정보를 쿠키에 저장 (자동 로그인용)
-      setCookie('userInfo', JSON.stringify({
+      // 사용자 정보를 메모리에 저장 (자동 로그인용)
+      userInfo = {
         userId: result.result.userId,
         userName: result.result.userName,
         role: result.result.role
-      }), 7);
+      };
       
       return result.result;
     } catch (error) {
       console.error('로그인 API 호출 실패:', error);
       
-      // 개발 환경에서만 Mock 데이터로 대체
-      if (import.meta.env.DEV && (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch')))) {
-        console.warn('개발 환경: 백엔드 서버 연결 실패, Mock 데이터로 대체합니다.');
+      // 개발 환경에서 Mock 데이터로 대체 (네트워크 에러, 400, 500 에러 모두 포함)
+      if (import.meta.env.DEV) {
+        console.warn('개발 환경: 백엔드 서버 오류, Mock 데이터로 대체합니다.');
         
         // 백엔드에 등록된 사용자만 Mock 로그인 허용
         const validUsers: Record<string, { userId: number; userName: string; role: 'USER' | 'ADVISOR' | 'ADMIN'; password: string }> = {
@@ -87,16 +123,16 @@ class AuthService {
           message: 'Mock 로그인 성공'
         };
         
-        // Mock 토큰 저장
-        setCookie('accessToken', mockResponse.accessToken, 1);
-        setCookie('refreshToken', mockResponse.refreshToken, 7);
+        // Mock 토큰을 메모리에 저장
+        accessToken = mockResponse.accessToken;
+        refreshToken = mockResponse.refreshToken;
         
-        // 사용자 정보를 쿠키에 저장
-        setCookie('userInfo', JSON.stringify({
+        // 사용자 정보를 메모리에 저장
+        userInfo = {
           userId: mockResponse.userId,
           userName: mockResponse.userName,
           role: mockResponse.role
-        }), 7);
+        };
         
         return mockResponse;
       }
@@ -146,17 +182,14 @@ class AuthService {
 
   // 로그아웃
   static async logout(): Promise<void> {
-    const token = getCookie('accessToken');
-    
-    if (token) {
+    if (accessToken) {
       try {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
+        await fetch(`/api/auth/logout`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Accept': 'application/json',
           },
-          credentials: 'include',
         });
       } catch (error) {
         console.error('로그아웃 API 호출 실패:', error);
@@ -168,27 +201,25 @@ class AuthService {
       }
     }
     
-    // 쿠키에서 모든 인증 정보 제거
-    removeCookie('accessToken');
-    removeCookie('refreshToken');
-    removeCookie('userInfo');
+    // 메모리에서 모든 인증 정보 제거
+    accessToken = null;
+    refreshToken = null;
+    userInfo = null;
   }
 
   // 토큰 가져오기
   static getAccessToken(): string | null {
-    return getCookie('accessToken');
+    return accessToken;
   }
 
   // 토큰 갱신
   static async refreshToken(): Promise<string | null> {
-    const refreshToken = getCookie('refreshToken');
-    
     if (!refreshToken) {
       return null;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      const response = await fetch(`/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -203,8 +234,8 @@ class AuthService {
       const result = await response.json();
       
       if (result.isSuccess && result.result?.accessToken) {
-        // 새로운 Access Token 저장
-        setCookie('accessToken', result.result.accessToken, 1);
+        // 새로운 Access Token을 메모리에 저장
+        accessToken = result.result.accessToken;
         return result.result.accessToken;
       }
       
@@ -224,7 +255,7 @@ class AuthService {
 
   // 인증된 API 요청 헬퍼 (토큰 갱신 포함)
   static async authenticatedRequest(url: string, options: any = {}) {
-    let token = getCookie('accessToken');
+    let token = accessToken;
     
     // 토큰이 없으면 갱신 시도
     if (!token) {
@@ -256,17 +287,12 @@ class AuthService {
 
   // 자동 로그인 체크
   static checkAutoLogin(): boolean {
-    const accessToken = getCookie('accessToken');
-    const refreshToken = getCookie('refreshToken');
-    const userInfo = getCookie('userInfo');
-    
-    return !!(accessToken || refreshToken) && !!userInfo;
+    return !!(accessToken && userInfo);
   }
 
   // 사용자 정보 가져오기
   static getUserInfo(): any {
-    const userInfo = getCookie('userInfo');
-    return userInfo ? JSON.parse(userInfo) : null;
+    return userInfo;
   }
 
   // 토큰 검증
