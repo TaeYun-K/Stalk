@@ -4,6 +4,7 @@ import '@/App.css';
 
 // Context
 import { WatchlistProvider } from '@/context/WatchlistContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 
 // Components
 import Navbar from '@/components/navbar';
@@ -11,6 +12,8 @@ import HomePageNavbar from '@/components/homepage-navbar';
 import Sidebar from '@/components/sidebar';
 import Footer from '@/components/footer';
 import ScrollToTop from '@/components/ScrollToTop';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import AdminProtectedRoute from '@/components/AdminProtectedRoute';
 
 // Pages
 import HomePage from '@/pages/home-page';
@@ -64,13 +67,12 @@ const hideFooterRoutes: string[] = ['/SignupChoicePage', '/login'];
 
 const AppContent: React.FC = () => {
   const location = useLocation();
+  const { isLoggedIn, isLoading, userInfo } = useAuth();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/');
   const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
   
-  console.log('Current path:', location.pathname);
-  console.log('Show footer:', showFooter);
-  console.log('Hide footer routes:', hideFooterRoutes);
+
 
   return (
     <div className="App min-h-screen bg-white flex flex-col">
@@ -124,9 +126,11 @@ const App: React.FC = () => {
   return (
     <Router>
       <ScrollToTop />
-      <WatchlistProvider>
-        <AppContent />
-      </WatchlistProvider>
+      <AuthProvider>
+        <WatchlistProvider>
+          <AppContent />
+        </WatchlistProvider>
+      </AuthProvider>
     </Router>
   );
 };

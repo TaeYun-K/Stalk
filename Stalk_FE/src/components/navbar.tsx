@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import newsIcon from '@/assets/images/icons/news_icon.png';
 import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { isLoggedIn, logout, userInfo, isLoggingOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -29,11 +30,7 @@ const Navbar: React.FC = () => {
     }
   };
 
-  // 로그인 상태 확인 (실제로는 context나 state management 사용)
-  const isLoggedIn: boolean = location.pathname.includes('logged-in') || 
-                    location.pathname === '/mypage' || 
-                    location.pathname === '/consultations' ||
-                    location.pathname === '/favorites';
+  // 로그인 상태는 AuthContext에서 관리
 
   return (
     <nav className="bg-white fixed top-0 left-0 right-0 z-50">
@@ -156,7 +153,7 @@ const Navbar: React.FC = () => {
                   className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm  duration-300"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                    김
+                    {userInfo?.userName?.charAt(0) || '사'}
                   </div>
                   
                   
@@ -181,11 +178,17 @@ const Navbar: React.FC = () => {
                     </button>
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
-                      onClick={() => {
-                        navigate('/');
+                      onClick={async () => {
+                        try {
+                          await logout();
+                          navigate('/');
+                        } catch (error) {
+                          console.error('로그아웃 실패:', error);
+                        }
                         setShowProfileMenu(false);
                       }}
-                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3"
+                      disabled={isLoggingOut}
+                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

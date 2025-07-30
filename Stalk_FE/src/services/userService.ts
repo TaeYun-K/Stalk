@@ -1,5 +1,7 @@
 import { User, PasswordForm, EditInfoForm } from '@/types';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
 class UserService {
   // 사용자 정보 조회
   static async getUserInfo(userId: string): Promise<User> {

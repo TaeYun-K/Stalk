@@ -1,17 +1,9 @@
-import { SignupFormData, User } from '@/types';
+import { SignupFormData, User, LoginRequest, LoginResponse, BaseApiResponse } from '@/types';
 
-// 실제 API 엔드포인트는 추후 설정
-// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-
-interface LoginRequest {
-  userId: string;
-  password: string;
-}
-
-interface LoginResponse {
-  token: string;
-  user: User;
-}
+// 메모리에 토큰 저장을 위한 변수들
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+let userInfo: any = null;
 
 interface EmailVerificationRequest {
   email: string;
@@ -25,22 +17,128 @@ interface EmailVerificationResponse {
 class AuthService {
   // 로그인
   static async login(data: LoginRequest): Promise<LoginResponse> {
-    // TODO: 실제 API 호출로 대체
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          token: 'mock-jwt-token',
-          user: {
-            userId: data.userId,
-            name: '김싸피',
-            contact: '010-0000-0000',
-            email: 'ssafy@samsung.com',
-            nickname: '김싸피',
-            userType: 'general'
-          }
+    try {
+      // 입력 데이터 검증
+      if (!data.userId || !data.password) {
+        throw new Error('아이디와 비밀번호를 모두 입력해주세요.');
+      }
+      
+      // 공백 제거
+      const cleanData = {
+        userId: data.userId.trim(),
+        password: data.password.trim()
+      };
+      
+      console.log('로그인 요청 데이터:', cleanData);
+      console.log('로그인 요청 URL:', `/api/auth/login`);
+      console.log('요청 본문:', JSON.stringify(cleanData));
+      
+      const response = await fetch(`/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify(cleanData),
+      });
+
+      if (!response.ok) {
+        console.error('API 응답 오류:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url
         });
-      }, 1000);
-    });
+        
+        const errorData = await response.json().catch(() => ({}));
+        console.error('에러 응답 데이터:', errorData);
+        
+        // Spring Boot 기본 에러 응답 처리
+        if (errorData.error === 'Bad Request' && errorData.status === 400) {
+          console.error('Spring Boot 검증 실패 - 요청 데이터:', cleanData);
+          throw new Error('입력 데이터가 올바르지 않습니다. 아이디와 비밀번호를 확인해주세요.');
+        }
+        
+        // 백엔드 커스텀 에러 메시지가 있는 경우
+        if (errorData.message) {
+          throw new Error(errorData.message);
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result: BaseApiResponse<LoginResponse> = await response.json();
+      
+      if (!result.isSuccess) {
+        throw new Error(result.message);
+      }
+
+      // Access Token과 Refresh Token을 메모리에 저장
+      accessToken = result.result.accessToken;
+      refreshToken = result.result.refreshToken;
+      
+      // 사용자 정보를 메모리에 저장 (자동 로그인용)
+      userInfo = {
+        userId: result.result.userId,
+        userName: result.result.userName,
+        role: result.result.role
+      };
+      
+      return result.result;
+    } catch (error) {
+      console.error('로그인 API 호출 실패:', error);
+      
+      // 개발 환경에서 Mock 데이터로 대체 (네트워크 에러, 400, 500 에러 모두 포함)
+      if (import.meta.env.DEV) {
+        console.warn('개발 환경: 백엔드 서버 오류, Mock 데이터로 대체합니다.');
+        
+        // 백엔드에 등록된 사용자만 Mock 로그인 허용
+        const validUsers: Record<string, { userId: number; userName: string; role: 'USER' | 'ADVISOR' | 'ADMIN'; password: string }> = {
+          'user001': { userId: 1001, userName: '김철수', role: 'USER', password: 'password123' },
+          'user002': { userId: 1002, userName: '이영희', role: 'USER', password: 'password123' },
+          'advisor001': { userId: 2001, userName: '한승우', role: 'ADVISOR', password: 'password123' },
+          'advisor002': { userId: 2002, userName: '이수진', role: 'ADVISOR', password: 'password123' },
+          'advisor003': { userId: 2003, userName: '박미승', role: 'ADVISOR', password: 'password123' },
+          'admin001': { userId: 3001, userName: '관리자', role: 'ADMIN', password: 'password123' }
+        };
+        
+        const userData = validUsers[data.userId as keyof typeof validUsers];
+        
+        if (!userData) {
+          throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
+        }
+        
+        // 비밀번호 검증
+        if (userData.password !== data.password) {
+          throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
+        }
+        
+        // Mock 응답 생성
+        const mockResponse: LoginResponse = {
+          accessToken: `MOCK_TOKEN_${Date.now()}_ACCESS_${data.userId}`,
+          refreshToken: `MOCK_TOKEN_${Date.now()}_REFRESH_${data.userId}`,
+          userId: userData.userId,
+          userName: userData.userName,
+          role: userData.role,
+          message: 'Mock 로그인 성공'
+        };
+        
+        // Mock 토큰을 메모리에 저장
+        accessToken = mockResponse.accessToken;
+        refreshToken = mockResponse.refreshToken;
+        
+        // 사용자 정보를 메모리에 저장
+        userInfo = {
+          userId: mockResponse.userId,
+          userName: mockResponse.userName,
+          role: mockResponse.role
+        };
+        
+        return mockResponse;
+      }
+      
+      throw error;
+    }
   }
 
   // 회원가입
@@ -84,9 +182,117 @@ class AuthService {
 
   // 로그아웃
   static async logout(): Promise<void> {
-    // TODO: 실제 로그아웃 처리
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    if (accessToken) {
+      try {
+        await fetch(`/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json',
+          },
+        });
+      } catch (error) {
+        console.error('로그아웃 API 호출 실패:', error);
+        // 개발 환경에서 CORS 에러나 네트워크 에러인 경우 Mock 처리
+        if (import.meta.env.DEV && (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch')))) {
+          console.warn('개발 환경: 백엔드 서버 연결 실패, 로컬 로그아웃만 진행합니다.');
+        }
+        // CORS 에러나 네트워크 에러가 발생해도 로컬 정리는 계속 진행
+      }
+    }
+    
+    // 메모리에서 모든 인증 정보 제거
+    accessToken = null;
+    refreshToken = null;
+    userInfo = null;
+  }
+
+  // 토큰 가져오기
+  static getAccessToken(): string | null {
+    return accessToken;
+  }
+
+  // 토큰 갱신
+  static async refreshToken(): Promise<string | null> {
+    if (!refreshToken) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(`/api/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('토큰 갱신 실패');
+      }
+
+      const result = await response.json();
+      
+      if (result.isSuccess && result.result?.accessToken) {
+        // 새로운 Access Token을 메모리에 저장
+        accessToken = result.result.accessToken;
+        return result.result.accessToken;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('토큰 갱신 실패:', error);
+      // CORS 에러나 네트워크 에러인 경우 로그아웃 처리하지 않고 null 반환
+      if (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch'))) {
+        console.warn('네트워크 에러로 인한 토큰 갱신 실패, 로그아웃 처리하지 않음');
+        return null;
+      }
+      // 토큰 갱신 실패 시 로그아웃 처리
+      this.logout();
+      return null;
+    }
+  }
+
+  // 인증된 API 요청 헬퍼 (토큰 갱신 포함)
+  static async authenticatedRequest(url: string, options: any = {}) {
+    let token = accessToken;
+    
+    // 토큰이 없으면 갱신 시도
+    if (!token) {
+      token = await this.refreshToken();
+    }
+    
+    const config = {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json',
+      },
+    };
+    
+    const response = await fetch(url, config);
+    
+    // 401 에러 시 토큰 갱신 재시도
+    if (response.status === 401) {
+      const newToken = await this.refreshToken();
+      if (newToken) {
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return fetch(url, config);
+      }
+    }
+    
+    return response;
+  }
+
+  // 자동 로그인 체크
+  static checkAutoLogin(): boolean {
+    return !!(accessToken && userInfo);
+  }
+
+  // 사용자 정보 가져오기
+  static getUserInfo(): any {
+    return userInfo;
   }
 
   // 토큰 검증

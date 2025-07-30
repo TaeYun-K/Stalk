@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
+import { useAuth } from '@/context/AuthContext';
 
 interface NewNavbarProps {
   userType?: string;
@@ -11,6 +12,7 @@ interface NewNavbarProps {
 const NewNavbar: React.FC<NewNavbarProps> = ({ userType = 'general', onUserTypeChange = () => {}, showUserTypeToggle = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isLoggedIn, logout } = useAuth();
   
   // userType is used in conditional rendering below
 
@@ -55,13 +57,27 @@ const NewNavbar: React.FC<NewNavbarProps> = ({ userType = 'general', onUserTypeC
           </div>
         )}
         
-        {/* 로그인 페이지가 아닐 때만 로그인 버튼 표시 */}
-        {location.pathname !== '/login' && (
+        {/* 로그인 상태에 따른 버튼 표시 */}
+        {!isLoggedIn && location.pathname !== '/login' ? (
           <button 
             onClick={() => navigate('/login')}
             className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-6 py-2.5 rounded-2xl text-sm transition-all duration-300 transform hover:scale-105"
           >
             로그인
+          </button>
+        ) : isLoggedIn && (
+          <button 
+            onClick={async () => {
+              try {
+                await logout();
+                navigate('/');
+              } catch (error) {
+                console.error('로그아웃 실패:', error);
+              }
+            }}
+            className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-2.5 rounded-2xl text-sm transition-all duration-300 transform hover:scale-105"
+          >
+            로그아웃
           </button>
         )}
       </div>

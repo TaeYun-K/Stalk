@@ -11,6 +11,41 @@ export interface User {
   profilePhoto?: string;
 }
 
+// 백엔드 API 응답 타입
+export interface LoginRequest {
+  userId: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  userId: number;
+  userName: string;
+  role: 'USER' | 'ADVISOR' | 'ADMIN';
+  message: string;
+}
+
+export interface UserInfo {
+  userId: number;
+  userName: string;
+  role: 'USER' | 'ADVISOR' | 'ADMIN';
+}
+
+export interface AuthState {
+  isLoggedIn: boolean;
+  isLoading: boolean;
+  userInfo: UserInfo | null;
+}
+
+export interface BaseApiResponse<T> {
+  httpStatus: string;
+  isSuccess: boolean;
+  message: string;
+  code: number;
+  result: T;
+}
+
 // 상담 관련 타입
 export interface ConsultationItem {
   id: string;
