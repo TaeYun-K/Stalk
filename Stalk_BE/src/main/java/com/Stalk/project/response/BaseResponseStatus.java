@@ -132,6 +132,16 @@ public enum BaseResponseStatus {
   POST_DELETE_FORBIDDEN(HttpStatus.FORBIDDEN, false, 1410, "해당 게시글을 삭제할 권한이 없습니다."),
   POST_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1411, "게시글 수정에 실패했습니다."),
   POST_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1412, "게시글 삭제에 실패했습니다."),
+
+  // Comment 관련 에러 (1413~1420)
+  COMMUNITY_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1413, "댓글을 찾을 수 없습니다."),
+  COMMUNITY_COMMENT_CREATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1414, "댓글 작성에 실패했습니다."),
+  COMMENT_UPDATE_FORBIDDEN(HttpStatus.FORBIDDEN, false, 1415, "댓글을 수정할 권한이 없습니다."),
+  COMMENT_DELETE_FORBIDDEN(HttpStatus.FORBIDDEN, false, 1416, "댓글을 삭제할 권한이 없습니다."),
+  COMMENT_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1417, "댓글 수정에 실패했습니다."),
+  COMMENT_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1418, "댓글 삭제에 실패했습니다."),
+
+
   // 로그아웃
   LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
 
