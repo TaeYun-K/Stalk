@@ -1,5 +1,6 @@
 package com.Stalk.project.user.dao;
 
+import com.Stalk.project.user.dto.in.UserUpdateRequestDto;
 import com.Stalk.project.user.dto.out.UserProfileResponseDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -14,4 +15,8 @@ public interface UserProfileMapper {
    * @return 사용자 프로필 정보
    */
   UserProfileResponseDto findUserProfileById(@Param("userId") Long userId);
+
+  int updateUserProfile(@Param("userId") Long userId,
+      @Param("updateDto") UserUpdateRequestDto updateDto);
+
 }
