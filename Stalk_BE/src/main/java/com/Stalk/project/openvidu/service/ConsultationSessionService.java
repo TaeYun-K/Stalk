@@ -26,6 +26,7 @@ public class ConsultationSessionService {
     this.openVidu = openVidu;
   }
 
+
   /**
    * 토큰 발급 메서드
    */
