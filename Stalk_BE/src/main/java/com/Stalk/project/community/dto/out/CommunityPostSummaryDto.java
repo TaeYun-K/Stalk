@@ -26,5 +26,5 @@ public class CommunityPostSummaryDto {
   private Integer commentCount;
 
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'+09:00'")
-  private LocalDateTime createdAt;
+  private String createdAt;
 }
