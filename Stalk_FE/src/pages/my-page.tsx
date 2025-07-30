@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate  } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 import { useAuth } from '@/context/AuthContext';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
@@ -9,8 +9,10 @@ import profileFox from '@/assets/images/profiles/Profile_fox.svg';
 import profilePanda from '@/assets/images/profiles/Profile_panda.svg';
 import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
 import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
+import ConsultationService from '@/services/consultationService';
 
 interface ConsultationItem {
+  id: string;
   date: string;
   time: string;
   content: string;
@@ -169,6 +171,20 @@ const MyPage = () => {
       fileName: '',
       selectedFile: null
     });
+  };
+
+  // 상담 입장 처리
+  const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
+    try {
+      const consultationId = consultationItem.id;
+
+      const sessionData = await ConsultationService.createSessionToken(consultationId);
+      
+      navigate(`/video-consultation/${sessionData.sessionId}?sessionId=${sessionData.sessionId}&token=${sessionData.token}&id=${consultationId}`);
+    } catch (error) {
+      console.error('Failed to start consultation:', error);
+      alert('상담 입장에 실패했습니다. 다시 시도해주세요.');
+    }
   };
 
   // 선택된 프로필 이미지 가져오기
@@ -500,8 +516,8 @@ const MyPage = () => {
                           <td className="px-4 py-3 text-left text-sm text-gray-900">{item.content}</td>
                           <td className="px-4 py-3 text-left text-sm text-gray-900">{item.expert}</td>
                           <td className="px-4 py-3 text-left">
-                            <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
-                              {item.videoConsultation}
+                            <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors" onClick={() => handleEnterConsultation(item)}>
+                            {item.videoConsultation}
                             </button>
                           </td>
                           <td className="px-4 py-3">
@@ -512,7 +528,7 @@ const MyPage = () => {
                           {consultationTab === '상담 완료' && (
                             <td className="px-4 py-3">
                               <button 
-                                onClick={() => handleConsultationDiaryClick(item)}
+                                onClick={() => handleEnterConsultation(item)}
                                 className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
                               >
                                 상담일지
