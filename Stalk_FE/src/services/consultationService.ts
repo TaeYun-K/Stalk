@@ -167,7 +167,11 @@ class ConsultationService {
   // OpenVidu 세션 생성 및 토큰 발급
   static async createSessionToken(consultationId: string): Promise<SessionTokenResponse> {
     try {
+<<<<<<< HEAD
       const response = await fetch(`http://localhost:8081/api/consultations/${consultationId}/session`, {
+=======
+      const response = await fetch(`https://i13e205.p.ssafy.io:8443/api/consultations/${consultationId}/session`, {
+>>>>>>> bb288a1dae64afb3904ed4ff7fc04f0c3a7d73d3
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

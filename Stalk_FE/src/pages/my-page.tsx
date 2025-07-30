@@ -176,6 +176,20 @@ const MyPage = () => {
     });
   };
 
+  // 상담 입장 처리
+  const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
+    try {
+      const consultationId = consultationItem.id;
+
+      const sessionData = await ConsultationService.createSessionToken(consultationId);
+      
+      navigate(`/video-consultation/${sessionData.sessionId}?sessionId=${sessionData.sessionId}&token=${sessionData.token}&id=${consultationId}`);
+    } catch (error) {
+      console.error('Failed to start consultation:', error);
+      alert('상담 입장에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
   // 선택된 프로필 이미지 가져오기
   const getSelectedProfileImage = () => {
     const selectedAvatar = avatarOptions.find(avatar => avatar.id === profileForm.selectedAvatar);
