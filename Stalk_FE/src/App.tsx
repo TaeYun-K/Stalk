@@ -36,6 +36,7 @@ import FavoritesPage from '@/pages/favorites-page';
 import SignupChoicePage from '@/pages/signup-choice-page';
 import SearchPage from '@/pages/search-page';
 import ExpertsIntroductionRegistrationPage from '@/pages/experts-introduction-registration-page';
+import VideoConsultationPage from '@/pages/video-consultation-page';
 
 // Navbar를 숨길 페이지 목록
 const hideNavbarRoutes: string[] = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete'];
@@ -109,6 +110,11 @@ const AppContent: React.FC = () => {
               <Route path="/watchlist" element={<div className="p-4"><h1>관심종목</h1></div>} />
               <Route path="/holdings" element={<div className="p-4"><h1>보유종목</h1></div>} />
               <Route path="/reservations" element={<div className="p-4"><h1>예약내역</h1></div>} />
+
+              {/* Video Consultation Route */}
+              <Route path="/video-consultation/:consultationId" element={<VideoConsultationPage />} />
+
+              {/* Protected Routes */}
               
               {/* Redirect to home if route not found */}
               <Route path="*" element={<Navigate to="/" replace />} />

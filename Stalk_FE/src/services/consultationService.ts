@@ -1,12 +1,21 @@
 import { ConsultationItem } from '@/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-
 interface ConsultationRequest {
   expertId: string;
   date: string;
   time: string;
   content: string;
+}
+
+interface SessionTokenResponse {
+  sessionId: string;
+  token: string;
+  createdAt: string;
+}
+
+interface SessionInfo {
+  sessionId: string;
+  createdAt: string;
 }
 
 class ConsultationService {
@@ -114,8 +123,8 @@ class ConsultationService {
   }
 
   // 상담 일지 조회
-  static async getConsultationLog(_consultationId: string): Promise<{ 
-    content: string; 
+  static async getConsultationLog(_consultationId: string): Promise<{
+    content: string;
     recommendations: string[];
     attachments: string[];
   }> {
@@ -140,8 +149,8 @@ class ConsultationService {
 
   // 상담 일지 작성 (전문가용)
   static async createConsultationLog(
-    _consultationId: string, 
-    _content: string, 
+    _consultationId: string,
+    _content: string,
     _recommendations: string[]
   ): Promise<{ success: boolean; message: string }> {
     // TODO: 실제 API 호출로 대체
@@ -154,6 +163,53 @@ class ConsultationService {
       }, 1000);
     });
   }
+
+  // OpenVidu 세션 생성 및 토큰 발급
+  static async createSessionToken(consultationId: string): Promise<SessionTokenResponse> {
+    try {
+<<<<<<< HEAD
+      const response = await fetch(`http://localhost:8081/api/consultations/${consultationId}/session`, {
+=======
+      const response = await fetch(`https://i13e205.p.ssafy.io:8443/api/consultations/${consultationId}/session`, {
+>>>>>>> bb288a1dae64afb3904ed4ff7fc04f0c3a7d73d3
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to create session token:', error);
+      throw new Error('세션 토큰 생성에 실패했습니다.');
+    }
+  }
+
+  // 세션 정보 조회
+  static async getSessionInfo(consultationId: string): Promise<SessionInfo> {
+    try {
+      const response = await fetch(`https://i13e205.p.ssafy.io:8443/api/consultations/${consultationId}/session`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get session info:', error);
+      throw new Error('세션 정보 조회에 실패했습니다.');
+    }
+  }
 }
 
-export default ConsultationService; 
+export default ConsultationService;
+export type { SessionTokenResponse, SessionInfo };
