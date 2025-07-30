@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
+import ExpertProfileImage from '@/assets/expert_profile_image.png';
 
 interface Review {
   id: number;
@@ -54,7 +55,7 @@ const ExpertDetailPage: React.FC = () => {
       name: '제임스',
       title: '컨설턴트',
       tagline: '주식 투자, 어디서부터 시작해야 할지 막막하신가요?',
-      image: '',
+      image: ExpertProfileImage,
       introduction: '중급자도 쉽게 이해할 수 있는 명확한 솔루션을 제공합니다. 8년간의 경험을 바탕으로 기술적 분석을 통한 객관적인 매수/매도 타이밍을 제시하며, 데이터 기반 전략으로 자산을 보호하고 성장시켜 드립니다. 저와 함께라면 투자가 더 이상 어렵지 않습니다.',
       qualifications: [
         'CFA (Chartered Financial Analyst)',
@@ -88,7 +89,7 @@ const ExpertDetailPage: React.FC = () => {
       name: '박주현',
       title: '컨설턴트',
       tagline: '주식 투자, 어디서부터 시작해야 할지 막막하신가요?',
-      image: '',
+      image: ExpertProfileImage,
       introduction: '초보자도 쉽게 이해할 수 있는 명확한 솔루션을 제공합니다. 5년간의 경험을 바탕으로 기술적 분석을 통한 객관적인 매수/매도 타이밍을 제시하며, 데이터 기반 전략으로 자산을 보호하고 성장시켜 드립니다. 저와 함께라면 투자가 더 이상 어렵지 않습니다.',
       qualifications: [
         '투자자산운용사',
@@ -292,7 +293,7 @@ const ExpertDetailPage: React.FC = () => {
       <NewNavbar userType="general" onUserTypeChange={() => {}} />
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex gap-8 min-h-screen">
           {/* Left Content */}
           <div className="flex-1">
@@ -304,6 +305,7 @@ const ExpertDetailPage: React.FC = () => {
                     {expert.name}
                   </h1>
                   <h3 className='text-left text-l font-semibold text-blue-500 mb-2'>{expert.title}</h3>
+                  <h3 className='text-left text-l font-medium text-gray-400 mb-2'>/  010-0000-0000</h3>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center mb-2 ml-4">
                       <div className="flex text-yellow-400">
@@ -318,11 +320,11 @@ const ExpertDetailPage: React.FC = () => {
                   "{expert.tagline}"
                 </p>
               </div>
-              <div className="w-48 h-48 rounded-2xl overflow-hidden">
+              <div className="w-48 h-60 rounded-2xl overflow-hidden">
                 <img 
                   src={expert.image} 
                   alt={expert.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-top"
                 />
               </div>
             </div>
@@ -374,7 +376,10 @@ const ExpertDetailPage: React.FC = () => {
             </div>
             {/* Reviews */}
             <section className="mt-8">
-              <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">리뷰</h2>
+              <div className="flex flex-row items-end space-x-3 mb-4">
+                <h2 className="text-left text-2xl font-bold text-gray-900">리뷰</h2>
+                <h3 className="text-left text-gray-500 text-sm">Reviews</h3>
+              </div>
               <div className="space-y-6">
                 {reviews.map((review) => (
                   <div key={review.id} className="py-6">

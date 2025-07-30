@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
+import newsIcon from '@/assets/images/icons/news_icon.png';
+import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
@@ -102,7 +104,7 @@ const Navbar: React.FC = () => {
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
                   >
-                   
+                    <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
                     <span>뉴스</span>
                   </button>
                   <button
@@ -112,8 +114,8 @@ const Navbar: React.FC = () => {
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
                   >
-                  
-                    <span>투자 지식in</span>
+                    <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
+                    <span>투자 지식iN</span>
                   </button>
                 </div>
               )}

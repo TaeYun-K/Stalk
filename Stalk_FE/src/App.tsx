@@ -32,6 +32,7 @@ import ExpertDetailPage from '@/pages/expert-detail-page';
 import FavoritesPage from '@/pages/favorites-page';
 import SignupChoicePage from '@/pages/signup-choice-page';
 import SearchPage from '@/pages/search-page';
+import ExpertsIntroductionRegistrationPage from '@/pages/experts-introduction-registration-page';
 
 // Navbar를 숨길 페이지 목록
 const hideNavbarRoutes: string[] = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete'];
@@ -54,7 +55,8 @@ const showSidebarRoutes: string[] = [
   '/watchlist',
   '/holdings',
   '/reservations',
-  '/expert-detail'
+  '/expert-detail',
+  '/expert-registration'
 ];
 
 // Footer를 숨길 페이지 목록
@@ -98,6 +100,7 @@ const AppContent: React.FC = () => {
               <Route path="/consultations" element={<div className="p-4"><h1>상담 내역</h1></div>} />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/expert-registration" element={<ExpertsIntroductionRegistrationPage />} />
               
               {/* Sidebar Routes */}
               <Route path="/notifications" element={<div className="p-4"><h1>알림</h1></div>} />

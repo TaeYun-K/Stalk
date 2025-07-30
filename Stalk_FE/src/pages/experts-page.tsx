@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ExpertProfileImage from '@/assets/expert_profile_image.png';
 
 const ExpertsPage = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ const ExpertsPage = () => {
       tags: ['#중급자 대상', '#CFA', '#단기매매'],
       features: ['30분 영상 상담', '번개 답변'],
       description: '<무수한 상담 후기 수>로 검증된 변호사/합리적 수임료',
-      image: ''
+      image: ExpertProfileImage
     },
     {
       id: 2,
@@ -33,7 +34,7 @@ const ExpertsPage = () => {
       tags: ['#입문자 대상', '#금융', '#장기'],
       features: ['15분 영상 상담', '번개 답변'],
       description: '꼼꼼하고 정확하게 상담하여 명쾌한 해결책을 제시합니다',
-      image: ''
+      image: ExpertProfileImage
     }
   ];
 
@@ -209,11 +210,11 @@ const ExpertsPage = () => {
           {sortedExperts.map((expert) => (
             <div 
               key={expert.id} 
-              className="bg-white rounded-lg py-10 px-12 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 cursor-pointer"
+              className="bg-white rounded-lg px-12 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 cursor-pointer"
               onClick={() => handleExpertClick(expert.id)}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+              <div className="flex h-50 items-start items-end justify-between">
+                <div className="flex-1 py-10">
                   {/* Tags */}
                   <div className="flex flex-wrap gap-2 mb-3">
                     {expert.tags.map((tag, tagIndex) => (
@@ -266,11 +267,12 @@ const ExpertsPage = () => {
                 </div>
 
                 {/* Profile Image */}
-                <div className="ml-6">
+                <div className="w-48 h-60
+                 ml-6 flex items-end">
                   <img
                     src={expert.image}
                     alt={expert.name}
-                    className="w-24 h-24 rounded-lg object-cover"
+                    className="w-full h-full rounded-lg object-cover object-top"
                   />
                 </div>
               </div>
