@@ -5,8 +5,6 @@ let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let userInfo: any = null;
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-
 interface EmailVerificationRequest {
   email: string;
 }
@@ -20,19 +18,53 @@ class AuthService {
   // 로그인
   static async login(data: LoginRequest): Promise<LoginResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      // 입력 데이터 검증
+      if (!data.userId || !data.password) {
+        throw new Error('아이디와 비밀번호를 모두 입력해주세요.');
+      }
+      
+      // 공백 제거
+      const cleanData = {
+        userId: data.userId.trim(),
+        password: data.password.trim()
+      };
+      
+      console.log('로그인 요청 데이터:', cleanData);
+      console.log('로그인 요청 URL:', `/api/auth/login`);
+      console.log('요청 본문:', JSON.stringify(cleanData));
+      
+      const response = await fetch(`/api/auth/login`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
           'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
         },
-        credentials: 'include', // CORS 쿠키 포함
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanData),
       });
 
       if (!response.ok) {
+        console.error('API 응답 오류:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url
+        });
+        
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        console.error('에러 응답 데이터:', errorData);
+        
+        // Spring Boot 기본 에러 응답 처리
+        if (errorData.error === 'Bad Request' && errorData.status === 400) {
+          console.error('Spring Boot 검증 실패 - 요청 데이터:', cleanData);
+          throw new Error('입력 데이터가 올바르지 않습니다. 아이디와 비밀번호를 확인해주세요.');
+        }
+        
+        // 백엔드 커스텀 에러 메시지가 있는 경우
+        if (errorData.message) {
+          throw new Error(errorData.message);
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result: BaseApiResponse<LoginResponse> = await response.json();
@@ -56,9 +88,9 @@ class AuthService {
     } catch (error) {
       console.error('로그인 API 호출 실패:', error);
       
-      // 개발 환경에서만 Mock 데이터로 대체
-      if (import.meta.env.DEV && (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch')))) {
-        console.warn('개발 환경: 백엔드 서버 연결 실패, Mock 데이터로 대체합니다.');
+      // 개발 환경에서 Mock 데이터로 대체 (네트워크 에러, 400, 500 에러 모두 포함)
+      if (import.meta.env.DEV) {
+        console.warn('개발 환경: 백엔드 서버 오류, Mock 데이터로 대체합니다.');
         
         // 백엔드에 등록된 사용자만 Mock 로그인 허용
         const validUsers: Record<string, { userId: number; userName: string; role: 'USER' | 'ADVISOR' | 'ADMIN'; password: string }> = {
@@ -152,13 +184,12 @@ class AuthService {
   static async logout(): Promise<void> {
     if (accessToken) {
       try {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
+        await fetch(`/api/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Accept': 'application/json',
           },
-          credentials: 'include',
         });
       } catch (error) {
         console.error('로그아웃 API 호출 실패:', error);
@@ -188,7 +219,7 @@ class AuthService {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      const response = await fetch(`/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

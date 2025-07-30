@@ -29,6 +29,12 @@ const LoginPage = () => {
     e.preventDefault();
     setError('');
 
+    // 프론트엔드 입력 검증
+    if (!formData.userId.trim() || !formData.password.trim()) {
+      setError('아이디와 비밀번호를 모두 입력해주세요.');
+      return;
+    }
+
     try {
       const response = await AuthService.login(formData);
       console.log('로그인 성공:', response);
