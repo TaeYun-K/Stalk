@@ -37,7 +37,7 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
-    config.setAllowedOrigins(Arrays.asList("*"));            // 모든 출처 허용
+    config.setAllowedOriginPatterns(Arrays.asList("*"));            // 모든 출처 허용
     config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(Arrays.asList("*"));            // 모든 요청 헤더 허용
     config.setAllowCredentials(true);                        // 쿠키/인증 정보 허용 시 true
