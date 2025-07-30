@@ -19,4 +19,18 @@
       AND deleted_at IS NULL
   </select>
 
+  <!-- 사용자 정보 업데이트 쿼리 -->
+  <update id="updateUserProfile">
+    UPDATE users
+    <set>
+      <if test="updateDto.name != null and updateDto.name != ''">
+        name = #{updateDto.name},
+      </if>
+      <if test="updateDto.contact != null and updateDto.contact != ''">
+        contact = #{updateDto.contact},
+      </if>
+    </set>
+    WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
+  </update>
+
 </mapper>
