@@ -1,48 +1,69 @@
 package com.Stalk.project.signup.dto.in;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.multipart.MultipartFile;
-import lombok.*;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
 public class AdvisorSignupRequest {
-    
-    @NotBlank @Size(max = 50)
-    private String userId;                          // UI: 아이디
 
-    @NotBlank @Size(max = 50)
-    private String name;                            // UI: 이름
+    @NotBlank(message = "아이디는 필수 입력 값입니다.")
+    private String userId;
 
-    @NotBlank @Size(max = 50)
-    private String nickname;                        // UI: 닉네임
+    @NotBlank(message = "이름은 필수 입력 값입니다.")
+    private String name;
 
-    @NotBlank @Size(min = 8, max = 100)
-    private String password;                        // UI: 비밀번호
+    @NotBlank(message = "닉네임은 필수 입력 값입니다.")
+    private String nickname;
 
-    @NotBlank @Size(min = 8, max = 100)
-    private String passwordConfirm;                 // UI: 비밀번호 확인
+    @NotBlank(message = "비밀번호는 필수 입력 값입니다.")
+    @Pattern(
+        regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\S+$).{8,20}$",
+        message = "비밀번호는 8~20자이며, 숫자·대문자·소문자·특수문자를 모두 포함해야 합니다."
+    )
+    private String password;
 
-    @Pattern(regexp = "\\d{9,20}")
-    private String contact;                         // UI: 연락처
+    @NotBlank(message = "비밀번호 확인은 필수 입력 값입니다.")
+    private String passwordConfirm;
 
-    @NotBlank @Email
-    private String email;                           // UI: 이메일
+    @NotBlank(message = "연락처는 필수 입력 값입니다.")
+    @Pattern(
+        regexp = "^\\d{9,11}$",
+        message = "연락처는 숫자 9~11자리여야 합니다."
+    )
+    private String contact;
 
-    @NotNull
-    private Boolean termsAgreed;                    // UI: 약관 동의 여부
+    @NotBlank(message = "이메일은 필수 입력 값입니다.")
+    @Email(message = "유효한 이메일 주소를 입력하세요.")
+    private String email;
 
-    @NotNull
-    private MultipartFile profileImage;             // UI: 프로필 사진 등록
+    @NotBlank(message = "자격증 명칭은 필수 입력 값입니다.")
+    private String certificateName;
 
-    @NotBlank @Size(max = 100)
-    private String certificateName;                 // UI: 전문 자격명
+    @NotBlank(message = "합격증 번호(8자리)는 필수 입력 값입니다.")
+    @Size(min = 8, max = 8, message = "합격증 번호는 정확히 8자리여야 합니다.")
+    private String certificateFileSn;
 
-    @NotBlank @Size(min = 8, max = 8)
-    private String certificateFileSn;               // UI: 합격증 번호(8)
+    @NotBlank(message = "생년월일(8자리)은 필수 입력 값입니다.")
+    @Size(min = 8, max = 8, message = "생년월일은 YYYYMMDD 형식의 8자리여야 합니다.")
+    private String birth;
 
-    @Pattern(regexp = "\\d{8}")
-    private String birth;                           // UI: 생년월일(8)
+    @NotBlank(message = "발급번호(6자리)는 필수 입력 값입니다.")
+    @Size(min = 6, max = 6, message = "발급번호는 정확히 6자리여야 합니다.")
+    private String certificateFileNumber;
 
-    @NotBlank @Size(min = 6, max = 6)
-    private String certificateFileNumber;           // UI: 발급번호(6)
+    // 프로필 이미지를 필수로 받을 경우
+    @NotNull(message = "프로필 이미지를 업로드해야 합니다.")
+    private MultipartFile profileImage;
+
+    @AssertTrue(message = "약관에 동의해야 합니다.")
+    private Boolean agreedTerms;
+
+    @AssertTrue(message = "개인정보 수집에 동의해야 합니다.")
+    private Boolean agreedPrivacy;
 }
