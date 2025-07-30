@@ -2,6 +2,8 @@ package com.Stalk.project.openvidu.controller;
 
 import com.Stalk.project.openvidu.dto.out.SessionTokenResponseDto;
 import com.Stalk.project.openvidu.service.ConsultationSessionService;
+import io.openvidu.java.client.OpenViduHttpException;
+import io.openvidu.java.client.OpenViduJavaClientException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.NoSuchElementException;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "상담 관련 Controller")
 @Slf4j
@@ -51,6 +54,28 @@ public class ConsultationController {
       return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  @Operation(
+      summary = "상담방 종료",
+      description = "주어진 consultationId에 해당하는 OpenVidu 세션을 종료합니다."
+  )
+  @DeleteMapping("/{consultationId}/session")
+  public ResponseEntity<Void> closeSession(
+      @PathVariable String consultationId) {
+    try {
+      sessionService.closeSession(consultationId);
+      // 204 No Content
+      return ResponseEntity.noContent().build();
+    } catch (ResponseStatusException e) {
+      // 404 등 예외 상태 그대로 전달
+      return ResponseEntity.status(e.getStatusCode()).build();
+    } catch (OpenViduJavaClientException | OpenViduHttpException e) {
+      // OpenVidu 서버 연결 오류
+      return ResponseEntity
+          .status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .build();
     }
   }
 }
