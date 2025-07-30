@@ -141,6 +141,15 @@ public enum BaseResponseStatus {
   COMMENT_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1417, "댓글 수정에 실패했습니다."),
   COMMENT_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1418, "댓글 삭제에 실패했습니다."),
 
+  /**
+   * 1500: User 관련 에러
+   */
+  USER_INFO_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1501, "사용자 정보를 찾을 수 없습니다."),
+  NO_UPDATE_FIELDS(HttpStatus.BAD_REQUEST, false, 1502, "수정할 정보를 입력해주세요."),
+  SAME_DATA_UPDATE(HttpStatus.BAD_REQUEST, false, 1503, "동일한 데이터입니다."),
+  USER_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1504, "사용자 정보 수정에 실패했습니다."),
+  INVALID_PHONE_FORMAT(HttpStatus.BAD_REQUEST, false, 1505, "전화번호는 010으로 시작하는 11자리 숫자여야 합니다."),
+
 
   // 로그아웃
   LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
