@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.user.dao.UserProfileMapper">
+
+  <!-- 사용자 프로필 조회 -->
+  <select id="findUserProfileById"
+    resultType="com.Stalk.project.user.dto.out.UserProfileResponseDto">
+    SELECT user_id as userId,
+           name,
+           contact,
+           email,
+           image   as profileImage,
+           role
+    FROM users
+    WHERE id = #{userId}
+      AND is_active = 1
+      AND deleted_at IS NULL
+  </select>
+
+</mapper>
