@@ -1,0 +1,17 @@
+package com.Stalk.project.user.dao;
+
+import com.Stalk.project.user.dto.out.UserProfileResponseDto;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+@Mapper
+public interface UserProfileMapper {
+
+  /**
+   * 사용자 ID로 프로필 정보 조회
+   *
+   * @param userId 사용자 ID (users.id)
+   * @return 사용자 프로필 정보
+   */
+  UserProfileResponseDto findUserProfileById(@Param("userId") Long userId);
+}
