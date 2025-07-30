@@ -1,6 +1,5 @@
 package com.Stalk.project.openvidu.controller;
 
-import com.Stalk.project.openvidu.dto.out.SessionInfoDto;
 import com.Stalk.project.openvidu.dto.out.SessionTokenResponseDto;
 import com.Stalk.project.openvidu.service.ConsultationSessionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,12 +40,12 @@ public class ConsultationController {
     }
   }
 
-  @Operation(summary = "상담방 생성 여부 조회")
+  @Operation(summary = "상담방 생성 여부 조회", description = "해당 consultationId의 방이 생성되면 token 반환, 아니면 404 반환")
   @GetMapping("/{consultationId}/session")
-  public ResponseEntity<SessionInfoDto> getSession(
+  public ResponseEntity<SessionTokenResponseDto > getSession(
       @PathVariable String consultationId) {
     try {
-      SessionInfoDto info = sessionService.getSessionInfo(consultationId);
+      SessionTokenResponseDto  info = sessionService.getSessionInfo(consultationId);
       return ResponseEntity.ok(info);
     } catch (NoSuchElementException e) {
       return ResponseEntity.status(HttpStatus.NOT_FOUND).build();

@@ -1,9 +1,7 @@
 package com.Stalk.project.openvidu.service;
 
-import com.Stalk.project.openvidu.dto.out.SessionInfoDto;
 import com.Stalk.project.openvidu.dto.out.SessionTokenResponseDto;
 import io.openvidu.java.client.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -21,6 +19,16 @@ public class ConsultationSessionService {
 
   public ConsultationSessionService(OpenVidu openVidu) {
     this.openVidu = openVidu;
+  }
+
+  private String generateToken(Session session, String consultationId)
+      throws OpenViduJavaClientException, OpenViduHttpException {
+    ConnectionProperties props = new ConnectionProperties.Builder()
+        .type(ConnectionType.WEBRTC)
+        .data("consultationId=" + consultationId)
+        .build();
+
+    return session.createConnection(props).getToken();
   }
 
   public SessionTokenResponseDto createSessionAndGetToken(String consultationId)
@@ -43,14 +51,7 @@ public class ConsultationSessionService {
         .build();
 
     // 3) 토큰 발급
-    String token;
-    try {
-      token = session
-          .createConnection(props)
-          .getToken();
-    } catch (OpenViduJavaClientException | OpenViduHttpException e) {
-      throw new IllegalStateException("토큰 발급 실패", e);
-    }
+    String token = generateToken(session, consultationId);
 
     // 4) 세션 생성 시각 조회
     String createdAt = createdAtMap
@@ -67,12 +68,19 @@ public class ConsultationSessionService {
 
 
   // 신규 조회 메서드
-  public SessionInfoDto getSessionInfo(String consultationId) {
+  public SessionTokenResponseDto getSessionInfo(String consultationId)
+      throws OpenViduJavaClientException, OpenViduHttpException {
     Session session = sessionMap.get(consultationId);
     if (session == null) {
       throw new NoSuchElementException("Session not found");
     }
-    Instant createdAt = createdAtMap.get(consultationId);
-    return new SessionInfoDto(session.getSessionId(), createdAt.toString());
+
+    String token = generateToken(session, consultationId);
+    String createdAt = createdAtMap.get(consultationId).toString();
+    return new SessionTokenResponseDto(
+        session.getSessionId(),
+        token,
+        createdAt
+    );
   }
 }
