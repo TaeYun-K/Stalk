@@ -27,6 +27,7 @@ const MyPage = () => {
   const { userInfo } = useAuth();
   const [activeTab, setActiveTab] = useState('내 정보');
   const [consultationTab, setConsultationTab] = useState('상담 전');
+  const navigate = useNavigate()
 
   // URL 파라미터에서 탭 설정
   useEffect(() => {
@@ -98,6 +99,7 @@ const MyPage = () => {
   const consultationData = {
     '상담 전': [
       {
+        id: '1',   
         date: '2025. 07. 18.',
         time: '17:00',
         content: '입문 투자 상담',
@@ -108,6 +110,7 @@ const MyPage = () => {
     ],
     '상담 완료': [
       {
+        id: '1',   
         date: '2025. 07. 19.',
         time: '20:00',
         content: '입문 투자 상담',
@@ -171,20 +174,6 @@ const MyPage = () => {
       fileName: '',
       selectedFile: null
     });
-  };
-
-  // 상담 입장 처리
-  const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
-    try {
-      const consultationId = consultationItem.id;
-
-      const sessionData = await ConsultationService.createSessionToken(consultationId);
-      
-      navigate(`/video-consultation/${sessionData.sessionId}?sessionId=${sessionData.sessionId}&token=${sessionData.token}&id=${consultationId}`);
-    } catch (error) {
-      console.error('Failed to start consultation:', error);
-      alert('상담 입장에 실패했습니다. 다시 시도해주세요.');
-    }
   };
 
   // 선택된 프로필 이미지 가져오기
@@ -268,6 +257,20 @@ const MyPage = () => {
   const handleCloseDiary = () => {
     setSelectedConsultation(null);
     setActiveTab('내 상담 내역');
+  };
+
+  // 상담 입장 처리
+  const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
+    try {
+      const consultationId = consultationItem.id;
+
+      const sessionData = await ConsultationService.createSessionToken(consultationId);
+      
+      navigate(`/video-consultation/${sessionData.sessionId}?sessionId=${sessionData.sessionId}&token=${sessionData.token}&id=${consultationId}`);
+    } catch (error) {
+      console.error('Failed to start consultation:', error);
+      alert('상담 입장에 실패했습니다. 다시 시도해주세요.');
+    }
   };
 
   const renderScheduleCalendar = () => {
