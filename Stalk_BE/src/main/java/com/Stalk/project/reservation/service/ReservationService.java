@@ -14,6 +14,7 @@ import com.Stalk.project.util.CursorPage;
 import com.Stalk.project.util.PageRequestDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,11 +36,14 @@ public class ReservationService {
   private final ReservationMapper reservationMapper;
 
   /**
-   * 상담 예약 생성 (토큰 기반 인증 적용)
+   * 상담 예약 생성 (토큰 기반 인증 적용), 동시성 이슈 해결
    *
    * @param currentUserId 현재 로그인한 사용자 ID (토큰에서 추출)
    * @param requestDto    예약 요청 정보
    * @return 예약 생성 결과
+   */
+  /**
+   * 상담 예약 생성 - 동시성 이슈 완전 해결 버전
    */
   public ConsultationReservationResponseDto createConsultationReservation(
       Long currentUserId, ConsultationReservationRequestDto requestDto) {
@@ -47,18 +51,18 @@ public class ReservationService {
     log.info("상담 예약 생성 시작: userId={}, advisorUserId={}",
         currentUserId, requestDto.getAdvisorUserId());
 
-    // 1. 입력값 파싱
     LocalDate requestDate = LocalDate.parse(requestDto.getDate());
     LocalTime requestTime = LocalTime.parse(requestDto.getTime());
 
-    // 2. 비즈니스 규칙 검증
-    validateReservationRequest(currentUserId, requestDto.getAdvisorUserId(), requestDate,
-        requestTime);
+    // 1. 기본 검증 (동시성과 무관한 부분)
+    validateBasicReservationRequest(currentUserId, requestDto.getAdvisorUserId(),
+        requestDate, requestTime);
 
-    // 3. 예약 생성
-    Long reservationId = createReservation(currentUserId, requestDto, requestDate, requestTime);
+    // 2. 예약 생성 (DB 제약조건이 동시성 보호)
+    Long reservationId = createReservationSafely(currentUserId, requestDto,
+        requestDate, requestTime);
 
-    // 4. 응답 생성
+    // 3. 응답 생성
     ZonedDateTime scheduledTime = ZonedDateTime.of(requestDate, requestTime,
         ZoneId.of("Asia/Seoul"));
 
@@ -73,7 +77,10 @@ public class ReservationService {
   /**
    * 예약 요청 검증
    */
-  private void validateReservationRequest(Long currentUserId, Long advisorUserId,
+  /**
+   * 기본 검증 (동시성과 무관한 부분만)
+   */
+  private void validateBasicReservationRequest(Long currentUserId, Long advisorUserId,
       LocalDate requestDate, LocalTime requestTime) {
     LocalDate today = LocalDate.now();
 
@@ -104,32 +111,28 @@ public class ReservationService {
     }
 
     // 6. 본인 예약 방지
-    // advisor 테이블에서 advisor_id = user_id 관계를 이용
     if (currentUserId.equals(advisorUserId)) {
       throw new BaseException(BaseResponseStatus.SELF_RESERVATION_NOT_ALLOWED);
     }
 
-    // 7. 차단 시간 확인
+    // 7. 차단 시간 확인 (실시간 체크 필요)
     if (reservationMapper.isTimeBlocked(advisorUserId, requestDate, requestTime)) {
       throw new BaseException(BaseResponseStatus.TIME_SLOT_BLOCKED);
-    }
-
-    // 8. 중복 예약 확인
-    if (reservationMapper.isTimeAlreadyReserved(advisorUserId, requestDate, requestTime)) {
-      throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
     }
   }
 
   /**
-   * 예약 생성 (DB 저장)
+   * 안전한 예약 생성 (DB 제약조건 예외 처리 포함)
    */
-  private Long createReservation(Long currentUserId, ConsultationReservationRequestDto requestDto,
+  private Long createReservationSafely(Long currentUserId,
+      ConsultationReservationRequestDto requestDto,
       LocalDate requestDate, LocalTime requestTime) {
+
     try {
       LocalTime endTime = requestTime.plusHours(1);
 
       int insertResult = reservationMapper.insertConsultationReservation(
-          currentUserId,  // 토큰에서 추출한 사용자 ID 사용
+          currentUserId,
           requestDto.getAdvisorUserId(),
           requestDate,
           requestTime,
@@ -147,6 +150,12 @@ public class ReservationService {
       }
 
       return reservationId;
+
+    } catch (DataIntegrityViolationException e) {
+      // DB 유니크 제약조건 위반 = 중복 예약 시도
+      log.warn("중복 예약 시도 감지: advisorId={}, date={}, time={}",
+          requestDto.getAdvisorUserId(), requestDate, requestTime, e);
+      throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
 
     } catch (BaseException e) {
       throw e;
