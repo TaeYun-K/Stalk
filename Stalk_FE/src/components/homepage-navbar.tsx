@@ -4,6 +4,7 @@ import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 import newsIcon from '@/assets/images/icons/news_icon.png';
 import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
+import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
@@ -82,6 +83,8 @@ const HomePageNavbar: React.FC = () => {
   };
 
   // AuthContext에서 로그인 상태를 가져오므로 별도의 로그인 상태 관리 제거
+
+
 
   // 로그인 상태가 변경될 때 프로필 이미지 가져오기
   useEffect(() => {
