@@ -29,7 +29,7 @@ public class MockAuthController {
   // Mock 사용자 데이터
   private final Map<String, MockUser> mockUsers = Map.of(
       "user001", new MockUser(1001L, "user001", "password123", "김철수", "USER", true, false),
-      "user002", new MockUser(1002L, "user002", "password123", "이영희", "USER", true, false),
+      "user002", new MockUser(1002L, "test", "test", "이영희", "USER", true, false),
       "advisor001", new MockUser(2001L, "advisor001", "password123", "한승우", "ADVISOR", true, true),
       "advisor002", new MockUser(2002L, "advisor002", "password123", "이수진", "ADVISOR", true, true),
       "advisor003", new MockUser(2003L, "advisor003", "password123", "박미승", "ADVISOR", true, false),
@@ -52,7 +52,7 @@ public class MockAuthController {
           | 아이디 | 비밀번호 | 이름 | 상태 |
           |--------|----------|------|------|
           | user001 | password123 | 김철수 | ✅ 활성 |
-          | user002 | password123 | 이영희 | ✅ 활성 |
+          | test | test | 이영희 | ✅ 활성 |
           
           #### 👨‍💼 전문가 (ADVISOR)
           | 아이디 | 비밀번호 | 이름 | 승인상태 |
