@@ -2,9 +2,26 @@ package com.Stalk.project.signup.dto.out;
 
 import lombok.*;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AdvisorSignupResponse {
 
-    private Long userId; // 신규 생성된 users.id
-    private String message; // 성공 메시지
+  // 기존
+  private Long userId;
+  private String message;
+
+  // User 정보
+  private String name;
+  private String email;
+  private String contact;
+  private String nickname;
+
+  // Advisor 정보
+  private String certificateName;
+  private String certificateFileSn;
+  private String birth;
+  private String certificateFileNumber;
 }
