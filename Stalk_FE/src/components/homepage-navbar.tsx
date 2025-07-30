@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
-import { useAuth } from '@/context/AuthContext';
+import newsIcon from '@/assets/images/icons/news_icon.png';
+import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
@@ -92,8 +93,8 @@ const HomePageNavbar: React.FC = () => {
   }, [isLoggedIn]);
 
   return (
-    <nav className={`fixed top-0 left-0 right-20 z-10 ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
-      <div className="justify-between sm:px-10 lg:px-16">
+    <nav className={`fixed top-0 left-0 right-0 z-10 ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
+      <div className="sm:px-10 lg:px-16">
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
@@ -154,7 +155,8 @@ const HomePageNavbar: React.FC = () => {
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
                   >
-                    뉴스
+                    <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
+                    <span>뉴스</span>
                   </button>
                   <button
                     onClick={() => {
@@ -163,7 +165,8 @@ const HomePageNavbar: React.FC = () => {
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
                   >
-                    자유게시판
+                    <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
+                    <span>투자 지식iN</span>
                   </button>
                 </div>
               )}
