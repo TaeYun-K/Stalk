@@ -20,22 +20,6 @@ public class SignupService {
     private final PasswordEncoder passwordEncoder;
 
     public SignupResponse register(SignupRequest req) {
-        // 이메일 인증 확인
-        EmailVerification ev = emailVerificationMapper.findByEmail(req.getEmail());
-        if (ev == null || !Boolean.TRUE.equals(ev.getVerified())) {
-            return new SignupResponse(false, null, "이메일 인증이 완료되지 않았습니다.");
-        }
-
-        // 비밀번호 확인
-        if (!req.getPassword().equals(req.getPasswordConfirm())) {
-            return new SignupResponse(false, null, "비밀번호가 일치하지 않습니다.");
-        }
-
-        // 약관 동의
-        if (!Boolean.TRUE.equals(req.getAgreedTerms()) || !Boolean.TRUE.equals(req.getAgreedPrivacy())) {
-            return new SignupResponse(false, null, "약관 및 개인정보 수집에 동의해야 합니다.");
-        }
-
         // 중복 검사
         if (userMapper.findByUserId(req.getUserId()) != null) {
             return new SignupResponse(false, null, "이미 사용 중인 userId입니다.");
@@ -43,6 +27,21 @@ public class SignupService {
 
         if (userMapper.findByNickname(req.getNickname()) != null) {
             return new SignupResponse(false, null, "이미 사용 중인 닉네임입니다.");
+        }
+
+        // 비밀번호 확인
+        if (!req.getPassword().equals(req.getPasswordConfirm())) {
+            return new SignupResponse(false, null, "비밀번호가 일치하지 않습니다.");
+        }
+        // 이메일 인증 확인
+        EmailVerification ev = emailVerificationMapper.findByEmail(req.getEmail());
+        if (ev == null || !Boolean.TRUE.equals(ev.getVerified())) {
+            return new SignupResponse(false, null, "이메일 인증이 완료되지 않았습니다.");
+        }
+
+        // 약관 동의
+        if (!Boolean.TRUE.equals(req.getAgreedTerms()) || !Boolean.TRUE.equals(req.getAgreedPrivacy())) {
+            return new SignupResponse(false, null, "약관 및 개인정보 수집에 동의해야 합니다.");
         }
 
         // 유저 생성
@@ -57,7 +56,7 @@ public class SignupService {
         user.setRole("USER");
         user.setImage("/images/default_profile.png");
         user.setIsVerified(true);
-        user.setTermsAgreed(true);
+        user.setTermsAgreed(req.getAgreedPrivacy());
         user.setIsActive(true);
 
         userMapper.insertUser(user);
