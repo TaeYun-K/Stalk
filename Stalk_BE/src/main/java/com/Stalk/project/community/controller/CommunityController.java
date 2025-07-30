@@ -1,9 +1,16 @@
 package com.Stalk.project.community.controller;
 
+import com.Stalk.project.community.dto.in.CommunityCommentCreateRequestDto;
+import com.Stalk.project.community.dto.in.CommunityCommentListRequestDto;
+import com.Stalk.project.community.dto.in.CommunityCommentUpdateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostCreateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostDetailRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostListRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostUpdateRequestDto;
+import com.Stalk.project.community.dto.out.CommunityCommentCreateResponseDto;
+import com.Stalk.project.community.dto.out.CommunityCommentDeleteResponseDto;
+import com.Stalk.project.community.dto.out.CommunityCommentDto;
+import com.Stalk.project.community.dto.out.CommunityCommentUpdateResponseDto;
 import com.Stalk.project.community.dto.out.CommunityPostCreateResponseDto;
 import com.Stalk.project.community.dto.out.CommunityPostDeleteResponseDto;
 import com.Stalk.project.community.dto.out.CommunityPostDetailDto;
@@ -205,6 +212,68 @@ public class CommunityController {
         currentUserRole
     );
 
+    return new BaseResponse<>(result);
+  }
+
+  // CommunityController.java에 추가할 댓글 관련 엔드포인트들
+
+  /**
+   * 댓글 작성
+   */
+  @PostMapping("/posts/{postId}/comments")
+  public BaseResponse<CommunityCommentCreateResponseDto> createComment(
+      @PathVariable("postId") Long postId,
+      @RequestHeader("Authorization") String authorization,
+      @Valid @RequestBody CommunityCommentCreateRequestDto requestDto) {
+
+    Long userId = TokenUtils.extractUserId(authorization);
+    CommunityCommentCreateResponseDto result = communityService.createComment(postId, userId,
+        requestDto);
+    return new BaseResponse<>(result);
+  }
+
+  /**
+   * 댓글 목록 조회 (더보기용)
+   */
+  @GetMapping("/posts/{postId}/comments")
+  public BaseResponse<CursorPage<CommunityCommentDto>> getCommentList(
+      @PathVariable("postId") Long postId,
+      @ModelAttribute CommunityCommentListRequestDto requestDto) {
+
+    CursorPage<CommunityCommentDto> result = communityService.getCommentList(postId, requestDto);
+    return new BaseResponse<>(result);
+  }
+
+  /**
+   * 댓글 수정
+   */
+  @PutMapping("/comments/{commentId}")
+  public BaseResponse<CommunityCommentUpdateResponseDto> updateComment(
+      @PathVariable("commentId") Long commentId,
+      @RequestHeader("Authorization") String authorization,
+      @Valid @RequestBody CommunityCommentUpdateRequestDto requestDto) {
+
+    Long userId = TokenUtils.extractUserId(authorization);
+    String userRole = TokenUtils.extractRole(authorization);
+
+    CommunityCommentUpdateResponseDto result = communityService.updateComment(commentId, userId,
+        userRole, requestDto);
+    return new BaseResponse<>(result);
+  }
+
+  /**
+   * 댓글 삭제
+   */
+  @DeleteMapping("/comments/{commentId}")
+  public BaseResponse<CommunityCommentDeleteResponseDto> deleteComment(
+      @PathVariable("commentId") Long commentId,
+      @RequestHeader("Authorization") String authorization) {
+
+    Long userId = TokenUtils.extractUserId(authorization);
+    String userRole = TokenUtils.extractRole(authorization);
+
+    CommunityCommentDeleteResponseDto result = communityService.deleteComment(commentId, userId,
+        userRole);
     return new BaseResponse<>(result);
   }
 }

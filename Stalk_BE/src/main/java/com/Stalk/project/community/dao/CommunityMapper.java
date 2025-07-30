@@ -3,9 +3,11 @@ package com.Stalk.project.community.dao;
 import com.Stalk.project.community.dto.in.CommunityPostCreateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostListRequestDto;
 import com.Stalk.project.community.dto.out.CommunityCommentDto;
+import com.Stalk.project.community.dto.out.CommunityCommentPermissionDto;
 import com.Stalk.project.community.dto.out.CommunityPostDetailDto;
 import com.Stalk.project.community.dto.out.CommunityPostPermissionDto;
 import com.Stalk.project.community.dto.out.CommunityPostSummaryDto;
+import com.Stalk.project.util.PageRequestDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -114,4 +116,27 @@ public interface CommunityMapper {
    * @return 삭제된 댓글 수
    */
   int deleteAllCommentsOfPost(@Param("postId") Long postId);
+
+  // 1. 댓글 작성
+  void createComment(@Param("postId") Long postId, @Param("userId") Long userId,
+      @Param("content") String content);
+
+  // 2. 마지막 생성된 댓글 ID 조회
+  Long getLastInsertedCommentId();
+
+  // 3. 댓글 목록 조회 (페이징)
+  List<CommunityCommentDto> findCommentsByPostId(@Param("postId") Long postId,
+      @Param("pageRequest") PageRequestDto pageRequest);
+
+  // 4. 댓글 권한 확인 (수정/삭제용)
+  CommunityCommentPermissionDto findCommentPermission(@Param("commentId") Long commentId);
+
+  // 5. 댓글 수정
+  int updateComment(@Param("commentId") Long commentId, @Param("content") String content);
+
+  // 6. 댓글 삭제
+  int deleteComment(@Param("commentId") Long commentId);
+
+  // 7. 글 존재 여부 확인 (댓글 작성 전)
+  boolean existsPostById(@Param("postId") Long postId);
 }

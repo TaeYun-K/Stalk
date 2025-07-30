@@ -2,12 +2,19 @@ package com.Stalk.project.community.service;
 
 import com.Stalk.project.auth.mock.util.TokenUtils;
 import com.Stalk.project.community.dao.CommunityMapper;
+import com.Stalk.project.community.dto.in.CommunityCommentCreateRequestDto;
+import com.Stalk.project.community.dto.in.CommunityCommentListRequestDto;
+import com.Stalk.project.community.dto.in.CommunityCommentUpdateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostCreateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostDetailRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostListRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostUpdateRequestDto;
 import com.Stalk.project.community.dto.in.PostCategory;
+import com.Stalk.project.community.dto.out.CommunityCommentCreateResponseDto;
+import com.Stalk.project.community.dto.out.CommunityCommentDeleteResponseDto;
 import com.Stalk.project.community.dto.out.CommunityCommentDto;
+import com.Stalk.project.community.dto.out.CommunityCommentPermissionDto;
+import com.Stalk.project.community.dto.out.CommunityCommentUpdateResponseDto;
 import com.Stalk.project.community.dto.out.CommunityPostCreateResponseDto;
 import com.Stalk.project.community.dto.out.CommunityPostDeleteResponseDto;
 import com.Stalk.project.community.dto.out.CommunityPostDetailDto;
@@ -341,5 +348,136 @@ public class CommunityService {
             .format(ZonedDateTime.now(ZoneId.of("Asia/Seoul"))))
         .message("글이 성공적으로 삭제되었습니다.")
         .build();
+  }
+
+  // CommunityService.java에 추가할 댓글 관련 메서드들
+
+  /**
+   * 댓글 작성
+   */
+  public CommunityCommentCreateResponseDto createComment(Long postId, Long userId,
+      CommunityCommentCreateRequestDto requestDto) {
+    // 1. 글 존재 여부 확인
+    if (!communityMapper.existsPostById(postId)) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    // 2. 댓글 생성
+    try {
+      communityMapper.createComment(postId, userId, requestDto.getContent());
+      Long commentId = communityMapper.getLastInsertedCommentId();
+
+      return CommunityCommentCreateResponseDto.builder()
+          .commentId(commentId)
+          .createdAt(LocalDateTime.now()
+              .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+09:00'")))
+          .message("댓글이 성공적으로 작성되었습니다.")
+          .build();
+
+    } catch (Exception e) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_COMMENT_CREATE_FAILED);
+    }
+  }
+
+  /**
+   * 댓글 목록 조회 (더보기용)
+   */
+  public CursorPage<CommunityCommentDto> getCommentList(Long postId,
+      CommunityCommentListRequestDto requestDto) {
+    // 1. 글 존재 여부 확인
+    if (!communityMapper.existsPostById(postId)) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    // 2. 댓글 목록 조회
+    List<CommunityCommentDto> comments = communityMapper.findCommentsByPostId(postId, requestDto);
+
+    // 3. 페이징 처리
+    boolean hasNext = comments.size() > requestDto.getPageSize();
+    if (hasNext) {
+      comments.remove(comments.size() - 1);
+    }
+
+    return CursorPage.<CommunityCommentDto>builder()
+        .content(comments)
+        .nextCursor(null) // 댓글은 단순 페이징으로 cursor 불필요
+        .hasNext(hasNext)
+        .pageSize(requestDto.getPageSize())
+        .pageNo(requestDto.getPageNo())
+        .build();
+  }
+
+  /**
+   * 댓글 수정
+   */
+  public CommunityCommentUpdateResponseDto updateComment(Long commentId, Long userId,
+      String userRole, CommunityCommentUpdateRequestDto requestDto) {
+    // 1. 댓글 존재 및 권한 확인
+    CommunityCommentPermissionDto permission = communityMapper.findCommentPermission(commentId);
+    if (permission == null) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_COMMENT_NOT_FOUND);
+    }
+
+    // 2. 수정 권한 확인 (작성자 본인 또는 관리자)
+    if (!permission.getUserId().equals(userId) && !"ADMIN".equals(userRole)) {
+      throw new BaseException(BaseResponseStatus.COMMENT_UPDATE_FORBIDDEN);
+    }
+
+    // 3. 댓글 수정
+    try {
+      int updatedRows = communityMapper.updateComment(commentId, requestDto.getContent());
+      if (updatedRows == 0) {
+        throw new BaseException(BaseResponseStatus.COMMENT_UPDATE_FAILED);
+      }
+
+      return CommunityCommentUpdateResponseDto.builder()
+          .commentId(commentId)
+          .updatedAt(LocalDateTime.now()
+              .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+09:00'")))
+          .message("댓글이 성공적으로 수정되었습니다.")
+          .build();
+
+    } catch (BaseException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new BaseException(BaseResponseStatus.COMMENT_UPDATE_FAILED);
+    }
+  }
+
+  /**
+   * 댓글 삭제
+   */
+  public CommunityCommentDeleteResponseDto deleteComment(Long commentId, Long userId,
+      String userRole) {
+    // 1. 댓글 존재 및 권한 확인
+    CommunityCommentPermissionDto permission = communityMapper.findCommentPermission(commentId);
+    if (permission == null) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_COMMENT_NOT_FOUND);
+    }
+
+    // 2. 삭제 권한 확인 (작성자 본인 또는 관리자)
+    if (!permission.getUserId().equals(userId) && !"ADMIN".equals(userRole)) {
+      throw new BaseException(BaseResponseStatus.COMMENT_DELETE_FORBIDDEN);
+    }
+
+    // 3. 댓글 삭제
+    try {
+      int deletedRows = communityMapper.deleteComment(commentId);
+      if (deletedRows == 0) {
+        throw new BaseException(BaseResponseStatus.COMMENT_DELETE_FAILED);
+      }
+
+      return CommunityCommentDeleteResponseDto.builder()
+          .commentId(commentId)
+          .deletedAt(LocalDateTime.now()
+              .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+09:00'")))
+          .message("댓글이 성공적으로 삭제되었습니다.")
+          .build();
+
+    } catch (BaseException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new BaseException(BaseResponseStatus.COMMENT_DELETE_FAILED);
+    }
   }
 }
