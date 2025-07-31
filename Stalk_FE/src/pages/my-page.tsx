@@ -264,7 +264,7 @@ const MyPage = () => {
     try {
       const consultationId = consultationItem.id;
 
-      const sessionData = await ConsultationService.createSessionToken("consultationId");
+      const sessionData = await ConsultationService.createSessionToken(consultationId);
       navigate( // parameter 여러개 넘기기
         `/video-consultation/${sessionData.sessionId}`,
         {
