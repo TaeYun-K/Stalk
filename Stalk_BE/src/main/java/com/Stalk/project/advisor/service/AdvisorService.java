@@ -1,11 +1,13 @@
 package com.Stalk.project.advisor.service;
 
 import com.Stalk.project.advisor.dao.AdvisorMapper;
+import com.Stalk.project.advisor.dto.in.AdvisorBlockedTimesRequestDto;
 import com.Stalk.project.advisor.dto.in.AdvisorListRequestDto;
 import com.Stalk.project.advisor.dto.out.*;
 import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
+import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -102,7 +105,7 @@ public class AdvisorService {
       case "LONG" -> "장기";
       default -> tradeStyle;
     };
-    
+
   }
 
 
@@ -256,5 +259,107 @@ public class AdvisorService {
         .isReserved(isReserved)
         .isBlocked(isBlocked)
         .build();
+  }
+
+  // AdvisorService.java에 추가할 메서드들
+
+  /**
+   * 전문가의 특정 날짜 차단 시간 조회
+   */
+  public AdvisorBlockedTimesResponseDto getAdvisorBlockedTimes(Long advisorId, String date) {
+    // 1. 날짜 형식 검증
+    validateDateFormat(date);
+
+    // 2. 전문가 존재 및 승인 여부 확인
+    if (!advisorMapper.isAdvisorExistsAndApproved(advisorId)) {
+      throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+    }
+
+    // 3. 차단 시간 조회
+    List<String> blockedTimes = advisorMapper.getAdvisorBlockedTimes(advisorId, date);
+
+    return new AdvisorBlockedTimesResponseDto(date, blockedTimes);
+  }
+
+  /**
+   * 전문가의 특정 날짜 차단 시간 업데이트
+   */
+  @Transactional
+  public AdvisorBlockedTimesUpdateResponseDto updateAdvisorBlockedTimes(
+      Long advisorId, String date, AdvisorBlockedTimesRequestDto requestDto) {
+
+    // 1. 날짜 형식 검증
+    validateDateFormat(date);
+
+    // 2. 과거 날짜 차단 방지
+    if (isDateInPast(date)) {
+      throw new BaseException(BaseResponseStatus.PAST_DATE_BLOCK_NOT_ALLOWED);
+    }
+
+    // 3. 전문가 존재 및 승인 여부 확인
+    if (!advisorMapper.isAdvisorExistsAndApproved(advisorId)) {
+      throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+    }
+
+    // 4. 시간 형식 검증
+    List<String> blockedTimes = requestDto.getBlockedTimes();
+    validateTimeSlots(blockedTimes);
+
+    // 5. 예약된 시간과 충돌 확인
+    List<String> reservedTimes = advisorMapper.getReservedTimesForDate(advisorId, date);
+    List<String> conflictTimes = blockedTimes.stream()
+        .filter(reservedTimes::contains)
+        .toList();
+
+    if (!conflictTimes.isEmpty()) {
+      throw new BaseException(BaseResponseStatus.RESERVED_TIME_CANNOT_BE_BLOCKED);
+    }
+
+    // 6. 기존 차단 시간 삭제
+    advisorMapper.deleteBlockedTimesByDate(advisorId, date);
+
+    // 7. 새로운 차단 시간 추가
+    if (!blockedTimes.isEmpty()) {
+      advisorMapper.insertBlockedTimes(advisorId, date, blockedTimes);
+    }
+
+    return new AdvisorBlockedTimesUpdateResponseDto(date, blockedTimes);
+  }
+
+  /**
+   * 날짜 형식 검증 (YYYY-MM-DD)
+   */
+  private void validateDateFormat(String date) {
+    if (!date.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+      throw new BaseException(BaseResponseStatus.INVALID_DATE_FORMAT);
+    }
+  }
+
+  /**
+   * 과거 날짜 여부 확인
+   */
+  private boolean isDateInPast(String date) {
+    try {
+      LocalDate targetDate = LocalDate.parse(date);
+      return targetDate.isBefore(LocalDate.now());
+    } catch (Exception e) {
+      throw new BaseException(BaseResponseStatus.INVALID_DATE_FORMAT);
+    }
+  }
+
+  /**
+   * 시간 슬롯 검증 (09:00~20:00, 정시만)
+   */
+  private void validateTimeSlots(List<String> timeSlots) {
+    List<String> validTimeSlots = Arrays.asList(
+        "09:00", "10:00", "11:00", "12:00", "13:00", "14:00",
+        "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"
+    );
+
+    for (String timeSlot : timeSlots) {
+      if (!validTimeSlots.contains(timeSlot)) {
+        throw new BaseException(BaseResponseStatus.INVALID_TIME_SLOT);
+      }
+    }
   }
 }
