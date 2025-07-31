@@ -72,9 +72,6 @@ const VideoConsultationPage: React.FC = () => {
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
-  console.log("Connection URL:", ovToken);
-  console.log("Consultation ID:", consultationId);
-  console.log("URL Session ID:", ovSessionId);
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
