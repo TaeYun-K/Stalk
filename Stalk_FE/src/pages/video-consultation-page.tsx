@@ -70,7 +70,7 @@ const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
-  const { connectionUrl: ovTokenUrl, consultationId } = (state as LocationState) || {};
+  const { connectionUrl: ovToken, consultationId } = (state as LocationState) || {};
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
@@ -135,7 +135,7 @@ const VideoConsultationPage: React.FC = () => {
       setOv(openVidu);
       
       // If we have session ID and token, connect to the session
-      if (ovTokenUrl) {
+      if (ovToken) {
         const session = openVidu.initSession();
         
         // Subscribe to session events
@@ -149,7 +149,7 @@ const VideoConsultationPage: React.FC = () => {
         });
         
         // Connect to the session
-        await session.connect("tok_BpQUhBwoAdd2SX2e");
+        await session.connect(ovToken);
         setSession(session);
         
         // Start publishing after connecting
