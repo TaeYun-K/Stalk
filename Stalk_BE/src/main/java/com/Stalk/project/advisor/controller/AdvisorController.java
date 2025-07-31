@@ -18,12 +18,18 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.time.LocalDate;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/advisors")
@@ -31,25 +37,59 @@ import java.time.LocalDate;
 public class AdvisorController {
 
   private final AdvisorService advisorService;
-  private final AdvisorMapper advisorMapper;  // 새로 추가
+  private final AdvisorMapper advisorMapper;
 
+  // 1. 일반 목록 조회 (파라미터 없음)
   @GetMapping
   @Operation(summary = "어드바이저 목록 조회")
   public BaseResponse<CursorPage<AdvisorResponseDto>> getAdvisorList(
       AdvisorListRequestDto requestDto) {
     CursorPage<AdvisorResponseDto> result = advisorService.getAdvisorList(requestDto);
-    return new BaseResponse<>(result); // 생성자 사용
+    return new BaseResponse<>(result);
+  }
+
+  // 2. 구체적인 경로들을 먼저 배치! (중요!)
+
+  /**
+   * 전문가 시간 차단 조회
+   */
+  @GetMapping("/blocked-times")
+  @Operation(summary = "전문가 시간 차단 조회", description = "특정 날짜에 전문가가 차단한 시간 목록을 조회합니다.")
+  public BaseResponse<AdvisorBlockedTimesResponseDto> getAdvisorBlockedTimes(
+      @RequestParam @Parameter(description = "조회할 날짜 (YYYY-MM-DD)", example = "2025-07-30") String date,
+      @RequestHeader("Authorization") String authorization) {
+
+    Long currentUserId = extractUserIdFromToken(authorization);
+
+    if (!isAdvisor(currentUserId)) {
+      throw new BaseException(BaseResponseStatus.ADVISOR_ONLY_ACCESS);
+    }
+
+    Long advisorId = currentUserId;
+    AdvisorBlockedTimesResponseDto result = advisorService.getAdvisorBlockedTimes(advisorId, date);
+    return new BaseResponse<>(result);
   }
 
   /**
-   * 어드바이저 상세 정보 조회
+   * 전문가 시간 차단 업데이트
    */
-  @GetMapping("/{advisorId}")
-  public ResponseEntity<BaseResponse<AdvisorDetailResponseDto>> getAdvisorDetail(
-      @PathVariable("advisorId") Long advisorId) {
+  @PutMapping("/blocked-times")
+  @Operation(summary = "전문가 시간 차단 업데이트", description = "특정 날짜의 전문가 시간 차단을 업데이트합니다.")
+  public BaseResponse<AdvisorBlockedTimesUpdateResponseDto> updateAdvisorBlockedTimes(
+      @RequestParam @Parameter(description = "업데이트할 날짜 (YYYY-MM-DD)", example = "2025-07-30") String date,
+      @Valid @RequestBody AdvisorBlockedTimesRequestDto requestDto,
+      @RequestHeader("Authorization") String authorization) {
 
-    AdvisorDetailResponseDto result = advisorService.getAdvisorDetail(advisorId);
-    return ResponseEntity.ok(new BaseResponse<>(result));
+    Long currentUserId = extractUserIdFromToken(authorization);
+
+    if (!isAdvisor(currentUserId)) {
+      throw new BaseException(BaseResponseStatus.ADVISOR_ONLY_ACCESS);
+    }
+
+    Long advisorId = currentUserId;
+    AdvisorBlockedTimesUpdateResponseDto result = advisorService.updateAdvisorBlockedTimes(
+        advisorId, date, requestDto);
+    return new BaseResponse<>(result);
   }
 
   /**
@@ -71,7 +111,6 @@ public class AdvisorController {
       @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
 
     try {
-      // 날짜가 없으면 오늘 날짜로 설정
       if (date == null) {
         date = LocalDate.now();
       }
@@ -84,56 +123,17 @@ public class AdvisorController {
     }
   }
 
-  // AdvisorController.java에 추가할 엔드포인트들
+  // 3. 가장 일반적인 패턴은 마지막에! (중요!)
 
   /**
-   * 전문가 시간 차단 조회
+   * 어드바이저 상세 정보 조회
    */
-  @GetMapping("/blocked-times")
-  @Operation(summary = "전문가 시간 차단 조회", description = "특정 날짜에 전문가가 차단한 시간 목록을 조회합니다.")
-  public BaseResponse<AdvisorBlockedTimesResponseDto> getAdvisorBlockedTimes(
-      @RequestParam @Parameter(description = "조회할 날짜 (YYYY-MM-DD)", example = "2025-07-30") String date,
-      @RequestHeader("Authorization") String authorization) {
+  @GetMapping("/{advisorId}")
+  public ResponseEntity<BaseResponse<AdvisorDetailResponseDto>> getAdvisorDetail(
+      @PathVariable("advisorId") Long advisorId) {
 
-    // 토큰에서 사용자 정보 추출
-    Long currentUserId = extractUserIdFromToken(authorization);
-
-    // 사용자가 전문가인지 확인
-    if (!isAdvisor(currentUserId)) {
-      throw new BaseException(BaseResponseStatus.ADVISOR_ONLY_ACCESS);
-    }
-
-    // advisor_id = user_id 관계 활용
-    Long advisorId = currentUserId;
-
-    AdvisorBlockedTimesResponseDto result = advisorService.getAdvisorBlockedTimes(advisorId, date);
-    return new BaseResponse<>(result);
-  }
-
-  /**
-   * 전문가 시간 차단 업데이트
-   */
-  @PutMapping("/blocked-times")
-  @Operation(summary = "전문가 시간 차단 업데이트", description = "특정 날짜의 전문가 시간 차단을 업데이트합니다.")
-  public BaseResponse<AdvisorBlockedTimesUpdateResponseDto> updateAdvisorBlockedTimes(
-      @RequestParam @Parameter(description = "업데이트할 날짜 (YYYY-MM-DD)", example = "2025-07-30") String date,
-      @Valid @RequestBody AdvisorBlockedTimesRequestDto requestDto,
-      @RequestHeader("Authorization") String authorization) {
-
-    // 토큰에서 사용자 정보 추출
-    Long currentUserId = extractUserIdFromToken(authorization);
-
-    // 사용자가 전문가인지 확인
-    if (!isAdvisor(currentUserId)) {
-      throw new BaseException(BaseResponseStatus.ADVISOR_ONLY_ACCESS);
-    }
-
-    // advisor_id = user_id 관계 활용
-    Long advisorId = currentUserId;
-
-    AdvisorBlockedTimesUpdateResponseDto result = advisorService.updateAdvisorBlockedTimes(
-        advisorId, date, requestDto);
-    return new BaseResponse<>(result);
+    AdvisorDetailResponseDto result = advisorService.getAdvisorDetail(advisorId);
+    return ResponseEntity.ok(new BaseResponse<>(result));
   }
 
   /**
@@ -147,12 +147,10 @@ public class AdvisorController {
     String token = authorization.substring(7);
     String[] parts = token.split("_");
 
-    // 토큰 형식: MOCK_TOKEN_{UUID}_{TYPE}_{USER_ID}_{ROLE} (6개 파트)
     if (parts.length != 6) {
       throw new BaseException(BaseResponseStatus.INVALID_TOKEN);
     }
 
-    // parts[4]가 USER_ID
     return Long.parseLong(parts[4]);
   }
 
@@ -160,7 +158,6 @@ public class AdvisorController {
    * 사용자가 전문가인지 확인
    */
   private boolean isAdvisor(Long userId) {
-    // 기존 구현된 로직 사용 또는 새로운 쿼리 작성
     return advisorMapper.isAdvisorExistsAndApproved(userId);
   }
 }
