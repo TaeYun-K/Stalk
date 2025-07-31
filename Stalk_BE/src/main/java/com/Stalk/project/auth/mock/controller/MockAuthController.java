@@ -361,7 +361,7 @@ public class MockAuthController {
           )
       )
   })
-  @PostMapping("/logout")
+  @PostMapping("/logout-test")
   public BaseResponse<Void> logout(
       @RequestHeader(value = "Authorization", required = false) String token) {
     log.info("로그아웃 요청");

@@ -63,6 +63,24 @@ public class AuthService {
   }
 
   /**
+   * 로그아웃: 클라이언트가 보낸 refresh token을 무효화(서버에 저장된 키 삭제)
+   */
+  public void logout(String refreshToken) {
+    // 1 토큰 유효성 검사
+    if (!jwtUtil.validateToken(refreshToken)) {
+      throw new BadCredentialsException("Invalid or expired refresh token");
+    }
+
+    // 2 토큰에서 userId 추출
+    String userId = jwtUtil.getUserIdFromToken(refreshToken);
+
+    // 3 Redis에 저장된 키 삭제
+    String key = "refresh_token:" + userId;
+    Boolean deleted = redisTemplate.delete(key);
+    System.out.println(deleted);
+  }
+
+  /**
    * 클라이언트가 보낸 refreshToken을 검증하고, Redis에 저장된 토큰과 일치하면 새로운 accessToken을 생성해 반환.
    */
   public String refreshAccessToken(String refreshToken) {
