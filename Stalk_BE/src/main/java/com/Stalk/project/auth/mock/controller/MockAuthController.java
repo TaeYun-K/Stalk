@@ -40,32 +40,32 @@ public class MockAuthController {
       summary = "통합 로그인",
       description = """
           **통합 로그인 API** ***************
-          
+                    
           ### 📋 기능 설명
           - 모든 역할(일반사용자/전문가/관리자)의 로그인을 하나의 API로 처리합니다
           - 입력된 사용자 ID로 자동으로 역할을 판별하고 적절한 검증을 수행합니다
           - 성공 시 JWT 형식의 Mock 토큰을 반환합니다
-          
+                    
           ### 🧪 테스트 계정
-          
+                    
           #### 👤 일반 사용자 (USER)
           | 아이디 | 비밀번호 | 이름 | 상태 |
           |--------|----------|------|------|
           | user001 | password123 | 김철수 | ✅ 활성 |
           | test | test | 이영희 | ✅ 활성 |
-          
+                    
           #### 👨‍💼 전문가 (ADVISOR)
           | 아이디 | 비밀번호 | 이름 | 승인상태 |
           |--------|----------|------|----------|
           | advisor001 | password123 | 한승우 | ✅ 승인됨 |
           | advisor002 | password123 | 이수진 | ✅ 승인됨 |
           | advisor003 | password123 | 박미승 | ❌ 승인안됨 |
-          
+                    
           #### 🛡️ 관리자 (ADMIN)
           | 아이디 | 비밀번호 | 이름 | 상태 |
           |--------|----------|------|------|
           | admin001 | password123 | 관리자 | ✅ 활성 |
-          
+                    
           ### ⚠️ 주의사항
           - 승인되지 않은 전문가(advisor003)는 로그인할 수 없습니다
           - 시스템이 자동으로 역할을 판별하므로 사용자는 ID/PW만 입력하면 됩니다
@@ -264,7 +264,7 @@ public class MockAuthController {
           )
       )
   })
-  @PostMapping("/login")
+  @PostMapping("/login-test")
   public BaseResponse<LoginResponseDto> login(@Valid @RequestBody LoginRequestDto request) {
     log.info("통합 로그인 시도: {}", request.getUserId());
 
@@ -323,12 +323,12 @@ public class MockAuthController {
       summary = "로그아웃",
       description = """
           **로그아웃 API**
-          
+                    
           ### 📋 기능 설명
           - 사용자의 로그아웃을 처리합니다
           - Mock API에서는 단순히 성공 응답만 반환합니다
           - 실제 구현에서는 토큰 무효화, 세션 종료 등의 처리가 필요합니다
-          
+                    
           ### 💡 사용법
           1. 로그인 API에서 받은 accessToken을 사용
           2. Authorization 헤더에 `Bearer {토큰}` 형식으로 전송
@@ -374,12 +374,12 @@ public class MockAuthController {
       summary = "Mock 사용자 목록 조회",
       description = """
           **개발/테스트용 API - Mock 사용자 목록 조회**
-          
+                    
           ### 📋 기능 설명
           - 현재 등록된 모든 Mock 사용자의 정보를 조회합니다
           - 프론트엔드 개발자가 테스트 계정을 확인할 때 사용합니다
           - **실제 운영 환경에서는 제거되어야 하는 API입니다**
-          
+                    
           ### ⚠️ 보안 주의사항
           - 이 API는 개발/테스트 목적으로만 사용되어야 합니다
           - 실제 운영 환경에서는 보안상 위험하므로 반드시 제거해야 합니다
