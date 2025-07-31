@@ -54,7 +54,7 @@ public class AdvisorService {
   }
 
   /**
-   * 어드바이저 상세 정보 조회
+   * 어드바이저 상세 정보 조회 (확장된 버전)
    */
   public AdvisorDetailResponseDto getAdvisorDetail(Long advisorId) {
     // 1. 어드바이저 기본 정보 조회
@@ -64,39 +64,36 @@ public class AdvisorService {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND); // 404 에러
     }
 
-    // 2. 최신 리뷰 10개 조회
-    List<AdvisorDetailResponseDto.ReviewDto> reviews = advisorMapper.findLatestReviewsByAdvisorId(
-        advisorId, 10);
+    // 2. 경력사항 조회
+    List<AdvisorDetailResponseDto.CareerDto> careers = advisorMapper.findAdvisorCareers(advisorId);
+    advisorDetail.setCareers(careers);
 
-    // 3. 전체 리뷰 수 조회 (더보기 버튼 표시 여부 판단용)
-    int totalReviewCount = advisorMapper.countReviewsByAdvisorId(advisorId);
-    boolean hasMoreReviews = totalReviewCount > 10;
+    // 3. 자격증 조회
+    List<AdvisorDetailResponseDto.CertificationDto> certificates = advisorMapper.findAdvisorCertificates(advisorId);
+    advisorDetail.setCertificates(certificates);
 
-    // 4. preferredTradeStyle enum을 한글로 변환
+    // 4. 리뷰 조회 (커뮤니티 프로필 이미지 포함)
+    List<AdvisorDetailResponseDto.ReviewDto> reviews = advisorMapper.findAdvisorReviewsWithProfile(advisorId);
+    advisorDetail.setReviews(reviews);
+
+    // 5. 더 많은 리뷰가 있는지 확인 (10개를 가져왔으므로 정확히 10개면 더 있을 수 있음)
+    boolean hasMoreReviews = reviews.size() == 10;
+    advisorDetail.setHas_more_reviews(hasMoreReviews);
+
+    // 6. preferredTradeStyle enum을 한글로 변환
     String preferredTradeStyleKorean = convertTradeStyleToKorean(
-        advisorDetail.getPreferredTradeStyle());
+        advisorDetail.getPreferred_trade_style());
+    advisorDetail.setPreferred_trade_style(preferredTradeStyleKorean);
 
-    // 5. 응답 DTO 구성
-    return AdvisorDetailResponseDto.builder()
-        .userId(advisorDetail.getUserId())
-        .name(advisorDetail.getName())
-        .profileImageUrl(advisorDetail.getProfileImageUrl())
-        .shortIntro(advisorDetail.getShortIntro())
-        .longIntro(advisorDetail.getLongIntro())
-        .preferredTradeStyle(preferredTradeStyleKorean)
-        .contact(advisorDetail.getContact())
-        .avgRating(advisorDetail.getAvgRating())
-        .reviewCount(advisorDetail.getReviewCount())
-        .reviews(reviews)
-        .hasMoreReviews(hasMoreReviews)
-        .build();
+    return advisorDetail;
   }
 
   /**
    * 투자 성향 enum을 한글로 변환
    */
-  // 오직 여기만 수정하면 됨
   private String convertTradeStyleToKorean(String tradeStyle) {
+    if (tradeStyle == null) return null;
+
     return switch (tradeStyle.toUpperCase()) {
       case "SHORT" -> "단기";
       case "MID_SHORT" -> "단중기";     // 새로 추가
@@ -105,9 +102,7 @@ public class AdvisorService {
       case "LONG" -> "장기";
       default -> tradeStyle;
     };
-
   }
-
 
   /**
    * 전문가의 예약 가능한 시간 슬롯 조회 (디버깅 버전)
@@ -260,8 +255,6 @@ public class AdvisorService {
         .isBlocked(isBlocked)
         .build();
   }
-
-  // AdvisorService.java에 추가할 메서드들
 
   /**
    * 전문가의 특정 날짜 차단 시간 조회
