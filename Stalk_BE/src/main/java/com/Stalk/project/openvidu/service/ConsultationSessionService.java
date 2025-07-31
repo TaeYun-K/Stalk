@@ -43,14 +43,10 @@ public class ConsultationSessionService {
         .data("consultationId=" + consultationId)
         .build();
 
-    String rawToken = session.createConnection(props).getToken();
+    String fullUrl = session.createConnection(props).getToken();
 
-    // 2) https:// → wss:// 스킴 변환
-    String wsBase = openviduUrl.replaceFirst("^https", "wss");
-
-    // 3) full URL 조합 후 반환
-    return String.format("%s/openvidu?sessionId=%s&token=%s",
-        wsBase, session.getSessionId(), rawToken);
+    // token= 이후 값만 추출
+    return fullUrl.substring(fullUrl.indexOf("token=") + "token=".length());
   }
 
   /**
