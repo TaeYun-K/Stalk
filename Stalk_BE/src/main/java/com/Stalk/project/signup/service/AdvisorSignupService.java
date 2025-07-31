@@ -6,6 +6,7 @@ import com.Stalk.project.signup.dao.UserMapper;
 import com.Stalk.project.signup.dao.AdvisorSignupMapper;
 import com.Stalk.project.signup.dto.in.AdvisorSignupRequest;
 import com.Stalk.project.signup.dto.out.AdvisorSignupResponse;
+import com.Stalk.project.signup.dto.out.SignupResponse;
 import com.Stalk.project.signup.entity.User;
 import com.Stalk.project.signup.entity.Advisor;
 import com.Stalk.project.util.FileStorageService;
@@ -26,23 +27,25 @@ public class AdvisorSignupService {
 
   @Transactional
   public AdvisorSignupResponse signup(AdvisorSignupRequest req) {
-    // 1 비밀번호 일치 확인
-    if (!req.getPassword().equals(req.getPasswordConfirm())) {
-      throw new IllegalArgumentException("비밀번호와 확인이 일치하지 않습니다.");
-    }
-
-    // 2 아이디·닉네임 중복 검사
+    // 1 아이디·닉네임 중복 검사
     if (userMapper.findByUserId(req.getUserId()) != null) {
       throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
     }
     if (userMapper.findByNickname(req.getNickname()) != null) {
       throw new IllegalArgumentException("이미 존재하는 닉네임입니다.");
     }
-
+    // 2 비밀번호 일치 확인
+    if (!req.getPassword().equals(req.getPasswordConfirm())) {
+      throw new IllegalArgumentException("비밀번호와 확인이 일치하지 않습니다.");
+    }
     // 3 이메일 인증 확인
     EmailVerification ev = emailVerificationMapper.findByEmail(req.getEmail());
     if (ev == null || !Boolean.TRUE.equals(ev.getVerified())) {
       throw new IllegalArgumentException("이메일 인증이 완료되지 않았습니다.");
+    }
+    // 약관 동의
+    if (!Boolean.TRUE.equals(req.getAgreedTerms()) || !Boolean.TRUE.equals(req.getAgreedPrivacy())) {
+      throw new IllegalArgumentException("약관 및 개인정보 수집에 동의해야 합니다.");
     }
 
     // 4 프로필 이미지 저장
@@ -60,7 +63,7 @@ public class AdvisorSignupService {
         .role("ADVISOR")
         .image(imageUrl)
         .isVerified(false)
-        .termsAgreed(req.getTermsAgreed())
+        .termsAgreed(req.getAgreedPrivacy())
         .isActive(true)
         .build();
     userMapper.insertUser(user);
