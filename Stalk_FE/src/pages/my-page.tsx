@@ -269,6 +269,7 @@ const MyPage = () => {
         `/video-consultation/${sessionData.sessionId}`,
         {
           state: {
+            sessionId : sessionData.sessionId,
             connectionUrl: sessionData.token,
             consultationId
           }

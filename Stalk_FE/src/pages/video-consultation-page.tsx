@@ -24,6 +24,7 @@ import { url } from "inspector";
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
   consultationId: string;
+  sessionId: string;        // OpenVidu 세션 ID
 }
 
 interface Participant {
@@ -70,7 +71,10 @@ const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
-  const { connectionUrl: ovToken, consultationId } = (state as LocationState) || {};
+  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
+  console.log("Connection URL:", ovToken);
+  console.log("Consultation ID:", consultationId);
+  console.log("URL Session ID:", ovSessionId);
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
@@ -137,6 +141,10 @@ const VideoConsultationPage: React.FC = () => {
       // If we have session ID and token, connect to the session
       if (ovToken) {
         const session = openVidu.initSession();
+
+        // Connect to the session
+        await session.connect(ovToken);
+        setSession(session);
         
         // Subscribe to session events
         session.on('streamCreated', (event) => {
@@ -147,10 +155,6 @@ const VideoConsultationPage: React.FC = () => {
         session.on('streamDestroyed', (event) => {
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
         });
-        
-        // Connect to the session
-        await session.connect(ovToken);
-        setSession(session);
         
         // Start publishing after connecting
         if (openVidu) {
