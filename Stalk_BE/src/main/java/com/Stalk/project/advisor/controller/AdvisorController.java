@@ -3,6 +3,7 @@ package com.Stalk.project.advisor.controller;
 import com.Stalk.project.advisor.dao.AdvisorMapper;
 import com.Stalk.project.advisor.dto.in.AdvisorBlockedTimesRequestDto;
 import com.Stalk.project.advisor.dto.in.AdvisorListRequestDto;
+import com.Stalk.project.advisor.dto.in.AvailableTimeSlotsRequestDto;
 import com.Stalk.project.advisor.dto.out.AdvisorBlockedTimesResponseDto;
 import com.Stalk.project.advisor.dto.out.AdvisorBlockedTimesUpdateResponseDto;
 import com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto;
@@ -10,6 +11,7 @@ import com.Stalk.project.advisor.dto.out.AdvisorResponseDto;
 import com.Stalk.project.advisor.dto.out.AvailableTimeSlotsResponseDto;
 import com.Stalk.project.advisor.service.AdvisorService;
 import com.Stalk.project.exception.BaseException;
+import com.Stalk.project.login.util.SecurityUtil;
 import com.Stalk.project.response.BaseResponse;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
@@ -17,12 +19,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -159,5 +163,23 @@ public class AdvisorController {
    */
   private boolean isAdvisor(Long userId) {
     return advisorMapper.isAdvisorExistsAndApproved(userId);
+  }
+
+  @GetMapping("/advisors/{advisor_id}/available-times")
+  @Operation(
+      summary = "예약 가능 시간 조회",
+      description = "일반 사용자만 특정 전문가의 예약 가능한 시간대를 조회할 수 있습니다.",
+      security = @SecurityRequirement(name = "Bearer Authentication")
+  )
+  public BaseResponse<AvailableTimeSlotsResponseDto> getAvailableTimeSlots(
+      @PathVariable("advisor_id") Long advisorId,
+      @ModelAttribute AvailableTimeSlotsRequestDto requestDto) {
+
+    // JWT에서 현재 사용자 역할 추출
+    String currentUserRole = SecurityUtil.getCurrentUserRole();
+
+    AvailableTimeSlotsResponseDto result = advisorService.getAvailableTimeSlots(
+        advisorId, currentUserRole, requestDto);
+    return new BaseResponse<>(result);
   }
 }

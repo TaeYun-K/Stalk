@@ -3,11 +3,13 @@ package com.Stalk.project.advisor.service;
 import com.Stalk.project.advisor.dao.AdvisorMapper;
 import com.Stalk.project.advisor.dto.in.AdvisorBlockedTimesRequestDto;
 import com.Stalk.project.advisor.dto.in.AdvisorListRequestDto;
+import com.Stalk.project.advisor.dto.in.AvailableTimeSlotsRequestDto;
 import com.Stalk.project.advisor.dto.out.*;
 import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
 import java.util.Arrays;
+import java.util.Collections;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -104,56 +106,56 @@ public class AdvisorService {
     };
   }
 
-  /**
-   * 전문가의 예약 가능한 시간 슬롯 조회 (디버깅 버전)
-   */
-  public AvailableTimeSlotsResponseDto getAvailableTimeSlots(Long advisorId, LocalDate date) {
-    System.out.println("=== 시간 슬롯 조회 시작 ===");
-    System.out.println("advisorId: " + advisorId + ", date: " + date);
+  public AvailableTimeSlotsResponseDto getAvailableTimeSlots(Long advisorId,
+      String currentUserRole, AvailableTimeSlotsRequestDto requestDto) {
 
-    // 1. 기본 검증
-    validateDateAndAdvisor(advisorId, date);
+    log.info("예약 가능 시간 조회 시작: advisorId={}, userRole={}, date={}",
+        advisorId, currentUserRole, requestDto.getDate());
 
-    // 2. 주말인 경우 빈 배열 반환
-    if (isWeekend(date)) {
+    // 1. 사용자 권한 확인 - 일반 사용자만 조회 가능
+    if (!"USER".equals(currentUserRole)) {
+      throw new BaseException(BaseResponseStatus.AVAILABLE_TIME_USER_ONLY);
+    }
+
+    LocalDate requestDate = LocalDate.parse(requestDto.getDate());
+    LocalDate today = LocalDate.now();
+
+    // 2. 날짜 검증
+    if (requestDate.isBefore(today)) {
+      throw new BaseException(BaseResponseStatus.PAST_DATE_NOT_ALLOWED);
+    }
+
+    if (requestDate.equals(today)) {
+      throw new BaseException(BaseResponseStatus.SAME_DAY_RESERVATION_NOT_ALLOWED_NEW);
+    }
+
+    // 3. 주말 체크
+    DayOfWeek dayOfWeek = requestDate.getDayOfWeek();
+    if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
+      // 주말은 빈 배열 반환
       return AvailableTimeSlotsResponseDto.builder()
-          .date(date)
-          .timeSlots(new ArrayList<>())
+          .date(requestDto.getDate())
+          .timeSlots(Collections.emptyList())
           .build();
     }
 
-    // 3. 기본 시간 슬롯 생성 (09:00 ~ 20:00, 1시간 간격)
-    List<LocalTime> baseTimeSlots = generateBaseTimeSlots();
-    System.out.println("기본 시간 슬롯: " + baseTimeSlots);
+    // 4. 어드바이저 존재 및 승인 여부 확인
+    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
+      throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+    }
 
-    // 4. 차단된 시간과 예약된 시간 조회
-    List<BlockedTimeDto> blockedTimes = advisorMapper.getBlockedTimes(advisorId, date);
-    List<ReservedTimeDto> reservedTimes = advisorMapper.getReservedTimes(advisorId, date);
+    // 5. 차단된 시간과 예약된 시간 조회
+    List<BlockedTimeDto> blockedTimes = advisorMapper.getBlockedTimes(advisorId, requestDate);
+    List<ReservedTimeDto> reservedTimes = advisorMapper.getReservedTimes(advisorId, requestDate);
 
-    System.out.println("차단된 시간 조회 결과: " + blockedTimes);
-    System.out.println("예약된 시간 조회 결과: " + reservedTimes);
+    // 6. 시간 슬롯 생성 및 상태 설정
+    List<TimeSlotDto> timeSlots = generateTimeSlots(blockedTimes, reservedTimes);
 
-    // 5. 차단/예약된 시간 Set으로 변환 (각각 별도 메서드로 처리)
-    Set<LocalTime> blockedTimeSet = convertBlockedTimesToSet(blockedTimes);
-    Set<LocalTime> reservedTimeSet = convertReservedTimesToSet(reservedTimes);
-
-    System.out.println("변환된 차단 시간 Set: " + blockedTimeSet);
-    System.out.println("변환된 예약 시간 Set: " + reservedTimeSet);
-
-    // 6. 시간 슬롯별 가용성 판단
-    List<AvailableTimeSlotsResponseDto.TimeSlot> timeSlots = baseTimeSlots.stream()
-        .map(time -> createTimeSlot(time, blockedTimeSet, reservedTimeSet))
-        .collect(Collectors.toList());
-
-    System.out.println("최종 시간 슬롯 결과:");
-    timeSlots.forEach(slot ->
-        System.out.println("  " + slot.getTime() + " - available: " + slot.getIsAvailable() +
-            ", blocked: " + slot.getIsBlocked() + ", reserved: " + slot.getIsReserved())
-    );
-    System.out.println("=== 시간 슬롯 조회 완료 ===");
+    log.info("예약 가능 시간 조회 완료: advisorId={}, availableSlots={}",
+        advisorId, timeSlots.size());
 
     return AvailableTimeSlotsResponseDto.builder()
-        .date(date)
+        .date(requestDto.getDate())
         .timeSlots(timeSlots)
         .build();
   }
@@ -264,7 +266,7 @@ public class AdvisorService {
     validateDateFormat(date);
 
     // 2. 전문가 존재 및 승인 여부 확인
-    if (!advisorMapper.isAdvisorExistsAndApproved(advisorId)) {
+    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
@@ -290,7 +292,7 @@ public class AdvisorService {
     }
 
     // 3. 전문가 존재 및 승인 여부 확인
-    if (!advisorMapper.isAdvisorExistsAndApproved(advisorId)) {
+    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
