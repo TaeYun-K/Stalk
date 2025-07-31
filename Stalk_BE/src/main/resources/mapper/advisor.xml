@@ -218,11 +218,15 @@
       u.nickname as nickname,
       ar.rating as rating,
       ar.content as content,
-      COALESCE(uci.image_path, '/images/default_profile.png') as profile_image,
+      CASE
+        WHEN uci.image_path IS NOT NULL AND uci.image_path != ''
+                THEN uci.image_path
+        ELSE '/images/default_profile.png'
+        END as profile_image,
       ar.created_at as created_at
     FROM advisor_reviews ar
            INNER JOIN users u ON ar.user_id = u.id
-           LEFT JOIN user_community_images uci ON u.user_id = uci.user_id
+           LEFT JOIN user_community_images uci ON u.id = uci.user_id
     WHERE ar.advisor_id = #{advisorId}
       AND ar.is_deleted = 0
     ORDER BY ar.created_at DESC
