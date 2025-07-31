@@ -43,10 +43,7 @@ public class ConsultationSessionService {
         .data("consultationId=" + consultationId)
         .build();
 
-    String fullUrl = session.createConnection(props).getToken();
-
-    // token= 이후 값만 추출
-    return fullUrl.substring(fullUrl.indexOf("token=") + "token=".length());
+    return session.createConnection(props).getToken();
   }
 
   /**
