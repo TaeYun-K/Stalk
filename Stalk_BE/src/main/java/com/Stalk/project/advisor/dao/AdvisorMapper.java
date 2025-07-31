@@ -74,4 +74,8 @@ public interface AdvisorMapper {
    * 전문가 존재 및 승인 여부 확인 ⭐ 추가된 메서드
    */
   boolean isAdvisorExistsAndApproved(@Param("advisorId") Long advisorId);
+
+  List<AdvisorDetailResponseDto.CareerDto> findAdvisorCareers(@Param("advisorId") Long advisorId);
+  List<AdvisorDetailResponseDto.CertificationDto> findAdvisorCertificates(@Param("advisorId") Long advisorId);
+  List<AdvisorDetailResponseDto.ReviewDto> findAdvisorReviewsWithProfile(@Param("advisorId") Long advisorId);
 }
