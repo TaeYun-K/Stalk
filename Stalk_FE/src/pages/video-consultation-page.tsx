@@ -6,7 +6,7 @@ import {
   Subscriber,
 } from "openvidu-browser";
 import React, { useEffect, useState } from "react";
-import { useNavigate, useSearchParams, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
 
 import cameraOffIcon from "@/assets/images/icons/consultation/camera-off.svg";
 import cameraOnIcon from "@/assets/images/icons/consultation/camera-on.svg";
@@ -20,6 +20,11 @@ import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
 import { url } from "inspector";
+
+interface LocationState {
+  connectionUrl: string;    // wss://… 전체 URL
+  consultationId: string;
+}
 
 interface Participant {
   id: string;
@@ -64,15 +69,8 @@ const TIMER_INTERVAL_MS = 1000;
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
-  const [searchParams] = useSearchParams();
-  const consultationId = searchParams.get("id");
-  
-  // Parse OpenVidu parameters from URL
-  const ovSessionId = searchParams.get("sessionId") || urlSessionId;
-  const ovToken = searchParams.get("token");
-  console.log('Session ID:', ovSessionId);
-  console.log('Token:', ovToken);
-
+  const {state} = useLocation();
+  const { connectionUrl: ovTokenUrl, consultationId } = (state as LocationState) || {};
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
@@ -133,11 +131,11 @@ const VideoConsultationPage: React.FC = () => {
 
   const initializeOpenVidu = async () => {
     try {
-      const openVidu = new OpenVidu();
+      const openVidu = new OpenVidu()
       setOv(openVidu);
       
       // If we have session ID and token, connect to the session
-      if (ovSessionId && ovToken) {
+      if (ovTokenUrl) {
         const session = openVidu.initSession();
         
         // Subscribe to session events
@@ -151,7 +149,7 @@ const VideoConsultationPage: React.FC = () => {
         });
         
         // Connect to the session
-        await session.connect(ovToken);
+        await session.connect("tok_BpQUhBwoAdd2SX2e");
         setSession(session);
         
         // Start publishing after connecting
