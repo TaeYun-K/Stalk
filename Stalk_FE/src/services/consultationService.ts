@@ -7,6 +7,13 @@ interface ConsultationRequest {
   content: string;
 }
 
+interface BaseResponse<T> {
+  isSuccess: boolean;
+  code:      number;
+  message:   string;
+  result:    T;
+}
+
 interface SessionTokenResponse {
   sessionId: string;
   token: string;
@@ -166,7 +173,6 @@ class ConsultationService {
 
   // OpenVidu 세션 생성 및 토큰 발급
   static async createSessionToken(consultationId: string): Promise<SessionTokenResponse> {
-    try {
       const response = await fetch(`https://i13e205.p.ssafy.io:8443/api/consultations/${consultationId}/session`, {
         method: 'POST',
         headers: {
@@ -178,11 +184,11 @@ class ConsultationService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to create session token:', error);
-      throw new Error('세션 토큰 생성에 실패했습니다.');
-    }
+      const data : BaseResponse<SessionTokenResponse> = await response.json();
+      if (!data.isSuccess) {
+        throw new Error(data.message);
+      }
+      return data.result;
   }
 
   // 세션 정보 조회
@@ -208,4 +214,4 @@ class ConsultationService {
 }
 
 export default ConsultationService;
-export type { SessionTokenResponse, SessionInfo };
+export type { SessionTokenResponse, SessionInfo, ConsultationRequest, BaseResponse };
