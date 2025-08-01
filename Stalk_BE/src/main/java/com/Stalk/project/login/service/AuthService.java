@@ -44,6 +44,7 @@ public class AuthService {
     // Access Token 및 Refresh Token 생성
     String accessToken = jwtUtil.createAccessToken(user.getUserId(), user.getRole());
     String refreshToken = jwtUtil.createRefreshToken(user.getUserId(), user.getRole());
+    System.out.println("refreshtoken : " + refreshToken);
 
     // Refresh Token을 Redis에 저장
     redisTemplate.opsForValue().set(
