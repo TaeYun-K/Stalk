@@ -228,9 +228,9 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
     
     try {
-      console.log("StockChart - Making request to:", `http://localhost:8081/api/stalk/daily/${selectedStock?.ticker}?period=${period}`);
+      console.log("StockChart - Making request to:", `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`);
       const response = await axios.get(
-        `http://localhost:8081/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
+        `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
       );
       
       console.log("StockChart - Response received:", response.data);

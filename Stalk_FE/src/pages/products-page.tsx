@@ -174,7 +174,7 @@ const ProductsPage = () => {
         const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KSQ' : 'STK';
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const url = `http://localhost:8081/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
+        const url = `https://i13e205.p.ssafy.io:8443/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
         console.log("Fetching from URL:", url);
 
         const response = await axios.get(url, {
@@ -224,7 +224,7 @@ const ProductsPage = () => {
       // Fallback: Try to get data from daily endpoint
       console.log("Trying fallback: fetching daily data for ticker:", selectedTicker);
       try {
-        const dailyResponse = await axios.get(`http://localhost:8081/api/stock/daily/${selectedTicker}?period=2`);
+        const dailyResponse = await axios.get(`https://i13e205.p.ssafy.io:8443/api/stock/daily/${selectedTicker}?period=2`);
         if (dailyResponse.data.success && dailyResponse.data.data.length > 0) {
           const latestData = dailyResponse.data.data[0];
           const prevData = dailyResponse.data.data[1] || latestData;
@@ -235,7 +235,7 @@ const ProductsPage = () => {
           // Try to get name from search
           let stockName = "";
           try {
-            const searchResponse = await axios.get(`http://localhost:8081/api/stock/search/${selectedTicker}`);
+            const searchResponse = await axios.get(`https://i13e205.p.ssafy.io:8443/api/stock/search/${selectedTicker}`);
             if (searchResponse.data.success && searchResponse.data.data.length > 0) {
               stockName = searchResponse.data.data[0].name;
               console.log("Found stock name from search:", stockName);
@@ -323,7 +323,7 @@ const ProductsPage = () => {
 
     try {
       const response = await axios.get(
-        `http://localhost:8081/api/stock/search/${query}`
+        `https://i13e205.p.ssafy.io:8443/api/stock/search/${query}`
       );
       if (response.data.success && response.data.data.length > 0) {
         const stock = response.data.data[0];
