@@ -35,11 +35,11 @@ public class AuthService {
     if (user == null || !passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
       throw new RuntimeException("Invalid user ID or password");
     }
-    
+
 //    if (!user.getIsActive()) {
 //      throw new RuntimeException("Account is not active");
 //    }
-
+    
     // Access Token 및 Refresh Token 생성
     String accessToken = jwtUtil.createAccessToken(user.getUserId(), user.getRole());
     String refreshToken = jwtUtil.createRefreshToken(user.getUserId(), user.getRole());
