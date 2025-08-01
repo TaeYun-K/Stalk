@@ -1,6 +1,5 @@
 package com.Stalk.project.community.service;
 
-import com.Stalk.project.auth.mock.util.TokenUtils;
 import com.Stalk.project.community.dao.CommunityMapper;
 import com.Stalk.project.community.dto.in.CommunityCommentCreateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityCommentListRequestDto;
@@ -47,7 +46,7 @@ public class CommunityService {
   private final CommunityMapper communityMapper;
 
   /**
-   * 커뮤니티 글 목록 조회
+   * 커뮤니티 글 목록 조회 (인증 불필요)
    */
   public CursorPage<CommunityPostSummaryDto> getCommunityPosts(
       CommunityPostListRequestDto requestDto) {
@@ -87,20 +86,14 @@ public class CommunityService {
   }
 
   /**
-   * 글쓰기 권한 체크
+   * 글쓰기 권한 체크 - JWT 방식으로 변경
    */
-  public WritePermissionResponseDto checkWritePermission(String authorizationHeader) {
-    log.info("글쓰기 권한 체크 시작");
+  public WritePermissionResponseDto checkWritePermission(Long currentUserId, String currentUserRole) {
+    log.info("글쓰기 권한 체크 시작 - userId: {}, role: {}", currentUserId, currentUserRole);
 
     try {
-      // 토큰에서 사용자 정보 추출
-      Long userId = TokenUtils.extractUserId(authorizationHeader);
-      String userRole = TokenUtils.extractRole(authorizationHeader);
-
-      log.info("토큰에서 추출된 사용자 정보 - userId: {}, role: {}", userId, userRole);
-
       // 사용자 정보 조회
-      String userName = communityMapper.findUserNameById(userId);
+      String userName = communityMapper.findUserNameById(currentUserId);
       if (userName == null) {
         throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
       }
@@ -110,7 +103,7 @@ public class CommunityService {
 
       // 사용자 역할에 따른 사용 가능 카테고리 결정
       List<String> availableCategories;
-      if ("USER".equals(userRole)) {
+      if ("USER".equals(currentUserRole)) {
         // 일반 사용자: QUESTION만 작성 가능
         availableCategories = Arrays.asList("QUESTION");
       } else {
@@ -123,7 +116,7 @@ public class CommunityService {
 
       return WritePermissionResponseDto.builder()
           .canWrite(canWrite)
-          .userRole(userRole)
+          .userRole(currentUserRole)
           .userName(userName)
           .availableCategories(availableCategories)
           .message("글 작성이 가능합니다.")
@@ -139,25 +132,19 @@ public class CommunityService {
   }
 
   /**
-   * 커뮤니티 글 작성
+   * 커뮤니티 글 작성 - JWT 방식으로 변경
    */
   @Transactional
-  public CommunityPostCreateResponseDto createCommunityPost(String authorizationHeader,
+  public CommunityPostCreateResponseDto createCommunityPost(Long currentUserId, String currentUserRole,
       CommunityPostCreateRequestDto requestDto) {
-    log.info("커뮤니티 글 작성 시작: {}", requestDto);
+    log.info("커뮤니티 글 작성 시작 - userId: {}, role: {}", currentUserId, currentUserRole);
 
     try {
-      // 토큰에서 사용자 정보 추출
-      Long userId = TokenUtils.extractUserId(authorizationHeader);
-      String userRole = TokenUtils.extractRole(authorizationHeader);
-
-      log.info("글 작성자 정보 - userId: {}, role: {}", userId, userRole);
-
       // 권한 검증
-      validateWritePermission(userRole, requestDto.getCategory());
+      validateWritePermission(currentUserRole, requestDto.getCategory());
 
       // 글 작성
-      int insertedRows = communityMapper.createCommunityPost(userId, requestDto);
+      int insertedRows = communityMapper.createCommunityPost(currentUserId, requestDto);
       if (insertedRows != 1) {
         throw new BaseException(BaseResponseStatus.COMMUNITY_POST_CREATE_FAILED);
       }
@@ -213,7 +200,7 @@ public class CommunityService {
   }
 
   /**
-   * 커뮤니티 글 상세 조회
+   * 커뮤니티 글 상세 조회 (인증 불필요)
    */
   public CommunityPostDetailDto getCommunityPostDetail(Long postId,
       CommunityPostDetailRequestDto requestDto) {
@@ -253,7 +240,7 @@ public class CommunityService {
   }
 
   /**
-   * 커뮤니티 글 수정
+   * 커뮤니티 글 수정 - JWT 방식으로 변경
    */
   public CommunityPostUpdateResponseDto updateCommunityPost(
       Long postId,
@@ -303,7 +290,7 @@ public class CommunityService {
   }
 
   /**
-   * 커뮤니티 글 삭제
+   * 커뮤니티 글 삭제 - JWT 방식으로 변경
    */
   public CommunityPostDeleteResponseDto deleteCommunityPost(
       Long postId,
@@ -350,12 +337,10 @@ public class CommunityService {
         .build();
   }
 
-  // CommunityService.java에 추가할 댓글 관련 메서드들
-
   /**
-   * 댓글 작성
+   * 댓글 작성 - JWT 방식으로 변경
    */
-  public CommunityCommentCreateResponseDto createComment(Long postId, Long userId,
+  public CommunityCommentCreateResponseDto createComment(Long postId, Long currentUserId,
       CommunityCommentCreateRequestDto requestDto) {
     // 1. 글 존재 여부 확인
     if (!communityMapper.existsPostById(postId)) {
@@ -364,7 +349,7 @@ public class CommunityService {
 
     // 2. 댓글 생성
     try {
-      communityMapper.createComment(postId, userId, requestDto.getContent());
+      communityMapper.createComment(postId, currentUserId, requestDto.getContent());
       Long commentId = communityMapper.getLastInsertedCommentId();
 
       return CommunityCommentCreateResponseDto.builder()
@@ -380,7 +365,7 @@ public class CommunityService {
   }
 
   /**
-   * 댓글 목록 조회 (더보기용)
+   * 댓글 목록 조회 (더보기용) - 인증 불필요
    */
   public CursorPage<CommunityCommentDto> getCommentList(Long postId,
       CommunityCommentListRequestDto requestDto) {
@@ -408,10 +393,10 @@ public class CommunityService {
   }
 
   /**
-   * 댓글 수정
+   * 댓글 수정 - JWT 방식으로 변경
    */
-  public CommunityCommentUpdateResponseDto updateComment(Long commentId, Long userId,
-      String userRole, CommunityCommentUpdateRequestDto requestDto) {
+  public CommunityCommentUpdateResponseDto updateComment(Long commentId, Long currentUserId,
+      String currentUserRole, CommunityCommentUpdateRequestDto requestDto) {
     // 1. 댓글 존재 및 권한 확인
     CommunityCommentPermissionDto permission = communityMapper.findCommentPermission(commentId);
     if (permission == null) {
@@ -419,7 +404,7 @@ public class CommunityService {
     }
 
     // 2. 수정 권한 확인 (작성자 본인 또는 관리자)
-    if (!permission.getUserId().equals(userId) && !"ADMIN".equals(userRole)) {
+    if (!permission.getUserId().equals(currentUserId) && !"ADMIN".equals(currentUserRole)) {
       throw new BaseException(BaseResponseStatus.COMMENT_UPDATE_FORBIDDEN);
     }
 
@@ -445,10 +430,10 @@ public class CommunityService {
   }
 
   /**
-   * 댓글 삭제
+   * 댓글 삭제 - JWT 방식으로 변경
    */
-  public CommunityCommentDeleteResponseDto deleteComment(Long commentId, Long userId,
-      String userRole) {
+  public CommunityCommentDeleteResponseDto deleteComment(Long commentId, Long currentUserId,
+      String currentUserRole) {
     // 1. 댓글 존재 및 권한 확인
     CommunityCommentPermissionDto permission = communityMapper.findCommentPermission(commentId);
     if (permission == null) {
@@ -456,7 +441,7 @@ public class CommunityService {
     }
 
     // 2. 삭제 권한 확인 (작성자 본인 또는 관리자)
-    if (!permission.getUserId().equals(userId) && !"ADMIN".equals(userRole)) {
+    if (!permission.getUserId().equals(currentUserId) && !"ADMIN".equals(currentUserRole)) {
       throw new BaseException(BaseResponseStatus.COMMENT_DELETE_FORBIDDEN);
     }
 

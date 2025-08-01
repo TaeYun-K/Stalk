@@ -102,7 +102,8 @@ public enum BaseResponseStatus {
   INVALID_TIME_SLOT(HttpStatus.BAD_REQUEST, false, 1320, "유효하지 않은 시간대입니다."),
   ADVISOR_ONLY_ACCESS(HttpStatus.FORBIDDEN, false, 1321, "전문가만 접근 가능합니다."),
   INVALID_DATE_FORMAT(HttpStatus.BAD_REQUEST, false, 1322, "날짜 형식이 올바르지 않습니다."),
-
+  RESERVATION_USER_ONLY(HttpStatus.FORBIDDEN, false, 1323, "예약은 일반 사용자만 가능합니다."),
+  AVAILABLE_TIME_USER_ONLY(HttpStatus.FORBIDDEN, false, 1324, "예약 가능 시간 조회는 일반 사용자만 가능합니다."),
   // ===== 인증 관련 에러 코드 (2000번대) =====
 
   // 로그인 실패

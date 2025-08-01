@@ -265,8 +265,16 @@ const MyPage = () => {
       const consultationId = consultationItem.id;
 
       const sessionData = await ConsultationService.createSessionToken(consultationId);
-      
-      navigate(`/video-consultation/${sessionData.sessionId}?sessionId=${sessionData.sessionId}&token=${sessionData.token}&id=${consultationId}`);
+      navigate( // parameter 여러개 넘기기
+        `/video-consultation/${sessionData.sessionId}`,
+        {
+          state: {
+            sessionId : sessionData.sessionId,
+            connectionUrl: sessionData.token,
+            consultationId
+          }
+        }
+      );
     } catch (error) {
       console.error('Failed to start consultation:', error);
       alert('상담 입장에 실패했습니다. 다시 시도해주세요.');

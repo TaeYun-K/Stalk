@@ -36,46 +36,62 @@ public interface AdvisorMapper {
   int countReviewsByAdvisorId(@Param("advisorId") Long advisorId);
 
   /**
-   * 특정 날짜의 전문가 차단 시간 조회
+   * 특정 날짜의 전문가 차단 시간 조회 (LocalDate 버전)
    */
   List<BlockedTimeDto> getBlockedTimes(@Param("advisorId") Long advisorId,
       @Param("date") LocalDate date);
 
   /**
-   * 특정 날짜의 전문가 예약 시간 조회
+   * 특정 날짜의 전문가 예약 시간 조회 (LocalDate 버전)
    */
   List<ReservedTimeDto> getReservedTimes(@Param("advisorId") Long advisorId,
       @Param("date") LocalDate date);
 
   /**
-   * 전문가의 특정 날짜 차단 시간 조회
+   * 전문가 존재 및 승인 여부 확인 (ReservationService에서 사용)
+   * ReservationMapper의 isApprovedAdvisor와 동일한 기능
+   */
+  boolean isApprovedAdvisor(@Param("advisorId") Long advisorId);
+
+  // ========== 전문가 일정 관리 관련 메서드들 (String date 버전) ==========
+
+  /**
+   * 전문가의 특정 날짜 차단 시간 조회 (일정 관리용)
    */
   List<String> getAdvisorBlockedTimes(@Param("advisorId") Long advisorId,
       @Param("date") String date);
 
   /**
-   * 전문가의 특정 날짜 차단 시간 삭제
+   * 전문가의 특정 날짜 차단 시간 삭제 (일정 관리용)
    */
   void deleteBlockedTimesByDate(@Param("advisorId") Long advisorId, @Param("date") String date);
 
   /**
-   * 전문가의 차단 시간 일괄 추가
+   * 전문가의 차단 시간 일괄 추가 (일정 관리용)
    */
   void insertBlockedTimes(@Param("advisorId") Long advisorId, @Param("date") String date,
       @Param("blockedTimes") List<String> blockedTimes);
 
   /**
-   * 특정 날짜/시간에 예약이 있는지 확인
+   * 특정 날짜/시간에 예약이 있는지 확인 (일정 관리용)
    */
   List<String> getReservedTimesForDate(@Param("advisorId") Long advisorId,
       @Param("date") String date);
 
-  /**
-   * 전문가 존재 및 승인 여부 확인 ⭐ 추가된 메서드
-   */
-  boolean isAdvisorExistsAndApproved(@Param("advisorId") Long advisorId);
+  // ========== 전문가 상세 정보 관련 추가 메서드들 ==========
 
+  /**
+   * 전문가 경력 정보 조회
+   */
   List<AdvisorDetailResponseDto.CareerDto> findAdvisorCareers(@Param("advisorId") Long advisorId);
+
+  /**
+   * 전문가 자격증 정보 조회
+   */
   List<AdvisorDetailResponseDto.CertificationDto> findAdvisorCertificates(@Param("advisorId") Long advisorId);
+
+  /**
+   * 전문가 리뷰 정보 조회 (프로필 포함)
+   */
   List<AdvisorDetailResponseDto.ReviewDto> findAdvisorReviewsWithProfile(@Param("advisorId") Long advisorId);
 }

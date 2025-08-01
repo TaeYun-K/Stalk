@@ -3,33 +3,40 @@ package com.Stalk.project.advisor.service;
 import com.Stalk.project.advisor.dao.AdvisorMapper;
 import com.Stalk.project.advisor.dto.in.AdvisorBlockedTimesRequestDto;
 import com.Stalk.project.advisor.dto.in.AdvisorListRequestDto;
+import com.Stalk.project.advisor.dto.in.AvailableTimeSlotsRequestDto;
 import com.Stalk.project.advisor.dto.out.*;
 import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
-import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AdvisorService {
 
   private final AdvisorMapper advisorMapper;
 
+  /**
+   * 어드바이저 목록 조회
+   */
   public CursorPage<AdvisorResponseDto> getAdvisorList(AdvisorListRequestDto requestDto) {
     // cursor가 null인 경우 첫 페이지 조회
     if (requestDto.getCursor() == null) {
-      requestDto.setCursor(0L); // 1L → 0L로 변경
+      requestDto.setCursor(0L);
     }
 
     // limit + 1로 조회하여 다음 페이지 존재 여부 확인
@@ -54,14 +61,14 @@ public class AdvisorService {
   }
 
   /**
-   * 어드바이저 상세 정보 조회 (확장된 버전)
+   * 어드바이저 상세 정보 조회
    */
   public AdvisorDetailResponseDto getAdvisorDetail(Long advisorId) {
     // 1. 어드바이저 기본 정보 조회
     AdvisorDetailResponseDto advisorDetail = advisorMapper.findAdvisorDetailById(advisorId);
 
     if (advisorDetail == null) {
-      throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND); // 404 에러
+      throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
     // 2. 경력사항 조회
@@ -76,7 +83,7 @@ public class AdvisorService {
     List<AdvisorDetailResponseDto.ReviewDto> reviews = advisorMapper.findAdvisorReviewsWithProfile(advisorId);
     advisorDetail.setReviews(reviews);
 
-    // 5. 더 많은 리뷰가 있는지 확인 (10개를 가져왔으므로 정확히 10개면 더 있을 수 있음)
+    // 5. 더 많은 리뷰가 있는지 확인
     boolean hasMoreReviews = reviews.size() == 10;
     advisorDetail.setHas_more_reviews(hasMoreReviews);
 
@@ -89,170 +96,59 @@ public class AdvisorService {
   }
 
   /**
-   * 투자 성향 enum을 한글로 변환
+   * 예약 가능 시간 조회 - 일반 사용자만 허용
    */
-  private String convertTradeStyleToKorean(String tradeStyle) {
-    if (tradeStyle == null) return null;
+  public AvailableTimeSlotsResponseDto getAvailableTimeSlots(Long advisorId,
+      String currentUserRole, AvailableTimeSlotsRequestDto requestDto) {
 
-    return switch (tradeStyle.toUpperCase()) {
-      case "SHORT" -> "단기";
-      case "MID_SHORT" -> "단중기";     // 새로 추가
-      case "MID" -> "중기";
-      case "MID_LONG" -> "중장기";      // 새로 추가
-      case "LONG" -> "장기";
-      default -> tradeStyle;
-    };
-  }
+    log.info("예약 가능 시간 조회 시작: advisorId={}, userRole={}, date={}",
+        advisorId, currentUserRole, requestDto.getDate());
 
-  /**
-   * 전문가의 예약 가능한 시간 슬롯 조회 (디버깅 버전)
-   */
-  public AvailableTimeSlotsResponseDto getAvailableTimeSlots(Long advisorId, LocalDate date) {
-    System.out.println("=== 시간 슬롯 조회 시작 ===");
-    System.out.println("advisorId: " + advisorId + ", date: " + date);
-
-    // 1. 기본 검증
-    validateDateAndAdvisor(advisorId, date);
-
-    // 2. 주말인 경우 빈 배열 반환
-    if (isWeekend(date)) {
-      return AvailableTimeSlotsResponseDto.builder()
-          .date(date)
-          .timeSlots(new ArrayList<>())
-          .build();
+    // 1. 사용자 권한 확인 - 일반 사용자만 조회 가능
+    if (!"USER".equals(currentUserRole)) {
+      throw new BaseException(BaseResponseStatus.AVAILABLE_TIME_USER_ONLY);
     }
 
-    // 3. 기본 시간 슬롯 생성 (09:00 ~ 20:00, 1시간 간격)
-    List<LocalTime> baseTimeSlots = generateBaseTimeSlots();
-    System.out.println("기본 시간 슬롯: " + baseTimeSlots);
+    LocalDate requestDate = requestDto.getDate();
+    LocalDate today = LocalDate.now();
 
-    // 4. 차단된 시간과 예약된 시간 조회
-    List<BlockedTimeDto> blockedTimes = advisorMapper.getBlockedTimes(advisorId, date);
-    List<ReservedTimeDto> reservedTimes = advisorMapper.getReservedTimes(advisorId, date);
-
-    System.out.println("차단된 시간 조회 결과: " + blockedTimes);
-    System.out.println("예약된 시간 조회 결과: " + reservedTimes);
-
-    // 5. 차단/예약된 시간 Set으로 변환 (각각 별도 메서드로 처리)
-    Set<LocalTime> blockedTimeSet = convertBlockedTimesToSet(blockedTimes);
-    Set<LocalTime> reservedTimeSet = convertReservedTimesToSet(reservedTimes);
-
-    System.out.println("변환된 차단 시간 Set: " + blockedTimeSet);
-    System.out.println("변환된 예약 시간 Set: " + reservedTimeSet);
-
-    // 6. 시간 슬롯별 가용성 판단
-    List<AvailableTimeSlotsResponseDto.TimeSlot> timeSlots = baseTimeSlots.stream()
-        .map(time -> createTimeSlot(time, blockedTimeSet, reservedTimeSet))
-        .collect(Collectors.toList());
-
-    System.out.println("최종 시간 슬롯 결과:");
-    timeSlots.forEach(slot ->
-        System.out.println("  " + slot.getTime() + " - available: " + slot.getIsAvailable() +
-            ", blocked: " + slot.getIsBlocked() + ", reserved: " + slot.getIsReserved())
-    );
-    System.out.println("=== 시간 슬롯 조회 완료 ===");
-
-    return AvailableTimeSlotsResponseDto.builder()
-        .date(date)
-        .timeSlots(timeSlots)
-        .build();
-  }
-
-  /**
-   * 날짜와 전문가 검증
-   */
-  private void validateDateAndAdvisor(Long advisorId, LocalDate date) {
-    // 과거 날짜 체크
-    if (date.isBefore(LocalDate.now())) {
+    // 2. 날짜 검증
+    if (requestDate.isBefore(today)) {
       throw new BaseException(BaseResponseStatus.PAST_DATE_NOT_ALLOWED);
     }
 
-    // 당일 예약 불가 체크
-    if (date.equals(LocalDate.now())) {
+    if (requestDate.equals(today)) {
       throw new BaseException(BaseResponseStatus.SAME_DAY_RESERVATION_NOT_ALLOWED_NEW);
     }
 
-    // 전문가 존재 여부 확인
-    try {
-      AdvisorDetailResponseDto advisor = getAdvisorDetail(advisorId);
-      if (advisor == null) {
-        throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
-      }
-    } catch (Exception e) {
+    // 3. 주말 체크
+    DayOfWeek dayOfWeek = requestDate.getDayOfWeek();
+    if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
+      // 주말은 빈 배열 반환
+      return AvailableTimeSlotsResponseDto.builder()
+          .date(requestDate)
+          .timeSlots(Collections.emptyList())
+          .build();
+    }
+
+    // 4. 어드바이저 존재 및 승인 여부 확인
+    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
-  }
 
-  /**
-   * 주말 여부 확인
-   */
-  private boolean isWeekend(LocalDate date) {
-    DayOfWeek dayOfWeek = date.getDayOfWeek();
-    return dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
-  }
+    // 5. 차단된 시간과 예약된 시간 조회
+    List<BlockedTimeDto> blockedTimes = advisorMapper.getBlockedTimes(advisorId, requestDate);
+    List<ReservedTimeDto> reservedTimes = advisorMapper.getReservedTimes(advisorId, requestDate);
 
-  /**
-   * 기본 시간 슬롯 생성 (09:00 ~ 20:00)
-   */
-  private List<LocalTime> generateBaseTimeSlots() {
-    List<LocalTime> timeSlots = new ArrayList<>();
-    for (int hour = 9; hour < 21; hour++) { // 09:00 ~ 20:00 (21시 제외)
-      timeSlots.add(LocalTime.of(hour, 0));
-    }
-    return timeSlots;
-  }
+    // 6. 시간 슬롯 생성 및 상태 설정
+    List<AvailableTimeSlotsResponseDto.TimeSlot> timeSlots = generateTimeSlots(blockedTimes, reservedTimes);
 
-  /**
-   * 차단된 시간을 LocalTime Set으로 변환
-   */
-  private Set<LocalTime> convertBlockedTimesToSet(List<BlockedTimeDto> blockedTimes) {
-    return blockedTimes.stream()
-        .flatMap(blocked -> {
-          // 시작 시간부터 종료 시간까지의 모든 시간 생성
-          List<LocalTime> times = new ArrayList<>();
-          LocalTime current = blocked.getStartTime();
-          while (current.isBefore(blocked.getEndTime())) {
-            times.add(current);
-            current = current.plusHours(1);
-          }
-          return times.stream();
-        })
-        .collect(Collectors.toSet());
-  }
+    log.info("예약 가능 시간 조회 완료: advisorId={}, availableSlots={}",
+        advisorId, timeSlots.size());
 
-  /**
-   * 예약된 시간을 LocalTime Set으로 변환
-   */
-  private Set<LocalTime> convertReservedTimesToSet(List<ReservedTimeDto> reservedTimes) {
-    return reservedTimes.stream()
-        .flatMap(reserved -> {
-          // 시작 시간부터 종료 시간까지의 모든 시간 생성
-          List<LocalTime> times = new ArrayList<>();
-          LocalTime current = reserved.getStartTime();
-          while (current.isBefore(reserved.getEndTime())) {
-            times.add(current);
-            current = current.plusHours(1);
-          }
-          return times.stream();
-        })
-        .collect(Collectors.toSet());
-  }
-
-  /**
-   * 개별 시간 슬롯 생성
-   */
-  private AvailableTimeSlotsResponseDto.TimeSlot createTimeSlot(LocalTime time,
-      Set<LocalTime> blockedTimes,
-      Set<LocalTime> reservedTimes) {
-    boolean isBlocked = blockedTimes.contains(time);
-    boolean isReserved = reservedTimes.contains(time);
-    boolean isAvailable = !isBlocked && !isReserved;
-
-    return AvailableTimeSlotsResponseDto.TimeSlot.builder()
-        .time(time.toString()) // "09:00" 형식으로 변환
-        .isAvailable(isAvailable)
-        .isReserved(isReserved)
-        .isBlocked(isBlocked)
+    return AvailableTimeSlotsResponseDto.builder()
+        .date(requestDate)
+        .timeSlots(timeSlots)
         .build();
   }
 
@@ -264,7 +160,7 @@ public class AdvisorService {
     validateDateFormat(date);
 
     // 2. 전문가 존재 및 승인 여부 확인
-    if (!advisorMapper.isAdvisorExistsAndApproved(advisorId)) {
+    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
@@ -290,7 +186,7 @@ public class AdvisorService {
     }
 
     // 3. 전문가 존재 및 승인 여부 확인
-    if (!advisorMapper.isAdvisorExistsAndApproved(advisorId)) {
+    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
@@ -317,6 +213,103 @@ public class AdvisorService {
     }
 
     return new AdvisorBlockedTimesUpdateResponseDto(date, blockedTimes);
+  }
+
+  // ============ Private Helper Methods ============
+
+  /**
+   * 투자 성향 enum을 한글로 변환
+   */
+  private String convertTradeStyleToKorean(String tradeStyle) {
+    if (tradeStyle == null) return null;
+
+    return switch (tradeStyle.toUpperCase()) {
+      case "SHORT" -> "단기";
+      case "MID_SHORT" -> "단중기";
+      case "MID" -> "중기";
+      case "MID_LONG" -> "중장기";
+      case "LONG" -> "장기";
+      default -> tradeStyle;
+    };
+  }
+
+  /**
+   * 시간 슬롯 생성 (09:00~20:00, 12개 슬롯)
+   */
+  private List<AvailableTimeSlotsResponseDto.TimeSlot> generateTimeSlots(
+      List<BlockedTimeDto> blockedTimes, List<ReservedTimeDto> reservedTimes) {
+
+    // 1. 기본 시간 슬롯 생성 (09:00~20:00)
+    List<LocalTime> baseTimeSlots = new ArrayList<>();
+    for (int hour = 9; hour <= 20; hour++) {
+      baseTimeSlots.add(LocalTime.of(hour, 0));
+    }
+
+    // 2. 차단된 시간들을 Set으로 변환
+    Set<LocalTime> blockedTimeSet = convertBlockedTimesToSet(blockedTimes);
+
+    // 3. 예약된 시간들을 Set으로 변환
+    Set<LocalTime> reservedTimeSet = convertReservedTimesToSet(reservedTimes);
+
+    // 4. 각 시간 슬롯의 상태 설정
+    List<AvailableTimeSlotsResponseDto.TimeSlot> timeSlots = new ArrayList<>();
+    for (LocalTime time : baseTimeSlots) {
+      AvailableTimeSlotsResponseDto.TimeSlot timeSlot = createTimeSlot(time, blockedTimeSet, reservedTimeSet);
+      timeSlots.add(timeSlot);
+    }
+
+    return timeSlots;
+  }
+
+  /**
+   * 차단된 시간을 LocalTime Set으로 변환
+   */
+  private Set<LocalTime> convertBlockedTimesToSet(List<BlockedTimeDto> blockedTimes) {
+    return blockedTimes.stream()
+        .flatMap(blocked -> {
+          List<LocalTime> times = new ArrayList<>();
+          LocalTime current = blocked.getStartTime();
+          while (current.isBefore(blocked.getEndTime())) {
+            times.add(current);
+            current = current.plusHours(1);
+          }
+          return times.stream();
+        })
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * 예약된 시간을 LocalTime Set으로 변환
+   */
+  private Set<LocalTime> convertReservedTimesToSet(List<ReservedTimeDto> reservedTimes) {
+    return reservedTimes.stream()
+        .flatMap(reserved -> {
+          List<LocalTime> times = new ArrayList<>();
+          LocalTime current = reserved.getStartTime();
+          while (current.isBefore(reserved.getEndTime())) {
+            times.add(current);
+            current = current.plusHours(1);
+          }
+          return times.stream();
+        })
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * 개별 시간 슬롯 생성
+   */
+  private AvailableTimeSlotsResponseDto.TimeSlot createTimeSlot(LocalTime time,
+      Set<LocalTime> blockedTimes, Set<LocalTime> reservedTimes) {
+    boolean isBlocked = blockedTimes.contains(time);
+    boolean isReserved = reservedTimes.contains(time);
+    boolean isAvailable = !isBlocked && !isReserved;
+
+    return AvailableTimeSlotsResponseDto.TimeSlot.builder()
+        .time(time.toString()) // "09:00" 형식으로 변환
+        .isAvailable(isAvailable)
+        .isReserved(isReserved)
+        .isBlocked(isBlocked)
+        .build();
   }
 
   /**
