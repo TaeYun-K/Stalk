@@ -28,14 +28,14 @@ interface UseStockDataOptions {
   refreshInterval?: number;
 }
 
-const API_BASE_URL = 'http://localhost:8081/api';
+const API_BASE_URL = "https://i13e205.p.ssafy.io:8443/api";
 
 export const useStockData = (
   ticker: string | null,
   options: UseStockDataOptions = {}
 ) => {
   const { autoRefresh = false, refreshInterval = 10000 } = options;
-  
+
   const [data, setData] = useState<StockData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,13 +52,13 @@ export const useStockData = (
         // Determine market type - default to STK for KOSPI, can be enhanced with lookup
         const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KSQ' : 'STK';
         const response = await axios.get(`${API_BASE_URL}/krx/stock/${ticker}?market=${marketType}`);
-        
+
         if (response.data) {
           const stockInfo = response.data;
           const price = parseFloat(stockInfo.closePrice) || 0;
           const change = parseFloat(stockInfo.priceChange) || 0;
           const changeRate = parseFloat(stockInfo.changeRate) || 0;
-          
+
           setData({
             ticker: stockInfo.ticker,
             name: stockInfo.name,
@@ -82,22 +82,22 @@ export const useStockData = (
 
       // Fallback to basic search if KRX API fails
       const searchResponse = await axios.get(`${API_BASE_URL}/stock/search/${ticker}`);
-      
+
       if (searchResponse.data.success && searchResponse.data.data.length > 0) {
         const stockInfo = searchResponse.data.data[0];
-        
+
         // Try to get daily chart data for recent prices
         try {
           const chartResponse = await axios.get(`${API_BASE_URL}/stock/daily/${ticker}?period=1`);
           if (chartResponse.data.success && chartResponse.data.data.length > 0) {
             const latestData = chartResponse.data.data[0];
             const prevData = chartResponse.data.data[1] || latestData;
-            
+
             const price = latestData.close;
             const prevClose = prevData.close;
             const change = price - prevClose;
             const changeRate = ((change / prevClose) * 100);
-            
+
             setData({
               ticker: stockInfo.ticker,
               name: stockInfo.name,
@@ -188,11 +188,11 @@ export const useStockList = (
   const fetchStockList = useCallback(async () => {
     const cacheKey = `${marketType}-${rankingType}`;
     const cached = stockDataCache[cacheKey];
-    
+
     // If we have cached data, show it immediately while loading new data
     if (cached) {
       setStocks(cached.data);
-      
+
       // If cache is still fresh, don't fetch new data
       if (Date.now() - cached.timestamp < CACHE_DURATION) {
         setIsLoading(false);
@@ -205,26 +205,26 @@ export const useStockList = (
 
     try {
       let combinedData: any[] = [];
-      
+
       if (marketType === '전체') {
         // For 전체 mode behavior:
         // - Volume/Value rankings: Show KOSPI only (like TossInvest major market focus)
         // - Rising/Falling rankings: Combine KOSPI+KOSDAQ (like TossInvest percentage rankings)
-        
+
         if (rankingType === 'rising' || rankingType === 'falling') {
           // For percentage-based rankings, combine both markets like TossInvest
           const kospiEndpoint = getStockEndpoint('kospi', rankingType);
           const kosdaqEndpoint = getStockEndpoint('kosdaq', rankingType);
           const etfEndpoint = `${API_BASE_URL}/krx/etf/daily-trading`;
-          
+
           const [kospiResponse, kosdaqResponse, etfResponse] = await Promise.allSettled([
             axios.get(`${kospiEndpoint}?limit=50`),
             axios.get(`${kosdaqEndpoint}?limit=50`),
             axios.get(etfEndpoint)
           ]);
-          
+
           console.log('ETF API Response:', etfResponse);
-          
+
           // Combine KOSPI and KOSDAQ data
           if (kospiResponse.status === 'fulfilled' && kospiResponse.value.data && Array.isArray(kospiResponse.value.data)) {
             const kospiStocks = kospiResponse.value.data.map((stock: any) => ({
@@ -241,7 +241,7 @@ export const useStockList = (
             }));
             combinedData = [...combinedData, ...kospiStocks];
           }
-          
+
           if (kosdaqResponse.status === 'fulfilled' && kosdaqResponse.value.data && Array.isArray(kosdaqResponse.value.data)) {
             const kosdaqStocks = kosdaqResponse.value.data.map((stock: any) => ({
               ticker: stock.ticker,
@@ -257,11 +257,11 @@ export const useStockList = (
             }));
             combinedData = [...combinedData, ...kosdaqStocks];
           }
-          
+
           // Add ETF data for rising/falling rankings
           console.log('ETF Response status:', etfResponse.status);
           console.log('ETF Response data:', etfResponse.status === 'fulfilled' ? etfResponse.value.data : 'No data');
-          
+
           if (etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) && etfResponse.value.data.length > 0) {
             console.log('Processing', etfResponse.value.data.length, 'ETFs');
             const etfData = etfResponse.value.data.map((etf: any) => ({
@@ -286,22 +286,22 @@ export const useStockList = (
               length: etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) ? etfResponse.value.data.length : 0
             });
           }
-          
+
           // Re-sort combined data for percentage rankings
           combinedData = sortCombinedData(combinedData, rankingType);
-          
+
         } else {
           // For volume/value rankings, show KOSPI only with ETF integration
           const kospiEndpoint = getStockEndpoint('kospi', rankingType);
           const etfEndpoint = `${API_BASE_URL}/krx/etf/daily-trading`;
-          
+
           const [kospiResponse, etfResponse] = await Promise.allSettled([
             axios.get(`${kospiEndpoint}?limit=40`),
             axios.get(etfEndpoint)
           ]);
-          
+
           console.log('Volume ranking - ETF API Response:', etfResponse);
-          
+
           // Process KOSPI data with preserved ranking
           if (kospiResponse.status === 'fulfilled' && kospiResponse.value.data && Array.isArray(kospiResponse.value.data)) {
             const kospiStocks = kospiResponse.value.data.map((stock: any, index: number) => ({
@@ -319,11 +319,11 @@ export const useStockList = (
             }));
             combinedData = [...kospiStocks];
           }
-          
+
           // Process ETF data and integrate with KOSPI rankings
           console.log('Volume - ETF Response status:', etfResponse.status);
           console.log('Volume - ETF Response data:', etfResponse.status === 'fulfilled' ? etfResponse.value.data : 'No data');
-          
+
           if (etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) && etfResponse.value.data.length > 0) {
             console.log('Volume - Processing', etfResponse.value.data.length, 'ETFs');
             const etfData = etfResponse.value.data.map((etf: any) => ({
@@ -338,7 +338,7 @@ export const useStockList = (
               type: 'etf',
               market: 'ETF'
             }));
-            
+
             // Integrate ETFs by their actual ranking value
             etfData.forEach(etf => {
               const etfValue = parseVolumeValue(etf[getRankingField(rankingType)]);
@@ -346,7 +346,7 @@ export const useStockList = (
                 const stockValue = parseVolumeValue(stock[getRankingField(rankingType)]);
                 return rankingType === 'falling' ? etfValue < stockValue : etfValue > stockValue;
               });
-              
+
               if (insertIndex === -1) insertIndex = combinedData.length;
               combinedData.splice(insertIndex, 0, etf);
             });
@@ -354,17 +354,17 @@ export const useStockList = (
             console.log('ETF API integration pending - showing KOSPI rankings only');
           }
         }
-        
+
       } else {
         // Fetch single market data (KOSPI or KOSDAQ)
         const stockEndpoint = getStockEndpoint(marketType, rankingType);
         const etfEndpoint = `${API_BASE_URL}/krx/etf/daily-trading`;
-        
+
         const [stockResponse, etfResponse] = await Promise.allSettled([
           axios.get(`${stockEndpoint}?limit=40`),
           axios.get(etfEndpoint)
         ]);
-        
+
         // Process single market stock data
         if (stockResponse.status === 'fulfilled' && stockResponse.value.data && Array.isArray(stockResponse.value.data)) {
           const rankedStocks = stockResponse.value.data.map((stock: any, index: number) => ({
@@ -382,7 +382,7 @@ export const useStockList = (
           }));
           combinedData = [...rankedStocks];
         }
-        
+
         // Process ETF data for single market view
         if (etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) && etfResponse.value.data.length > 0) {
           const etfData = etfResponse.value.data.map((etf: any) => ({
@@ -397,28 +397,28 @@ export const useStockList = (
             type: 'etf',
             market: 'ETF'
           }));
-          
+
           combinedData = [...combinedData, ...etfData];
         } else {
           console.log('ETF API integration pending - showing stocks only');
         }
       }
-      
+
       // Assign final rankings based on mode and ranking type
       const finalData = combinedData.slice(0, 20).map((item, index) => ({
         ...item,
         rank: index + 1
       }));
-      
+
       console.log('Final data:', finalData);
       console.log('ETFs in final data:', finalData.filter(item => item.type === 'etf').length);
-      
+
       setStocks(finalData);
-      
+
       // Update cache
       const cacheKey = `${marketType}-${rankingType}`;
       stockDataCache[cacheKey] = { data: finalData, timestamp: Date.now() };
-      
+
     } catch (err: any) {
       console.error('Error fetching combined stock and ETF data:', err);
       if (err.message?.includes('Network Error') || err.code === 'ERR_NETWORK') {
@@ -447,7 +447,7 @@ export const useStockList = (
 // Helper function to get stock endpoint
 function getStockEndpoint(marketType: string, rankingType: string): string {
   const baseUrl = API_BASE_URL;
-  
+
   if (marketType === 'kosdaq') {
     switch (rankingType) {
       case 'volume':
@@ -503,7 +503,7 @@ function sortCombinedData(data: any[], rankingType: string): any[] {
 function parseVolumeValue(value: string | number): number {
   if (typeof value === 'number') return value;
   if (!value || typeof value !== 'string') return 0;
-  
+
   const numStr = value.replace(/,/g, '');
   if (numStr.includes('M') || numStr.includes('m')) {
     return parseFloat(numStr.replace(/[Mm]/g, '')) * 1000000;
@@ -572,13 +572,13 @@ export const useInvestorTrends = (ticker: string | null) => {
 
   const fetchInvestorTrends = useCallback(async () => {
     if (!ticker) return;
-    
+
     setIsLoading(true);
     setError(null);
 
     try {
       const response = await axios.get(`${API_BASE_URL}/stock/investor-trends/${ticker}`);
-      
+
       if (response.data.success && response.data.data) {
         setData(response.data.data);
       } else {
@@ -617,18 +617,18 @@ export const useStockBasicInfo = (ticker: string | null, marketType: 'STK' | 'KS
 
   const fetchBasicInfo = useCallback(async () => {
     if (!ticker) return;
-    
+
     setIsLoading(true);
     setError(null);
 
     try {
       // Use your granted "유가증권 종목기본정보" or "코스닥 종목기본정보" APIs
-      const endpoint = marketType === 'STK' 
+      const endpoint = marketType === 'STK'
         ? `${API_BASE_URL}/krx/securities/basic-info/${ticker}`
         : `${API_BASE_URL}/krx/kosdaq/basic-info/${ticker}`;
-        
+
       const response = await axios.get(endpoint);
-      
+
       if (response.data) {
         setBasicInfo(response.data);
       } else {
