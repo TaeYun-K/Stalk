@@ -51,7 +51,7 @@ public class SecurityConfig {
                 "/webjars/**"           // Swagger의 JS/CSS 리소스
             ).permitAll()
             // 인증 없이 열어둘 애플리케이션 엔드포인트
-            .requestMatchers("/api/auth/**").permitAll()
+            .requestMatchers("/api/**").permitAll()
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated())
         // JWT 필터를 UsernamePasswordAuthenticationFilter 전에 추가
