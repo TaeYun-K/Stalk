@@ -71,10 +71,6 @@ export interface SignupResponse {
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  userId: number;
-  userName: string;
-  role: 'USER' | 'ADVISOR' | 'ADMIN';
-  message: string;
 }
 
 export interface UserInfo {
