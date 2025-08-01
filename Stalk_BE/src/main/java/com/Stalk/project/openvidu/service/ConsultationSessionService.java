@@ -2,8 +2,11 @@ package com.Stalk.project.openvidu.service;
 
 import com.Stalk.project.openvidu.dto.out.SessionTokenResponseDto;
 import io.openvidu.java.client.*;
+
+import java.net.URI;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -19,12 +22,16 @@ public class ConsultationSessionService {
 
   private final OpenVidu openVidu;
   // 메모리나 DB에 세션 객체를 캐싱할 수 있습니다.
+
+  @Value("${openvidu.url}")
+  private String openviduUrl;
   private final Map<String, Session> sessionMap = new ConcurrentHashMap<>();
   private final Map<String, Instant> createdAtMap = new ConcurrentHashMap<>();
 
   public ConsultationSessionService(OpenVidu openVidu) {
     this.openVidu = openVidu;
   }
+
 
   /**
    * 토큰 발급 메서드
@@ -55,28 +62,21 @@ public class ConsultationSessionService {
       }
     });
 
-    // 2) 토큰 발급 옵션 설정
-    ConnectionProperties props = new ConnectionProperties.Builder()
-        .type(ConnectionType.WEBRTC)
-        .data("consultationId=" + consultationId)
-        .build();
-
-    // 3) 토큰 발급
+    // 2) 토큰 발급
     String token = generateToken(session, consultationId);
 
-    // 4) 세션 생성 시각 조회
+    // 3) 세션 생성 시각 조회
     String createdAt = createdAtMap
         .get(consultationId)
         .toString();
 
-    // 5) DTO 반환
+    // 4) DTO 반환
     return new SessionTokenResponseDto(
         session.getSessionId(),
         token,
         createdAt
     );
   }
-
 
   /**
    * 신규 조회 메서드

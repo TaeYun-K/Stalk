@@ -97,7 +97,13 @@ public enum BaseResponseStatus {
   ALREADY_CANCELED_RESERVATION(HttpStatus.BAD_REQUEST, false, 1315, "이미 취소된 예약입니다."),
   UNAUTHORIZED_CANCEL_REQUEST(HttpStatus.FORBIDDEN, false, 1316, "해당 예약을 취소할 권한이 없습니다."),
   CANCEL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1317, "예약 취소 처리에 실패했습니다."),
-
+  PAST_DATE_BLOCK_NOT_ALLOWED(HttpStatus.BAD_REQUEST, false, 1318, "과거 날짜는 차단할 수 없습니다."),
+  RESERVED_TIME_CANNOT_BE_BLOCKED(HttpStatus.BAD_REQUEST, false, 1319, "이미 예약된 시간은 차단할 수 없습니다."),
+  INVALID_TIME_SLOT(HttpStatus.BAD_REQUEST, false, 1320, "유효하지 않은 시간대입니다."),
+  ADVISOR_ONLY_ACCESS(HttpStatus.FORBIDDEN, false, 1321, "전문가만 접근 가능합니다."),
+  INVALID_DATE_FORMAT(HttpStatus.BAD_REQUEST, false, 1322, "날짜 형식이 올바르지 않습니다."),
+  RESERVATION_USER_ONLY(HttpStatus.FORBIDDEN, false, 1323, "예약은 일반 사용자만 가능합니다."),
+  AVAILABLE_TIME_USER_ONLY(HttpStatus.FORBIDDEN, false, 1324, "예약 가능 시간 조회는 일반 사용자만 가능합니다."),
   // ===== 인증 관련 에러 코드 (2000번대) =====
 
   // 로그인 실패

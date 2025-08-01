@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate  } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 import { useAuth } from '@/context/AuthContext';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
@@ -9,8 +9,10 @@ import profileFox from '@/assets/images/profiles/Profile_fox.svg';
 import profilePanda from '@/assets/images/profiles/Profile_panda.svg';
 import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
 import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
+import ConsultationService from '@/services/consultationService';
 
 interface ConsultationItem {
+  id: string;
   date: string;
   time: string;
   content: string;
@@ -25,6 +27,7 @@ const MyPage = () => {
   const { userInfo } = useAuth();
   const [activeTab, setActiveTab] = useState('내 정보');
   const [consultationTab, setConsultationTab] = useState('상담 전');
+  const navigate = useNavigate()
 
   // URL 파라미터에서 탭 설정
   useEffect(() => {
@@ -96,6 +99,7 @@ const MyPage = () => {
   const consultationData = {
     '상담 전': [
       {
+        id: '1',   
         date: '2025. 07. 18.',
         time: '17:00',
         content: '입문 투자 상담',
@@ -106,6 +110,7 @@ const MyPage = () => {
     ],
     '상담 완료': [
       {
+        id: '1',   
         date: '2025. 07. 19.',
         time: '20:00',
         content: '입문 투자 상담',
@@ -252,6 +257,28 @@ const MyPage = () => {
   const handleCloseDiary = () => {
     setSelectedConsultation(null);
     setActiveTab('내 상담 내역');
+  };
+
+  // 상담 입장 처리
+  const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
+    try {
+      const consultationId = consultationItem.id;
+
+      const sessionData = await ConsultationService.createSessionToken(consultationId);
+      navigate( // parameter 여러개 넘기기
+        `/video-consultation/${sessionData.sessionId}`,
+        {
+          state: {
+            sessionId : sessionData.sessionId,
+            connectionUrl: sessionData.token,
+            consultationId
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Failed to start consultation:', error);
+      alert('상담 입장에 실패했습니다. 다시 시도해주세요.');
+    }
   };
 
   const renderScheduleCalendar = () => {
@@ -500,8 +527,8 @@ const MyPage = () => {
                           <td className="px-4 py-3 text-left text-sm text-gray-900">{item.content}</td>
                           <td className="px-4 py-3 text-left text-sm text-gray-900">{item.expert}</td>
                           <td className="px-4 py-3 text-left">
-                            <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
-                              {item.videoConsultation}
+                            <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors" onClick={() => handleEnterConsultation(item)}>
+                            {item.videoConsultation}
                             </button>
                           </td>
                           <td className="px-4 py-3">
@@ -512,7 +539,7 @@ const MyPage = () => {
                           {consultationTab === '상담 완료' && (
                             <td className="px-4 py-3">
                               <button 
-                                onClick={() => handleConsultationDiaryClick(item)}
+                                onClick={() => handleEnterConsultation(item)}
                                 className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
                               >
                                 상담일지

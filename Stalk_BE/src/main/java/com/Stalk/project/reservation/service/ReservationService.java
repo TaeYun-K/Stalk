@@ -46,16 +46,16 @@ public class ReservationService {
    * 상담 예약 생성 - 동시성 이슈 완전 해결 버전
    */
   public ConsultationReservationResponseDto createConsultationReservation(
-      Long currentUserId, ConsultationReservationRequestDto requestDto) {
+      Long currentUserId, String currentUserRole, ConsultationReservationRequestDto requestDto) {
 
-    log.info("상담 예약 생성 시작: userId={}, advisorUserId={}",
-        currentUserId, requestDto.getAdvisorUserId());
+    log.info("상담 예약 생성 시작: userId={}, role={}, advisorUserId={}",
+        currentUserId, currentUserRole, requestDto.getAdvisorUserId());
 
     LocalDate requestDate = LocalDate.parse(requestDto.getDate());
     LocalTime requestTime = LocalTime.parse(requestDto.getTime());
 
-    // 1. 기본 검증 (동시성과 무관한 부분)
-    validateBasicReservationRequest(currentUserId, requestDto.getAdvisorUserId(),
+    // 1. 기본 검증 (권한 포함)
+    validateBasicReservationRequest(currentUserId, currentUserRole, requestDto.getAdvisorUserId(),
         requestDate, requestTime);
 
     // 2. 예약 생성 (DB 제약조건이 동시성 보호)
@@ -77,12 +77,14 @@ public class ReservationService {
   /**
    * 예약 요청 검증
    */
-  /**
-   * 기본 검증 (동시성과 무관한 부분만)
-   */
-  private void validateBasicReservationRequest(Long currentUserId, Long advisorUserId,
-      LocalDate requestDate, LocalTime requestTime) {
+  private void validateBasicReservationRequest(Long currentUserId, String currentUserRole,
+      Long advisorUserId, LocalDate requestDate, LocalTime requestTime) {
     LocalDate today = LocalDate.now();
+
+    // 0. 사용자 권한 확인 - 일반 사용자만 예약 가능
+    if (!"USER".equals(currentUserRole)) {
+      throw new BaseException(BaseResponseStatus.RESERVATION_USER_ONLY);
+    }
 
     // 1. 과거 날짜 검증
     if (requestDate.isBefore(today)) {
@@ -110,7 +112,7 @@ public class ReservationService {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
-    // 6. 본인 예약 방지
+    // 6. 본인 예약 방지 (이제 USER만 예약하므로 실제로는 발생하지 않음)
     if (currentUserId.equals(advisorUserId)) {
       throw new BaseException(BaseResponseStatus.SELF_RESERVATION_NOT_ALLOWED);
     }
