@@ -1,276 +1,607 @@
-import { useState } from 'react';
-import { useWatchlist } from '@/context/WatchlistContext';
+import axios from "axios";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import StockChart from "../components/chart/stock-chart";
+import StockDetailHeader from "../components/stock-detail-header";
+import StockRankingTable from "../components/stock-ranking-table";
+import {
+  useMarketIndices,
+  useStockBasicInfo,
+  useStockData,
+  useStockList,
+} from "../hooks/use-stock-data";
+
+interface StockData {
+  ticker: string;
+  name: string;
+  price: number;
+  change: number;
+  changeRate: number;
+  volume: string;
+  marketCap: string;
+  foreignBuy?: number;
+  foreignSell?: number;
+}
+
+interface RankingStock {
+  rank: number;
+  ticker: string;
+  name: string;
+  price: number;
+  change: number;
+  changeRate: number;
+  marketCap: string;
+  logo?: string;
+}
+
+interface MarketIndex {
+  name: string;
+  value: number;
+  change: number;
+  changeRate: number;
+}
+
+type ViewMode = "detail" | "ranking";
+type TimeRange = "1d" | "1w" | "1m";
+type RankingType = "volume" | "rising" | "falling";
+type MarketType = "전체" | "kospi" | "kosdaq";
 
 const ProductsPage = () => {
-  const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const products = [
-    {
-      id: 1,
-      name: '삼성전자',
-      code: '005930',
-      category: 'stock',
-      price: 75000,
-      change: 2.5,
-      volume: '12.5M',
-      marketCap: '447.8조'
-    },
-    {
-      id: 2,
-      name: 'SK하이닉스',
-      code: '000660',
-      category: 'stock',
-      price: 145000,
-      change: -1.2,
-      volume: '8.2M',
-      marketCap: '105.3조'
-    },
-    {
-      id: 3,
-      name: '네이버',
-      code: '035420',
-      category: 'stock',
-      price: 215000,
-      change: 0.8,
-      volume: '3.1M',
-      marketCap: '35.2조'
-    },
-    {
-      id: 4,
-      name: '카카오',
-      code: '035720',
-      category: 'stock',
-      price: 48500,
-      change: -3.1,
-      volume: '15.7M',
-      marketCap: '21.8조'
-    },
-    {
-      id: 5,
-      name: 'LG에너지솔루션',
-      code: '373220',
-      category: 'stock',
-      price: 425000,
-      change: 1.7,
-      volume: '2.3M',
-      marketCap: '95.6조'
-    },
-    {
-      id: 6,
-      name: '현대차',
-      code: '005380',
-      category: 'stock',
-      price: 185000,
-      change: 0.5,
-      volume: '4.8M',
-      marketCap: '39.2조'
-    }
-  ];
+  // Get initial state from URL params
+  const tickerFromUrl = searchParams.get("ticker");
+  const rankingTypeFromUrl = (searchParams.get("ranking") as RankingType) || "volume";
+  const marketTypeFromUrl = (searchParams.get("market") as MarketType) || "전체";
 
-  const categories = [
-    { id: 'all', name: '전체', icon: '📊' },
-    { id: 'stock', name: '주식', icon: '📈' },
-    { id: 'bond', name: '채권', icon: '📋' },
-    { id: 'fund', name: '펀드', icon: '💰' },
-    { id: 'etf', name: 'ETF', icon: '🎯' }
-  ];
+  const [viewMode, setViewMode] = useState<ViewMode>(tickerFromUrl ? "detail" : "ranking");
+  const [rankingType, setRankingType] = useState<RankingType>(rankingTypeFromUrl);
+  const [marketType, setMarketType] = useState<MarketType>(marketTypeFromUrl);
+  const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(tickerFromUrl);
+  const [timeRange, setTimeRange] = useState<TimeRange>("1d");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [chartType, setChartType] = useState<'line'>('line');
+  const [drawingMode, setDrawingMode] = useState(false);
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.code.includes(searchQuery);
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+  // Use custom hooks for data fetching
+  const {
+    data: stockData,
+    isLoading: stockLoading,
+    error: stockError,
+  } = useStockData(selectedTicker, {
+    autoRefresh: true,
+    refreshInterval: 30000, // Refresh every 30 seconds
   });
 
+  // State for real-time price data
+  const [realtimePriceData, setRealtimePriceData] = useState<any>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+
+  // Helper function to format volume with Korean units
+  const formatVolume = (vol: string) => {
+    const num = parseInt(vol?.replace(/,/g, '') || '0');
+    if (num >= 100000000) {
+      return (num / 100000000).toFixed(1) + '억';
+    } else if (num >= 10000) {
+      return (num / 10000).toFixed(1) + '만';
+    }
+    return num.toLocaleString();
+  };
+
+  const { indices: marketIndices } = useMarketIndices();
+
+  // Use the stock list hook for ranking data
+  const {
+    stocks: rankingData,
+    isLoading: rankingLoading,
+    error: rankingError,
+  } = useStockList(rankingType, marketType);
+
+
+  // Use stock basic info hook for enhanced detail view
+  // Commented out as the endpoint doesn't exist yet
+  /*
+  const {
+    basicInfo,
+    isLoading: basicInfoLoading,
+    error: basicInfoError,
+  } = useStockBasicInfo(
+    selectedTicker,
+    selectedStock?.marketType === "KOSDAQ" ? "KSQ" : "STK"
+  );
+  */
+
+  // Convert stock data to ranking format
+  const rankingStocks: RankingStock[] =
+    rankingData?.map((stock: any) => ({
+      rank: stock.rank || 0,
+      ticker: stock.ticker || "",
+      name: stock.name || "",
+      price: stock.price || 0,
+      change: stock.change || 0,
+      changeRate: stock.changeRate || 0,
+      marketCap: stock.marketCap || "0",
+      volume: stock.volume || "0",
+    })) || [];
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Ranking data:", rankingData);
+    console.log("Ranking loading:", rankingLoading);
+    console.log("Ranking error:", rankingError);
+    console.log("Ranking stocks length:", rankingStocks.length);
+  }, [rankingData, rankingLoading, rankingError, rankingStocks]);
+
+  // Update selected stock when stock data changes
+  useEffect(() => {
+    if (stockData && selectedTicker) {
+      console.log("Updating selectedStock with stockData:", stockData);
+      setSelectedStock({
+        ticker: stockData.ticker,
+        name: stockData.name,
+        price: stockData.price,
+        change: stockData.change,
+        changeRate: stockData.changeRate,
+        volume: stockData.volume,
+        marketCap: stockData.marketCap,
+        foreignBuy: 95995,
+        foreignSell: 23000,
+      });
+    }
+  }, [stockData, selectedTicker]);
+
+  // Fetch real-time price data when ticker changes
+  useEffect(() => {
+    const fetchRealtimePrice = async () => {
+      if (!selectedTicker) {
+        setRealtimePriceData(null);
+        return;
+      }
+
+      console.log("Fetching real-time price for ticker:", selectedTicker);
+
+      // Clear previous data first
+      setRealtimePriceData(null);
+      setPriceLoading(true);
+
+      try {
+        // First try to get basic info from KRX
+        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KSQ' : 'STK';
+        // Add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const url = `https://i13e205.p.ssafy.io:8443/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
+        console.log("Fetching from URL:", url);
+
+        const response = await axios.get(url, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+
+        if (response.data) {
+          console.log("Real-time price data:", response.data);
+
+          // Check if we got data for the correct ticker
+          const returnedTicker = response.data.ISU_SRT_CD || response.data.ticker;
+          if (returnedTicker !== selectedTicker) {
+            console.error(`TICKER MISMATCH! Requested: ${selectedTicker}, Received: ${returnedTicker}`);
+            console.error("This indicates a backend caching issue");
+          }
+
+          // Map KRX API field names to our expected format
+          const mappedData = {
+            ticker: response.data.ISU_SRT_CD || response.data.ticker,
+            name: response.data.ISU_ABBRV || response.data.name,
+            closePrice: (response.data.TDD_CLSPRC || response.data.closePrice || "0").toString().replace(/,/g, ''),
+            priceChange: (response.data.CMPPREVDD_PRC || response.data.priceChange || "0").toString().replace(/,/g, ''),
+            changeRate: (response.data.FLUC_RT || response.data.changeRate || "0").toString().replace(/,/g, ''),
+            volume: formatVolume(response.data.ACC_TRDVOL || response.data.volume || "0"),
+            tradeValue: response.data.ACC_TRDVAL || response.data.tradeValue,
+            marketCap: response.data.MKTCAP || response.data.marketCap,
+          };
+
+          console.log("Mapped price data:", mappedData);
+
+          // Only set the data if it's for the correct ticker
+          if (returnedTicker === selectedTicker) {
+            setRealtimePriceData(mappedData);
+            return; // Success, no need for fallback
+          } else {
+            console.error("Skipping wrong ticker data, will try fallback");
+            // Continue to fallback below
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch real-time price:", err);
+      }
+
+      // Fallback: Try to get data from daily endpoint
+      console.log("Trying fallback: fetching daily data for ticker:", selectedTicker);
+      try {
+        const dailyResponse = await axios.get(`https://i13e205.p.ssafy.io:8443/api/stock/daily/${selectedTicker}?period=2`);
+        if (dailyResponse.data.success && dailyResponse.data.data.length > 0) {
+          const latestData = dailyResponse.data.data[0];
+          const prevData = dailyResponse.data.data[1] || latestData;
+
+          const change = latestData.close - prevData.close;
+          const changeRate = prevData.close > 0 ? ((change / prevData.close) * 100) : 0;
+
+          // Try to get name from search
+          let stockName = "";
+          try {
+            const searchResponse = await axios.get(`https://i13e205.p.ssafy.io:8443/api/stock/search/${selectedTicker}`);
+            if (searchResponse.data.success && searchResponse.data.data.length > 0) {
+              stockName = searchResponse.data.data[0].name;
+              console.log("Found stock name from search:", stockName);
+            }
+          } catch (searchErr) {
+            console.error("Failed to get stock name:", searchErr);
+          }
+
+          // If still no name, try from the ranking list
+          if (!stockName && rankingData) {
+            const stockFromRanking = rankingData.find((s: any) => s.ticker === selectedTicker);
+            if (stockFromRanking) {
+              stockName = stockFromRanking.name;
+              console.log("Found stock name from ranking data:", stockName);
+            }
+          }
+
+          // Last resort - use ticker but mark it
+          if (!stockName) {
+            stockName = `종목 ${selectedTicker}`;
+            console.warn("Could not find stock name, using ticker");
+          }
+
+          const fallbackData = {
+            ticker: selectedTicker,
+            name: stockName,
+            closePrice: latestData.close.toString(),
+            priceChange: change.toString(),
+            changeRate: changeRate.toFixed(2),
+            volume: formatVolume(latestData.volume.toString())
+          };
+
+          console.log("Fallback data:", fallbackData);
+          setRealtimePriceData(fallbackData);
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback price fetch failed:", fallbackErr);
+        // Set minimal data so UI doesn't break
+        setRealtimePriceData({
+          ticker: selectedTicker,
+          name: selectedTicker,
+          closePrice: "0",
+          priceChange: "0",
+          changeRate: "0",
+          volume: "0"
+        });
+      } finally {
+        setPriceLoading(false);
+      }
+    };
+
+    fetchRealtimePrice();
+  }, [selectedTicker]);
+
+  // Handle URL changes (including browser back button)
+  useEffect(() => {
+    const ticker = searchParams.get("ticker");
+    const ranking = searchParams.get("ranking") as RankingType;
+    const market = searchParams.get("market") as MarketType;
+
+    if (ticker) {
+      setSelectedTicker(ticker);
+      setViewMode("detail");
+    } else {
+      setSelectedTicker(null);
+      setViewMode("ranking");
+    }
+
+    if (ranking) setRankingType(ranking);
+    if (market) setMarketType(market);
+
+    // Handle search from URL params
+    const urlSearchQuery = searchParams.get("search");
+    if (urlSearchQuery) {
+      searchStocks(urlSearchQuery);
+    }
+  }, [searchParams]);
+
+  // Search stocks from backend
+  const searchStocks = async (query: string) => {
+    if (!query.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.get(
+        `https://i13e205.p.ssafy.io:8443/api/stock/search/${query}`
+      );
+      if (response.data.success && response.data.data.length > 0) {
+        const stock = response.data.data[0];
+
+        // Update URL params when selecting a stock from search
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set("ticker", stock.ticker);
+        newParams.set("ranking", rankingType);
+        newParams.set("market", marketType);
+        setSearchParams(newParams);
+
+        setSelectedTicker(stock.ticker);
+        setViewMode("detail");
+      } else {
+        setError("검색 결과가 없습니다.");
+      }
+    } catch (err) {
+      console.error("Stock search error:", err);
+      setError("주식 검색 중 오류가 발생했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const selectStock = (stock: RankingStock) => {
+    console.log("ProductsPage - Stock selected:", stock);
+    // Update URL params to include the ticker
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("ticker", stock.ticker);
+    newParams.set("ranking", rankingType);
+    newParams.set("market", marketType);
+    setSearchParams(newParams);
+
+    setSelectedTicker(stock.ticker);
+    setViewMode("detail");
+
+    // Store the stock info temporarily to show immediately
+    setRealtimePriceData({
+      ticker: stock.ticker,
+      name: stock.name,
+      closePrice: stock.price.toString(),
+      priceChange: stock.change.toString(),
+      changeRate: stock.changeRate.toString(),
+      volume: stock.volume || "0"
+    });
+
+    console.log("ProductsPage - View mode set to detail, ticker:", stock.ticker);
+  };
+
+  const goBackToRanking = () => {
+    // Remove ticker from URL params to go back to ranking
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("ticker");
+    setSearchParams(newParams);
+
+    setSelectedTicker(null);
+    setViewMode("ranking");
+  };
+
+  const toggleFavorite = () => {
+    if (selectedStock) {
+      setFavorites((prev) =>
+        prev.includes(selectedStock.ticker)
+          ? prev.filter((t) => t !== selectedStock.ticker)
+          : [...prev, selectedStock.ticker]
+      );
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Search is now handled by the dropdown component
+  };
+
+  const handleRankingTypeChange = (newType: RankingType) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("ranking", newType);
+    setSearchParams(newParams);
+    setRankingType(newType);
+  };
+
+  const handleMarketTypeChange = (newMarket: MarketType) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("market", newMarket);
+    setSearchParams(newParams);
+    setMarketType(newMarket);
+  };
+
+  const periodToDays: Record<TimeRange, number> = {
+    "1d": 30,  // Show 30 days of daily data
+    "1w": -14, // Show 14 weeks of weekly data (negative indicates weekly aggregation)
+    "1m": -12, // Show 12 months of monthly data (negative indicates monthly aggregation)
+  };
+
+  console.log("ProductsPage render - viewMode:", viewMode, "selectedStock:", selectedStock, "isLoading:", isLoading, "selectedTicker:", selectedTicker, "realtimePriceData:", realtimePriceData, "timeRange:", timeRange, "periodToDays[timeRange]:", periodToDays[timeRange]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-      <main className="px-4 sm:px-6 lg:px-8 py-8 pt-28">
-        <div className="max-w-7xl mx-auto">
-          {/* Page Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">상품 조회</h1>
-            <p className="text-lg text-gray-600">다양한 투자 상품을 검색하고 비교해보세요</p>
-          </div>
-
-          {/* Search Bar */}
-          <div className="max-w-2xl mx-auto mb-8">
-            <div className="relative group">
-              <div className="bg-white/80 backdrop-blur-xl border border-gray-200 hover:border-blue-300 rounded-2xl px-6 py-4 flex items-center space-x-4 transition-all duration-300 shadow-modern group-hover:shadow-glow">
-                <svg className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="종목명 또는 종목코드를 입력하세요"
-                  className="bg-transparent outline-none text-gray-700 placeholder-gray-400 text-lg flex-1"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex justify-center mb-8">
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-2 shadow-modern border border-white/20">
-              <div className="flex space-x-2">
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-medium transition-all duration-300 ${
-                      selectedCategory === category.id
-                        ? 'bg-blue-500 text-white shadow-modern'
-                        : 'text-gray-600 hover:bg-white/50'
-                    }`}
-                  >
-                    <span className="text-lg">{category.icon}</span>
-                    <span>{category.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Products Table */}
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl overflow-hidden shadow-modern border border-white/20">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-lg font-semibold text-gray-900">종목명</th>
-                    <th className="px-6 py-4 text-left text-lg font-semibold text-gray-900">종목코드</th>
-                    <th className="px-6 py-4 text-right text-lg font-semibold text-gray-900">현재가</th>
-                    <th className="px-6 py-4 text-right text-lg font-semibold text-gray-900">등락률</th>
-                    <th className="px-6 py-4 text-right text-lg font-semibold text-gray-900">거래량</th>
-                    <th className="px-6 py-4 text-right text-lg font-semibold text-gray-900">시가총액</th>
-                    <th className="px-6 py-4 text-center text-lg font-semibold text-gray-900">관심</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredProducts.map((product, index) => (
-                    <tr 
-                      key={product.id} 
-                      className="hover:bg-blue-50/50 transition-all duration-300 cursor-pointer animate-fade-in"
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center mr-4 shadow-modern">
-                            <span className="text-white font-bold text-lg">
-                              {product.name.charAt(0)}
-                            </span>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-gray-900">{product.name}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">
-                          {product.code}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="text-lg font-bold text-gray-900">
-                          {product.price.toLocaleString()}원
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
-                          product.change > 0 
-                            ? 'bg-red-100 text-red-800' 
-                            : product.change < 0 
-                            ? 'bg-blue-100 text-blue-700' 
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {product.change > 0 ? '↗' : product.change < 0 ? '↘' : '→'}
-                          <span className="ml-1">
-                            {product.change > 0 ? '+' : ''}{product.change}%
-                          </span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right text-gray-600 font-medium">{product.volume}</td>
-                      <td className="px-6 py-4 text-right text-gray-600 font-medium">{product.marketCap}</td>
-                      <td className="px-6 py-4 text-center">
-                        <button 
-                          className={`group transition-all duration-300 transform hover:scale-110 ${
-                            isInWatchlist(product.code) 
-                              ? 'text-red-500' 
-                              : 'text-gray-400 hover:text-red-500'
-                          }`}
-                          onClick={() => {
-                            if (isInWatchlist(product.code)) {
-                              removeFromWatchlist(product.code);
-                            } else {
-                              addToWatchlist({
-                                code: product.code,
-                                name: product.name,
-                                price: product.price,
-                                change: product.change
-                              });
-                            }
-                          }}
-                        >
-                          <svg className={`w-6 h-6 ${isInWatchlist(product.code) ? 'fill-current' : 'group-hover:fill-current'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* No Results */}
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-16">
-              <div className="w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-glow">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">검색 결과가 없습니다</h3>
-              <p className="text-gray-600">다른 검색어를 입력해보세요</p>
+    <div className="min-h-screen bg-gray-50">
+      <main className="px-4 sm:px-6 lg:px-8 py-8 pt-24">
+        <div className="max-w-8xl mx-auto">
+          {/* Loading and Error States */}
+          {isLoading && (
+            <div className="text-center py-8">
+              <div className="text-gray-600">검색 중...</div>
             </div>
           )}
 
-          {/* Market Summary */}
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-modern border border-white/20">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">KOSPI</h3>
-                <span className="text-green-600 font-bold">+1.2%</span>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">2,450.12</div>
-              <div className="text-sm text-gray-600">전일 대비 +29.15</div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+              {error}
             </div>
-            
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-modern border border-white/20">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">KOSDAQ</h3>
-                <span className="text-red-600 font-bold">-0.8%</span>
+          )}
+
+          {/* Detail View */}
+          {viewMode === "detail" && selectedTicker && (
+            <div className="space-y-6">
+              {/* Back Button */}
+              <button
+                onClick={goBackToRanking}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                <span>순위 목록으로 돌아가기</span>
+              </button>
+
+              {/* Stock Info - Full Width */}
+              <div className="space-y-6">
+                {/* Stock Header */}
+                {(selectedStock || realtimePriceData) ? (
+                  <StockDetailHeader
+                    key={`header-${selectedTicker}`}
+                    ticker={selectedTicker || ""}
+                    name={selectedStock?.name || realtimePriceData?.name || selectedTicker || ""}
+                    price={(() => {
+                      const price = selectedStock?.price || parseFloat(realtimePriceData?.closePrice?.replace(/,/g, '')) || 0;
+                      console.log("Price calculation:", {
+                        selectedStockPrice: selectedStock?.price,
+                        realtimeClosePrice: realtimePriceData?.closePrice,
+                        parsedPrice: parseFloat(realtimePriceData?.closePrice?.replace(/,/g, '')),
+                        finalPrice: price
+                      });
+                      return price;
+                    })()}
+                    change={selectedStock?.change || parseFloat(realtimePriceData?.priceChange?.replace(/,/g, '')) || 0}
+                    changeRate={selectedStock?.changeRate || parseFloat(realtimePriceData?.changeRate?.replace(/,/g, '')) || 0}
+                    high={parseFloat(realtimePriceData?.highPrice) || undefined}
+                    low={parseFloat(realtimePriceData?.lowPrice) || undefined}
+                    open={parseFloat(realtimePriceData?.openPrice) || undefined}
+                    prevClose={parseFloat(realtimePriceData?.prevClosePrice) || undefined}
+                    volume={realtimePriceData?.volume || selectedStock?.volume}
+                    onFavoriteToggle={toggleFavorite}
+                    isFavorite={favorites.includes(selectedTicker || "")}
+                  />
+                ) : (
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <div className="animate-pulse">
+                      <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+                      <div className="h-6 bg-gray-200 rounded w-1/6"></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Integrated Chart Box with Period Navigation */}
+                <div className="bg-white rounded-lg shadow-sm">
+                  {/* Period Navigation Bar */}
+                  <div className="border-b border-gray-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      {/* Time Range Selector */}
+                      <div className="flex space-x-2">
+                        {(
+                          ["1d", "1w", "1m"] as TimeRange[]
+                        ).map((range) => {
+                          const displayLabel = {
+                            "1d": "일",
+                            "1w": "주",
+                            "1m": "월"
+                          }[range] || range;
+                          
+                          return (
+                            <button
+                              key={range}
+                              onClick={() => setTimeRange(range)}
+                              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                timeRange === range
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              }`}
+                            >
+                              {displayLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Chart Type and Refresh Controls */}
+                      <div className="flex items-center space-x-4">
+                        
+                        {/* Refresh Button */}
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                        >
+                          새로고침
+                        </button>
+                        
+                        {/* Drawing Mode Button */}
+                        <button 
+                          onClick={() => setDrawingMode(!drawingMode)}
+                          className={`px-3 py-2 rounded-lg transition-colors text-sm ${
+                            drawingMode 
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {drawingMode ? '그리기 종료' : '그리기'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Chart Component */}
+                  <div style={{ height: "600px", padding: "20px" }}>
+                    <StockChart
+                      selectedStock={{
+                        ticker: selectedTicker || "",
+                        name: selectedStock?.name || realtimePriceData?.name || "",
+                      }}
+                      darkMode={false}
+                      realTimeUpdates={false}
+                      period={periodToDays[timeRange]}
+                      chartType={chartType}
+                      drawingMode={drawingMode}
+                    />
+                  </div>
+                </div>
+
               </div>
-              <div className="text-2xl font-bold text-gray-900">825.67</div>
-              <div className="text-sm text-gray-600">전일 대비 -6.78</div>
             </div>
-            
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-modern border border-white/20">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">거래량</h3>
-                                        <span className="text-blue-500 font-bold">+15.3%</span>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">1.2조원</div>
-              <div className="text-sm text-gray-600">전일 대비 +158억원</div>
-            </div>
-          </div>
+          )}
+
+
+          {/* Ranking View */}
+          {viewMode === "ranking" && (
+            <>
+              {rankingError ? (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {rankingError}
+                </div>
+              ) : (
+                <StockRankingTable
+                  stocks={rankingStocks}
+                  onStockClick={selectStock}
+                  rankingType={rankingType}
+                  onRankingTypeChange={handleRankingTypeChange}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  onSearchSubmit={handleSearch}
+                  title={`${marketType === "전체" ? "통합" : marketType.toUpperCase()} 실시간 차트`}
+                  marketType={marketType}
+                  onMarketTypeChange={handleMarketTypeChange}
+                />
+              )}
+            </>
+          )}
         </div>
       </main>
-
     </div>
   );
 };

@@ -1,3 +1,4 @@
+console.log('StockChart module loading...');
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Chart as ChartJS,
@@ -9,16 +10,21 @@ import {
   Tooltip,
   Legend,
   BarElement,
+  LineController,
+  BarController,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { Canvas, Line as FabricLine, Rect, Circle, IText } from 'fabric';
 import axios from 'axios';
+console.log('StockChart imports completed');
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  LineController,
+  BarController,
   Title,
   Tooltip,
   Legend,
@@ -40,6 +46,9 @@ interface StockChartProps {
   selectedStock?: StockData | null;
   darkMode?: boolean;
   realTimeUpdates?: boolean;
+  chartType?: ChartType;
+  period?: number;
+  drawingMode?: boolean;
 }
 
 type ChartType = 'line' | 'area' | 'candlestick';
@@ -48,24 +57,41 @@ type DrawingTool = 'pen' | 'select';
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 const CANVAS_INIT_DELAY_MS = 1000;
 
-const StockChart: React.FC<StockChartProps> = ({ 
-  selectedStock, 
-  darkMode = false, 
-  realTimeUpdates = false // Disabled by default to prevent excessive API calls
+const StockChart: React.FC<StockChartProps> = ({
+  selectedStock,
+  darkMode = false,
+  realTimeUpdates = false, // Disabled by default to prevent excessive API calls
+  chartType: propChartType = 'candlestick',
+  period: propPeriod = 30,
+  drawingMode: propDrawingMode = false
 }) => {
   console.log("StockChart - Component rendered with selectedStock:", selectedStock);
-  
+
   const [chartData, setChartData] = useState<any>(null);
-  const [chartType, setChartType] = useState<ChartType>('line');
-  const [period, setPeriod] = useState<string>('30');
+  const [chartType, setChartType] = useState<ChartType>(propChartType);
+  const [period, setPeriod] = useState<string>(propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
+
+  // Update internal state when props change
+  useEffect(() => {
+    if (propChartType !== chartType) {
+      setChartType(propChartType);
+    }
+    const newPeriod = propPeriod.toString();
+    if (newPeriod !== period) {
+      setPeriod(newPeriod);
+    }
+    if (propDrawingMode !== isDrawingMode) {
+      setIsDrawingMode(propDrawingMode);
+    }
+  }, [propChartType, propPeriod, propDrawingMode]);
+
+  const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
   const [drawingTool, setDrawingTool] = useState<DrawingTool>('pen');
   const [strokeColor, setStrokeColor] = useState<string>('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState<number>(2);
-  
+
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const fabricCanvasRef = useRef<Canvas | null>(null);
   const chartRef = useRef<any>(null);
@@ -96,7 +122,7 @@ const StockChart: React.FC<StockChartProps> = ({
           if (existingCanvas) {
             existingCanvas.remove();
           }
-          
+
           const canvasElement = document.createElement('canvas');
           canvasElement.id = 'drawing-canvas';
           canvasElement.style.position = 'absolute';
@@ -105,15 +131,15 @@ const StockChart: React.FC<StockChartProps> = ({
           canvasElement.style.pointerEvents = 'none';
           canvasElement.style.zIndex = '1';
           canvasElement.style.background = 'transparent';
-          
+
           chartContainerRef.current.appendChild(canvasElement);
-          
+
           const containerWidth = chartContainerRef.current.offsetWidth || 800;
           const containerHeight = chartContainerRef.current.offsetHeight || 400;
-          
+
           canvasElement.width = containerWidth;
           canvasElement.height = containerHeight;
-          
+
           fabricCanvasRef.current = new Canvas(canvasElement, {
             isDrawingMode: false,
             width: containerWidth,
@@ -122,12 +148,12 @@ const StockChart: React.FC<StockChartProps> = ({
             renderOnAddRemove: true,
             enableRetinaScaling: false,
           });
-          
+
           if (fabricCanvasRef.current.freeDrawingBrush) {
             fabricCanvasRef.current.freeDrawingBrush.color = strokeColor;
             fabricCanvasRef.current.freeDrawingBrush.width = strokeWidth;
           }
-          
+
           console.log('Fabric canvas initialized successfully');
         } catch (error) {
           console.error('Error initializing Fabric.js canvas:', error);
@@ -136,7 +162,7 @@ const StockChart: React.FC<StockChartProps> = ({
     };
 
     const timer = setTimeout(initCanvas, CANVAS_INIT_DELAY_MS);
-    
+
     return () => {
       clearTimeout(timer);
       if (fabricCanvasRef.current) {
@@ -155,15 +181,15 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         const canvas = fabricCanvasRef.current;
         const canvasElement = canvas.getElement();
-        
+
         if (isDrawingMode) {
           console.log('Enabling drawing mode with tool:', drawingTool);
           canvasElement.style.pointerEvents = 'auto';
           canvasElement.style.zIndex = '10';
-          
+
           canvas.isDrawingMode = drawingTool === 'pen';
           canvas.selection = drawingTool !== 'pen';
-          
+
           if (drawingTool === 'pen' && canvas.freeDrawingBrush) {
             canvas.freeDrawingBrush.color = strokeColor;
             canvas.freeDrawingBrush.width = strokeWidth;
@@ -175,7 +201,7 @@ const StockChart: React.FC<StockChartProps> = ({
           canvas.isDrawingMode = false;
           canvas.selection = false;
         }
-        
+
         canvas.renderAll();
       } catch (error) {
         console.error('Error updating drawing mode:', error);
@@ -200,46 +226,57 @@ const StockChart: React.FC<StockChartProps> = ({
       console.log('Already loading data, skipping duplicate request');
       return;
     }
-    
+
     // Don't show loading state for updates to prevent flicker
     if (!isUpdate) {
       setIsLoading(true);
     }
     setError(null);
-    
+
     try {
-      console.log("StockChart - Making request to:", `http://localhost:5000/api/stalk/daily/${selectedStock?.ticker}?period=${period}`);
+      console.log("StockChart - Making request to:", `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`);
       const response = await axios.get(
-        `http://localhost:5000/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
+        `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
       );
-      
+
       console.log("StockChart - Response received:", response.data);
-      
+
       if (response.data.success) {
         const data: ChartDataPoint[] = response.data.data;
+        const aggregationType = response.data.aggregationType || 'daily';
         console.log("StockChart - Raw data points:", data);
-        
+        console.log("StockChart - Aggregation type:", aggregationType);
+
         if (!data || data.length === 0) {
           console.error("StockChart - No data points in response");
           setError("차트 데이터가 없습니다.");
           return;
         }
-        
+
         // Sort by date in ascending order (oldest first)
         const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
         console.log("StockChart - Sorted data:", sortedData);
-        
+
         const labels = sortedData.map(item => {
           const date = item.date;
           const year = date.substring(0, 4);
           const month = date.substring(4, 6);
           const day = date.substring(6, 8);
-          return `${month}/${day}`;
+
+          // Format labels based on aggregation type
+          switch (aggregationType) {
+            case 'weekly':
+              return `${month}/${day}`;  // Weekly: show month/day (e.g., "7/25")
+            case 'monthly':
+              return `${year.substring(2)}/${month}`;  // Monthly: show year/month (e.g., "24/07")
+            default: // daily
+              return `${month}/${day}`;  // Daily: show month/day (e.g., "7/31")
+          }
         });
-        
+
         const prices = sortedData.map(item => item.close);
         const volumes = sortedData.map(item => item.volume);
-        
+
         console.log("StockChart - Labels:", labels);
         console.log("StockChart - Prices:", prices);
         console.log("StockChart - Volumes:", volumes);
@@ -247,15 +284,16 @@ const StockChart: React.FC<StockChartProps> = ({
         // If we're updating and have an existing chart, update it smoothly
         if (isUpdate && chartRef.current && chartData) {
           const chart = chartRef.current;
-          
+
           // Update the data arrays directly
           chart.data.labels = labels;
           chart.data.datasets[0].data = prices;
-          
-          if (chartType === 'candlestick' && chart.data.datasets[1]) {
+
+          // Always update volume data (second dataset)
+          if (chart.data.datasets[1]) {
             chart.data.datasets[1].data = volumes;
           }
-          
+
           // Update the chart with animation
           chart.update('active');
         } else {
@@ -266,22 +304,26 @@ const StockChart: React.FC<StockChartProps> = ({
               {
                 label: '종가',
                 data: prices,
+                type: 'line' as const,
                 borderColor: 'rgb(75, 192, 192)',
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 tension: 0.1,
                 fill: chartType === 'area',
+                yAxisID: 'y',
+                pointRadius: 2,
+                pointHoverRadius: 4,
               },
-              ...(chartType === 'candlestick' ? [{
+              {
                 label: '거래량',
                 data: volumes,
                 type: 'bar' as const,
                 backgroundColor: 'rgba(153, 102, 255, 0.3)',
                 borderColor: 'rgba(153, 102, 255, 1)',
                 yAxisID: 'y1',
-              }] : []),
+              },
             ],
           };
-          
+
           console.log("StockChart - Setting chart data:", newChartData);
           setChartData(newChartData);
         }
@@ -499,25 +541,23 @@ const StockChart: React.FC<StockChartProps> = ({
           color: darkMode ? '#374151' : '#e5e7eb',
         },
       },
-      ...(chartType === 'candlestick' ? {
-        y1: {
-          type: 'linear' as const,
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        title: {
           display: true,
-          position: 'right' as const,
-          title: {
-            display: true,
-            text: '거래량 (주)',
-          },
-          grid: {
-            drawOnChartArea: false,
-          },
-          ticks: {
-            callback: function(value: any) {
-              return value.toLocaleString() + '주';
-            },
+          text: '거래량 (주)',
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+        ticks: {
+          callback: function(value: any) {
+            return value.toLocaleString() + '주';
           },
         },
-      } : {}),
+      },
     },
     interaction: {
       mode: 'nearest' as const,
@@ -536,127 +576,12 @@ const StockChart: React.FC<StockChartProps> = ({
       </div>
     );
   }
-  
+
   console.log("StockChart - Rendering chart for stock:", selectedStock.ticker);
 
   return (
-    <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg flex flex-col overflow-hidden`}>
-      <div className="flex flex-wrap justify-between items-center mb-5 pb-4 border-b border-gray-200 gap-4">
-        <div className="flex items-center gap-2">
-          <label className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} whitespace-nowrap`}>
-            기간:
-          </label>
-          <select 
-            value={period} 
-            onChange={(e) => setPeriod(e.target.value)} 
-            className={`px-3 py-1.5 border ${darkMode ? 'border-gray-600 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white'} rounded-md text-sm min-w-20 focus:outline-none focus:border-blue-500`}
-          >
-            <option value="7">7일</option>
-            <option value="30">30일</option>
-            <option value="60">60일</option>
-            <option value="90">90일</option>
-          </select>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <label className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} whitespace-nowrap`}>
-            차트 유형:
-          </label>
-          <select 
-            value={chartType} 
-            onChange={(e) => setChartType(e.target.value as ChartType)} 
-            className={`px-3 py-1.5 border ${darkMode ? 'border-gray-600 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white'} rounded-md text-sm min-w-20 focus:outline-none focus:border-blue-500`}
-          >
-            <option value="line">선 차트</option>
-            <option value="area">영역 차트</option>
-            <option value="candlestick">캔들스틱</option>
-          </select>
-        </div>
-        
-        <button
-          onClick={() => fetchChartData(true)}
-          disabled={isLoading}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            darkMode 
-              ? 'bg-gray-600 text-gray-200 hover:bg-gray-500 disabled:bg-gray-700' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:bg-gray-50'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          새로고침
-        </button>
-      </div>
+    <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} flex flex-col overflow-hidden`}>
 
-      <div className="flex flex-wrap items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-        <button
-          onClick={toggleDrawingMode}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            isDrawingMode 
-              ? 'bg-blue-600 text-white' 
-              : darkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          {isDrawingMode ? '그리기 종료' : '그리기 모드'}
-        </button>
-
-        {isDrawingMode && (
-          <>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">도구:</label>
-              <select 
-                value={drawingTool} 
-                onChange={(e) => setDrawingTool(e.target.value as DrawingTool)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm"
-              >
-                <option value="pen">펜</option>
-                <option value="select">선택</option>
-              </select>
-            </div>
-
-            <button onClick={addLine} className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded">
-              직선
-            </button>
-            <button onClick={addRectangle} className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded">
-              사각형
-            </button>
-            <button onClick={addCircle} className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded">
-              원
-            </button>
-            <button onClick={addText} className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded">
-              텍스트
-            </button>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">색상:</label>
-              <input 
-                type="color" 
-                value={strokeColor} 
-                onChange={(e) => setStrokeColor(e.target.value)}
-                className="w-8 h-8 border border-gray-300 rounded cursor-pointer"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">굵기:</label>
-              <input 
-                type="range" 
-                min="1" 
-                max="10" 
-                value={strokeWidth}
-                onChange={(e) => setStrokeWidth(parseInt(e.target.value))}
-                className="w-16"
-              />
-              <span className="text-sm text-gray-600">{strokeWidth}px</span>
-            </div>
-
-            <button onClick={deleteSelected} className="px-2 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded">
-              선택 삭제
-            </button>
-            <button onClick={clearDrawings} className="px-2 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded">
-              전체 삭제
-            </button>
-          </>
-        )}
-      </div>
 
       <div className="relative mt-5" ref={chartContainerRef} style={{ height: '400px', width: '100%' }}>
         {isLoading && (
@@ -674,8 +599,8 @@ const StockChart: React.FC<StockChartProps> = ({
                 <div className="ml-14 h-full pb-10 relative">
                   <div className="absolute inset-0 flex items-end justify-around">
                     {[...Array(12)].map((_, i) => (
-                      <div 
-                        key={i} 
+                      <div
+                        key={i}
                         className="w-8 bg-gray-200 dark:bg-gray-700 rounded-t animate-pulse"
                         style={{ height: `${Math.random() * 60 + 20}%`, animationDelay: `${i * 0.1}s` }}
                       ></div>
@@ -690,7 +615,7 @@ const StockChart: React.FC<StockChartProps> = ({
                 </div>
               </div>
             </div>
-            
+
             {/* Loading overlay */}
             <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm z-10">
               <div className="relative">
@@ -713,24 +638,22 @@ const StockChart: React.FC<StockChartProps> = ({
             </div>
           </>
         )}
-        
+
         {error && (
           <div className="flex flex-col justify-center items-center h-full text-red-600 text-base gap-4">
             {error}
-            <button 
-              onClick={fetchChartData} 
+            <button
+              onClick={fetchChartData}
               className="px-4 py-2 bg-blue-600 text-white border-none rounded-md cursor-pointer text-sm transition-colors hover:bg-blue-700"
             >
               다시 시도
             </button>
           </div>
         )}
-        
+
         {chartData && !isLoading && !error && (
           <div className="w-full h-full">
-            {chartType === 'candlestick' ? 
-            <Bar data={chartData} options={chartOptions} ref={chartRef} /> :
-            <Line data={chartData} options={chartOptions} ref={chartRef} />}
+            <Bar data={chartData} options={chartOptions} ref={chartRef} />
           </div>
         )}
       </div>
