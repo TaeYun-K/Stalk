@@ -32,7 +32,7 @@ public class AuthService {
 
   public LoginResponse login(LoginRequest loginRequest) {
     User user = userLoginMapper.findByUserId(loginRequest.getUserId());
-    System.out.println("user id: " + user.getUserId());
+    System.out.println("user id: " + user.toString());
     if (user == null || !passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
       throw new RuntimeException("Invalid user ID or password");
     }
