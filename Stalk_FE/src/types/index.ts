@@ -1,20 +1,71 @@
-// 사용자 관련 타입
+// 백엔드 UserProfileResponseDto와 일치
+export interface UserProfileResponse {
+  userId: string;           // 로그인 ID
+  name: string;             // 이름
+  contact: string;          // 연락처
+  email: string;            // 이메일
+  profileImage: string;     // 프로필 이미지
+  role: 'USER' | 'ADVISOR' | 'ADMIN';  // 역할
+}
+
+// 백엔드 User Entity와 일치
 export interface User {
-  userId: string;
+  id: number;               // PK (Long → number)
   name: string;
-  contact: string;
+  userId: string;           // 로그인 ID
   email: string;
+  password?: string;        // 비밀번호 (보안상 optional)
+  contact: string;
   nickname: string;
-  qualification?: string;
-  isApproved?: boolean;
-  userType: 'general' | 'expert';
-  profilePhoto?: string;
+  loginType?: string;
+  role: 'USER' | 'ADVISOR' | 'ADMIN';
+  image?: string;           // 프로필 이미지
+  isVerified?: boolean;
+  termsAgreed?: boolean;
+  isActive?: boolean;
+  deletedAt?: string;       // LocalDateTime → string (ISO format)
+  lastLoginAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// 백엔드 UserUpdateRequestDto와 일치
+export interface UserUpdateRequest {
+  name: string;
+  contact: string;          // 010으로 시작하는 11자리
+}
+
+// 백엔드 UserUpdateResponseDto와 일치
+export interface UserUpdateResponse {
+  message: string;
+  updatedName: string;
+  updatedContact: string;
 }
 
 // 백엔드 API 응답 타입
 export interface LoginRequest {
   userId: string;
   password: string;
+}
+
+// 백엔드 SignupRequest와 일치
+export interface SignupRequest {
+  name: string;
+  userId: string;
+  nickname: string;
+  password: string;
+  passwordConfirm: string;
+  contact: string;
+  email: string;
+  agreedTerms: boolean;
+  agreedPrivacy: boolean;
+}
+
+// 백엔드 SignupResponse와 일치
+export interface SignupResponse {
+  success: boolean;
+  userId: number;           // Long → number
+  message: string;
 }
 
 export interface LoginResponse {

@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { 
+  createContext, 
+  useContext, 
+  useState, 
+  useEffect, 
+  ReactNode, 
+  useRef,
+  useCallback
+} from 'react';
 import AuthService from '@/services/authService';
 import { UserInfo } from '@/types';
 
@@ -30,32 +38,77 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isLoggingIn] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const tokenCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 토큰 만료 체크 및 자동 갱신
+  const startTokenExpiryCheck = useCallback(() => {
+    // 기존 인터벌이 있으면 제거
+    if (tokenCheckIntervalRef.current) {
+      clearInterval(tokenCheckIntervalRef.current);
+    }
+
+    // 1분마다 토큰 만료 체크
+    tokenCheckIntervalRef.current = setInterval(async () => {
+      if (isLoggedIn) {
+        const isTokenValid = await AuthService.checkTokenExpiry();
+        if (!isTokenValid) {
+          console.log('토큰 갱신 실패, 로그아웃 처리');
+          logout();
+        }
+      }
+    }, 60000); // 1분마다 체크
+  }, [isLoggedIn]);
+
+  // 토큰 만료 체크 중지
+  const stopTokenExpiryCheck = useCallback(() => {
+    if (tokenCheckIntervalRef.current) {
+      clearInterval(tokenCheckIntervalRef.current);
+      tokenCheckIntervalRef.current = null;
+    }
+  }, []);
+
+  // 로그아웃 처리
+  const logout = useCallback(async () => {
+    setIsLoggingOut(true);
+    stopTokenExpiryCheck(); // 토큰 만료 체크 중지
+    try {
+      await AuthService.logout();
+    } catch (error) {
+      console.error('로그아웃 중 에러 발생:', error);
+    } finally {
+      // 에러가 발생해도 상태는 확실히 초기화
+      setIsLoggedIn(false);
+      setUserInfo(null);
+      setIsLoggingOut(false);
+    }
+  }, [stopTokenExpiryCheck]);
 
   // 자동 로그인 체크
-  const checkAuth = async (): Promise<boolean> => {
+  const checkAuth = useCallback(async (): Promise<boolean> => {
     try {
-      // localStorage와 쿠키에서 로그인 상태 확인
+      // AuthService 초기화 (localStorage에서 토큰 복원)
+      AuthService.initialize();
+      
+      // 토큰 만료 확인 및 자동 갱신
+      const isTokenValid = await AuthService.checkTokenExpiry();
+      if (!isTokenValid) {
+        setIsLoggedIn(false);
+        setUserInfo(null);
+        return false;
+      }
+
+      // localStorage와 메모리에서 로그인 상태 확인
       if (AuthService.checkAutoLogin()) {
         const storedUserInfo = AuthService.getUserInfo();
         if (storedUserInfo) {
           setIsLoggedIn(true);
           setUserInfo(storedUserInfo);
+          startTokenExpiryCheck(); // 토큰 만료 체크 시작
           return true;
         }
-      }
-      
-      // 토큰이 있지만 사용자 정보가 없는 경우는 로그아웃 상태로 처리
-      const accessToken = AuthService.getAccessToken();
-      if (accessToken) {
-        console.log('토큰은 있지만 사용자 정보가 없음, 로그아웃 상태로 처리');
-        // 토큰들을 제거
-        const { removeCookie } = await import('@/utils/cookieUtils');
-        removeCookie('accessToken');
-        removeCookie('refreshToken');
-        removeCookie('userInfo');
       }
       
       setIsLoggedIn(false);
@@ -67,28 +120,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUserInfo(null);
       return false;
     }
-  };
+  }, [startTokenExpiryCheck]);
 
   // 로그인 처리
-  const login = (userInfo: UserInfo) => {
+  const login = useCallback((userInfo: UserInfo) => {
     setIsLoggedIn(true);
     setUserInfo(userInfo);
-  };
-
-  // 로그아웃 처리
-  const logout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await AuthService.logout();
-    } catch (error) {
-      console.error('로그아웃 중 에러 발생:', error);
-    } finally {
-      // 에러가 발생해도 상태는 확실히 초기화
-      setIsLoggedIn(false);
-      setUserInfo(null);
-      setIsLoggingOut(false);
-    }
-  };
+    startTokenExpiryCheck(); // 로그인 시 토큰 만료 체크 시작
+  }, [startTokenExpiryCheck]);
 
   // 컴포넌트 마운트 시 자동 로그인 체크
   useEffect(() => {
@@ -98,7 +137,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(false);
     };
     initAuth();
-  }, []);
+    
+    // 컴포넌트 언마운트 시 인터벌 정리
+    return () => {
+      stopTokenExpiryCheck();
+    };
+  }, [checkAuth, stopTokenExpiryCheck]);
 
   const value: AuthContextType = {
     isLoggedIn,

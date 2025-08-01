@@ -1,9 +1,91 @@
 import { SignupFormData, User, LoginRequest, LoginResponse, BaseApiResponse } from '@/types';
 
-// 메모리에 토큰 저장을 위한 변수들
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
-let userInfo: any = null;
+// localStorage 키 상수들
+const ACCESS_TOKEN_KEY = 'accessToken';
+const REFRESH_TOKEN_KEY = 'refreshToken';
+const USER_INFO_KEY = 'userInfo';
+
+// JWT 토큰 디코딩 함수
+function decodeJWT(token: string): any {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('JWT 디코딩 실패:', error);
+    return null;
+  }
+}
+
+// 토큰 만료 시간 확인 함수
+function getTokenExpiryTime(token: string): number | null {
+  const decoded = decodeJWT(token);
+  if (decoded && decoded.exp) {
+    return decoded.exp * 1000; // 밀리초로 변환
+  }
+  return null;
+}
+
+// 토큰 만료까지 남은 시간 확인 (밀리초)
+function getTimeUntilExpiry(token: string): number | null {
+  const expiryTime = getTokenExpiryTime(token);
+  if (expiryTime) {
+    return expiryTime - Date.now();
+  }
+  return null;
+}
+
+// localStorage에서 토큰 검증 및 정리
+function validateAndCleanupTokens(): boolean {
+  try {
+    const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    
+    if (storedAccessToken) {
+      // 토큰 만료 확인
+      const timeUntilExpiry = getTimeUntilExpiry(storedAccessToken);
+      if (timeUntilExpiry && timeUntilExpiry > 0) {
+        console.log('localStorage 토큰 유효함');
+        return true;
+      } else {
+        console.log('저장된 토큰이 만료됨, localStorage 정리');
+        clearStoredTokens();
+        return false;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('토큰 검증 실패:', error);
+    clearStoredTokens();
+    return false;
+  }
+}
+
+// localStorage에 토큰 저장
+function saveTokensToStorage(accessTokenValue: string, refreshTokenValue: string, userInfoValue: any): void {
+  try {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessTokenValue);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshTokenValue);
+    localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfoValue));
+    console.log('토큰이 localStorage에 저장됨');
+  } catch (error) {
+    console.error('토큰 저장 실패:', error);
+  }
+}
+
+// localStorage에서 토큰 제거
+function clearStoredTokens(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(USER_INFO_KEY);
+}
 
 interface EmailVerificationRequest {
   email: string;
@@ -73,16 +155,15 @@ class AuthService {
         throw new Error(result.message);
       }
 
-      // Access Token과 Refresh Token을 메모리에 저장
-      accessToken = result.result.accessToken;
-      refreshToken = result.result.refreshToken;
-      
-      // 사용자 정보를 메모리에 저장 (자동 로그인용)
-      userInfo = {
+      // 사용자 정보 객체 생성
+      const userInfoData = {
         userId: result.result.userId,
         userName: result.result.userName,
         role: result.result.role
       };
+
+      // localStorage에 토큰과 사용자 정보 저장
+      saveTokensToStorage(result.result.accessToken, result.result.refreshToken, userInfoData);
       
       return result.result;
     } catch (error) {
@@ -123,16 +204,15 @@ class AuthService {
           message: 'Mock 로그인 성공'
         };
         
-        // Mock 토큰을 메모리에 저장
-        accessToken = mockResponse.accessToken;
-        refreshToken = mockResponse.refreshToken;
-        
-        // 사용자 정보를 메모리에 저장
-        userInfo = {
+        // 사용자 정보 객체 생성
+        const mockUserInfo = {
           userId: mockResponse.userId,
           userName: mockResponse.userName,
           role: mockResponse.role
         };
+
+        // localStorage에 Mock 토큰과 사용자 정보 저장
+        saveTokensToStorage(mockResponse.accessToken, mockResponse.refreshToken, mockUserInfo);
         
         return mockResponse;
       }
@@ -182,14 +262,16 @@ class AuthService {
 
   // 로그아웃
   static async logout(): Promise<void> {
-    if (accessToken) {
+    const currentRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    
+    if (currentRefreshToken) {
       try {
         await fetch(`/api/auth/logout`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/json',
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ refreshToken: currentRefreshToken }),
         });
       } catch (error) {
         console.error('로그아웃 API 호출 실패:', error);
@@ -201,20 +283,19 @@ class AuthService {
       }
     }
     
-    // 메모리에서 모든 인증 정보 제거
-    accessToken = null;
-    refreshToken = null;
-    userInfo = null;
+    // localStorage에서 토큰 제거
+    clearStoredTokens();
   }
 
   // 토큰 가져오기
   static getAccessToken(): string | null {
-    return accessToken;
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
   }
 
   // 토큰 갱신
   static async refreshToken(): Promise<string | null> {
-    if (!refreshToken) {
+    const currentRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!currentRefreshToken) {
       return null;
     }
 
@@ -224,19 +305,25 @@ class AuthService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refreshToken: currentRefreshToken }),
       });
 
       if (!response.ok) {
         throw new Error('토큰 갱신 실패');
       }
 
-      const result = await response.json();
+      // 백엔드에서 문자열로 토큰만 반환
+      const newAccessToken = await response.text();
       
-      if (result.isSuccess && result.result?.accessToken) {
-        // 새로운 Access Token을 메모리에 저장
-        accessToken = result.result.accessToken;
-        return result.result.accessToken;
+      if (newAccessToken) {
+        // localStorage에 새로운 토큰 저장 (기존 refreshToken과 userInfo 유지)
+        const currentUserInfo = localStorage.getItem(USER_INFO_KEY);
+        if (currentRefreshToken && currentUserInfo) {
+          const userInfoData = JSON.parse(currentUserInfo);
+          saveTokensToStorage(newAccessToken, currentRefreshToken, userInfoData);
+        }
+        
+        return newAccessToken;
       }
       
       return null;
@@ -255,7 +342,7 @@ class AuthService {
 
   // 인증된 API 요청 헬퍼 (토큰 갱신 포함)
   static async authenticatedRequest(url: string, options: any = {}) {
-    let token = accessToken;
+    let token = localStorage.getItem(ACCESS_TOKEN_KEY);
     
     // 토큰이 없으면 갱신 시도
     if (!token) {
@@ -287,12 +374,50 @@ class AuthService {
 
   // 자동 로그인 체크
   static checkAutoLogin(): boolean {
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const userInfo = localStorage.getItem(USER_INFO_KEY);
     return !!(accessToken && userInfo);
+  }
+
+  // 토큰 만료 확인 및 자동 갱신
+  static async checkTokenExpiry(): Promise<boolean> {
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!accessToken) {
+      return false;
+    }
+
+    const timeUntilExpiry = getTimeUntilExpiry(accessToken);
+    if (!timeUntilExpiry) {
+      console.error('토큰 만료 시간을 확인할 수 없음');
+      return false;
+    }
+
+    // 토큰이 이미 만료된 경우
+    if (timeUntilExpiry <= 0) {
+      console.log('토큰이 만료됨, 갱신 시도');
+      const newToken = await this.refreshToken();
+      return !!newToken;
+    }
+
+    // 5분(300,000ms) 이내에 만료되는 경우 자동 갱신
+    if (timeUntilExpiry <= 5 * 60 * 1000) {
+      console.log('토큰이 5분 이내에 만료됨, 자동 갱신 시도');
+      const newToken = await this.refreshToken();
+      return !!newToken;
+    }
+
+    return true; // 토큰이 유효함
+  }
+
+  // 토큰 상태 초기화 (앱 시작 시 호출)
+  static initialize(): void {
+    validateAndCleanupTokens();
   }
 
   // 사용자 정보 가져오기
   static getUserInfo(): any {
-    return userInfo;
+    const userInfo = localStorage.getItem(USER_INFO_KEY);
+    return userInfo ? JSON.parse(userInfo) : null;
   }
 
   // 토큰 검증
@@ -303,12 +428,13 @@ class AuthService {
         resolve({
           valid: true,
           user: {
+            id: 1,
             userId: 'ssafy_kim',
             name: '김싸피',
             contact: '010-0000-0000',
             email: 'ssafy@samsung.com',
             nickname: '김싸피',
-            userType: 'general'
+            role: 'USER'
           }
         });
       }, 500);
