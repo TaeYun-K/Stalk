@@ -31,16 +31,16 @@ public class AuthService {
   }
 
   public LoginResponse login(LoginRequest loginRequest) {
-    System.out.println("loginRequest.getUserId() : " + loginRequest.getUserId());
+    // System.out.println("loginRequest.getUserId() : " + loginRequest.getUserId());
     User user = userLoginMapper.findByUserId(loginRequest.getUserId());
-    System.out.println("user id: " + user.toString());
+    // System.out.println("user id: " + user.toString());
     if (user == null || !passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
       throw new RuntimeException("Invalid user ID or password");
     }
 
-//    if (!user.getIsActive()) {
-//      throw new RuntimeException("Account is not active");
-//    }
+    if (!user.getIsActive()) {
+      throw new RuntimeException("Account is not active");
+    }
 
     // Access Token 및 Refresh Token 생성
     String accessToken = jwtUtil.createAccessToken(user.getUserId(), user.getRole());
