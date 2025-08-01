@@ -1,16 +1,16 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+
+import { Link } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
-import normalUserIcon from '@/assets/normal_user.svg';
-import specialistIcon from '@/assets/specialist.svg';
+import Footer from '@/components/footer';
+import normalUserIcon from '@/assets/images/icons/normal_user_icon.svg';
+import specialistIcon from '@/assets/images/icons/specialist_icon.svg';
 
 const SignupChoicePage = () => {
-  const navigate = useNavigate();
 
   return (
     <div className="relative flex flex-col min-h-screen bg-gradient-to-b from-blue-100 to-white">
       <NewNavbar />
-      <main className="flex-grow flex flex-col items-center justify-center">
+      <main className="flex items-center justify-center px-4 pb-8">
         <div className="w-full max-w-4xl bg-white rounded-[40px] shadow-lg flex flex-col p-20">
           <div className="text-center mb-8">
             <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800">회원가입</h1>
@@ -32,10 +32,7 @@ const SignupChoicePage = () => {
           </div>
         </div>
       </main>
-      <footer className="w-full py-4 text-center text-zinc-500 text-xs">
-        <p>사업자 등록번호 : 000-00-0000 | 대표 : 스토커 | 주소 : 46733 부산광역시 강서구 녹산산업중로 333</p>
-        <p className="mt-1">스톡에서 제공하는 투자 상담 및 정보는 투자 판단을 위한 단순 참고용일 뿐, 투자 제안 및 권유, 종목 추천을 위해 작성된 것이 아닙니다.</p>
-      </footer>
+      <Footer />
     </div>
   );
 };

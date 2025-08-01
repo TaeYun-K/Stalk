@@ -31,6 +31,7 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      'no-unused-vars': 'off', // TypeScript 규칙과 중복되므로 비활성화
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

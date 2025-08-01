@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '@/components/footer';
 
@@ -104,18 +104,16 @@ const CommunityPage = () => {
     }
   ];
 
-  const filteredPosts = selectedTab === 'news' ? newsPosts : knowledgePosts;
+  // Posts are filtered by selectedTab in the conditional rendering below
 
   return (
     <div className="min-h-screen bg-white">
-      
-      
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex gap-8">
           {/* Left Sidebar */}
-          <div className="w-64 flex-shrink-0">
+          <div className="pt-16 w-64">
             <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">커뮤니티</h2>
+              <h2 className="ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
             </div>
             <nav className="space-y-2">
               <button
@@ -127,9 +125,6 @@ const CommunityPage = () => {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                  </svg>
                   <span>뉴스</span>
                 </div>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,10 +140,8 @@ const CommunityPage = () => {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>투자 지식in</span>
+                 
+                  <span>투자 지식iN</span>
                 </div>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -158,7 +151,7 @@ const CommunityPage = () => {
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1">
+          <div className="flex-1 pt-16">
             {selectedTab === 'news' && (
               <div className="space-y-6">
                 {/* Search and Sort */}
@@ -168,35 +161,36 @@ const CommunityPage = () => {
                       <input
                         type="text"
                         placeholder="뉴스 검색"
-                        className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full pl-6 pr-10 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                      <svg className="absolute right-3 top-3 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </div>
                   </div>
-                  <select className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option>정렬: 최신순</option>
-                    <option>정렬: 인기순</option>
-                    <option>정렬: 조회순</option>
-                  </select>
+                  <div>
+                    <select className="px-4 py-3 focus:outline-none">
+                      <option>최신순</option>
+                      <option>인기순</option>
+                      <option>조회순</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* News Feed */}
                 <div className="space-y-6">
                   {newsPosts.map((post) => (
-                    <div key={post.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                    <div key={post.id} className="bg-white border-b border-gray-200 p-6 hover:shadow-lg transition-shadow cursor-pointer">
                       <div className="flex gap-6">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
                             <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-md">{post.category}</span>
-                            <span className="text-sm text-gray-500">{post.date}</span>
+                            <span className="text-sm text-gray-500"></span>
                           </div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
-                          <p className="text-gray-600 mb-3">{post.content}</p>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500">작성자: {post.author}</span>
-                            <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">자세히 보기</button>
+                          <h3 className="text-left text-lg font-semibold text-gray-900 my-3">{post.title}</h3>
+                          <p className="text-left text-gray-600 mb-3 leading-loose">{post.content}</p>
+                          <div className="flex items-center justify-end">
+                            <span className="text-sm text-gray-500">{post.date} / {post.author}</span>
                           </div>
                         </div>
                         <div className="w-48 h-32 bg-gray-200 rounded-lg overflow-hidden">
@@ -217,38 +211,49 @@ const CommunityPage = () => {
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="게시물 검색"
-                        className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="투자 질문 검색"
+                        className="w-full pl-6 pr-10 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                      <svg className="absolute right-3 top-3 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </div>
                   </div>
-                  <select className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option>정렬: 최신순</option>
-                    <option>정렬: 인기순</option>
-                    <option>정렬: 조회순</option>
-                  </select>
+                  <div className="flex items-center space-x-4">
+                    <select className="px-4 py-3 focus:outline-none">
+                      <option>최신순</option>
+                      <option>인기순</option>
+                      <option>조회순</option>
+                    </select>
+                    <button
+                      onClick={() => navigate('/write-post')}
+                      className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>글쓰기</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Posts Table */}
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-white rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">닉네임</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">카테고리</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">제목</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">작성일</th>
+                      <tr className="bg-blue-100">
+                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">카테고리</th>
+                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">제목</th>
+                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">닉네임</th>
+                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">작성일</th>
                       </tr>
                     </thead>
                     <tbody>
                       {knowledgePosts.map((post) => (
                         <tr key={post.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer">
-                          <td className="px-4 py-3 text-sm text-gray-900">{post.nickname}</td>
                           <td className="px-4 py-3 text-sm text-gray-900">{post.category}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{post.title}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-left">{post.title}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{post.nickname}</td>
                           <td className="px-4 py-3 text-sm text-gray-900">{post.date}</td>
                         </tr>
                       ))}
@@ -257,17 +262,7 @@ const CommunityPage = () => {
                 </div>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => navigate('/write-post')}
-                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span>글쓰기</span>
-                  </button>
-                  
+                <div className="flex items-center justify-end">         
                   <div className="flex items-center space-x-2">
                     <button className="px-3 py-1 text-gray-500 hover:text-gray-700">{"<<"}</button>
                     <button className="px-3 py-1 text-gray-500 hover:text-gray-700">{"<"}</button>
@@ -286,8 +281,6 @@ const CommunityPage = () => {
           </div>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 };

@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import stalkLogoBlue from '@/assets/Stalk_logo_blue.svg';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
+import newsIcon from '@/assets/images/icons/news_icon.png';
+import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { isLoggedIn, logout, userInfo, isLoggingOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [communityMenuTimeout, setCommunityMenuTimeout] = useState<number | null>(null);
+  const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   // 검색 함수
   const handleSearch = (): void => {
@@ -27,16 +30,12 @@ const Navbar: React.FC = () => {
     }
   };
 
-  // 로그인 상태 확인 (실제로는 context나 state management 사용)
-  const isLoggedIn: boolean = location.pathname.includes('logged-in') || 
-                    location.pathname === '/mypage' || 
-                    location.pathname === '/consultations' ||
-                    location.pathname === '/favorites';
+  // 로그인 상태는 AuthContext에서 관리
 
   return (
     <nav className="bg-white fixed top-0 left-0 right-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
+      <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16">
+      <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
             <button 
@@ -102,9 +101,7 @@ const Navbar: React.FC = () => {
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                    </svg>
+                    <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
                     <span>뉴스</span>
                   </button>
                   <button
@@ -114,10 +111,8 @@ const Navbar: React.FC = () => {
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <span>투자 지식in</span>
+                    <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
+                    <span>투자 지식iN</span>
                   </button>
                 </div>
               )}
@@ -158,7 +153,7 @@ const Navbar: React.FC = () => {
                   className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm  duration-300"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                    김
+                    {userInfo?.userName?.charAt(0) || '사'}
                   </div>
                   
                   
@@ -183,11 +178,17 @@ const Navbar: React.FC = () => {
                     </button>
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
-                      onClick={() => {
-                        navigate('/');
+                      onClick={async () => {
+                        try {
+                          await logout();
+                          navigate('/');
+                        } catch (error) {
+                          console.error('로그아웃 실패:', error);
+                        }
                         setShowProfileMenu(false);
                       }}
-                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3"
+                      disabled={isLoggingOut}
+                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
