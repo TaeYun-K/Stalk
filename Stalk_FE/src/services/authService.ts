@@ -1,91 +1,11 @@
-import { SignupFormData, User, LoginRequest, LoginResponse, BaseApiResponse } from '@/types';
+import { SignupFormData, User, LoginRequest, LoginResponse } from '@/types';
 
-// localStorage 키 상수들
+// localStorage에서 토큰 관리
 const ACCESS_TOKEN_KEY = 'accessToken';
-const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_INFO_KEY = 'userInfo';
 
-// JWT 토큰 디코딩 함수
-function decodeJWT(token: string): any {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        })
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    console.error('JWT 디코딩 실패:', error);
-    return null;
-  }
-}
-
-// 토큰 만료 시간 확인 함수
-function getTokenExpiryTime(token: string): number | null {
-  const decoded = decodeJWT(token);
-  if (decoded && decoded.exp) {
-    return decoded.exp * 1000; // 밀리초로 변환
-  }
-  return null;
-}
-
-// 토큰 만료까지 남은 시간 확인 (밀리초)
-function getTimeUntilExpiry(token: string): number | null {
-  const expiryTime = getTokenExpiryTime(token);
-  if (expiryTime) {
-    return expiryTime - Date.now();
-  }
-  return null;
-}
-
-// localStorage에서 토큰 검증 및 정리
-function validateAndCleanupTokens(): boolean {
-  try {
-    const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    
-    if (storedAccessToken) {
-      // 토큰 만료 확인
-      const timeUntilExpiry = getTimeUntilExpiry(storedAccessToken);
-      if (timeUntilExpiry && timeUntilExpiry > 0) {
-        console.log('localStorage 토큰 유효함');
-        return true;
-      } else {
-        console.log('저장된 토큰이 만료됨, localStorage 정리');
-        clearStoredTokens();
-        return false;
-      }
-    }
-    return false;
-  } catch (error) {
-    console.error('토큰 검증 실패:', error);
-    clearStoredTokens();
-    return false;
-  }
-}
-
-// localStorage에 토큰 저장
-function saveTokensToStorage(accessTokenValue: string, refreshTokenValue: string, userInfoValue: any): void {
-  try {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessTokenValue);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshTokenValue);
-    localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfoValue));
-    console.log('토큰이 localStorage에 저장됨');
-  } catch (error) {
-    console.error('토큰 저장 실패:', error);
-  }
-}
-
-// localStorage에서 토큰 제거
-function clearStoredTokens(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_INFO_KEY);
-}
+// 사용자 정보는 메모리에 저장 (새로고침 시 localStorage에서 복원)
+let userInfo: any = null;
 
 interface EmailVerificationRequest {
   email: string;
@@ -97,6 +17,19 @@ interface EmailVerificationResponse {
 }
 
 class AuthService {
+  // Access Token 관리 메서드들
+  static getAccessToken(): string | null {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  }
+
+  static setAccessToken(token: string): void {
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  }
+
+  static removeAccessToken(): void {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+
   // 로그인
   static async login(data: LoginRequest): Promise<LoginResponse> {
     try {
@@ -149,73 +82,40 @@ class AuthService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const result: BaseApiResponse<LoginResponse> = await response.json();
-      
-      if (!result.isSuccess) {
-        throw new Error(result.message);
-      }
+      // 백엔드에서 직접 LoginResponse를 반환 (BaseApiResponse 래퍼 없음)
+      const result: LoginResponse = await response.json();
 
-      // 사용자 정보 객체 생성
-      const userInfoData = {
-        userId: result.result.userId,
-        userName: result.result.userName,
-        role: result.result.role
+      // Access Token을 localStorage에 저장
+      this.setAccessToken(result.accessToken);
+      
+      // 사용자 정보는 JWT 토큰에서 추출하거나 별도 API로 조회해야 함
+      // 임시로 토큰에서 기본 정보만 설정
+      userInfo = {
+        userId: 0, // JWT에서 추출하거나 별도 API 호출 필요
+        userName: '', // JWT에서 추출하거나 별도 API 호출 필요
+        role: 'USER' // JWT에서 추출하거나 별도 API 호출 필요
       };
-
-      // localStorage에 토큰과 사용자 정보 저장
-      saveTokensToStorage(result.result.accessToken, result.result.refreshToken, userInfoData);
       
-      return result.result;
+      // 로그인 성공 후 사용자 정보를 별도로 조회
+      try {
+        const userProfile = await this.getUserProfile();
+        userInfo = {
+          userId: 0, // UserProfileResponseDto에는 Long id가 없어서 0으로 설정
+          userName: userProfile.name,
+          role: userProfile.role as 'USER' | 'ADVISOR' | 'ADMIN'
+        };
+        
+        // 사용자 정보를 localStorage에도 저장
+        localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
+      } catch (error) {
+        console.warn('사용자 정보 조회 실패, 기본값 사용:', error);
+      }
+      
+      return result;
     } catch (error) {
       console.error('로그인 API 호출 실패:', error);
       
-      // 개발 환경에서 Mock 데이터로 대체 (네트워크 에러, 400, 500 에러 모두 포함)
-      if (import.meta.env.DEV) {
-        console.warn('개발 환경: 백엔드 서버 오류, Mock 데이터로 대체합니다.');
-        
-        // 백엔드에 등록된 사용자만 Mock 로그인 허용
-        const validUsers: Record<string, { userId: number; userName: string; role: 'USER' | 'ADVISOR' | 'ADMIN'; password: string }> = {
-          'user001': { userId: 1001, userName: '김철수', role: 'USER', password: 'password123' },
-          'user002': { userId: 1002, userName: '이영희', role: 'USER', password: 'password123' },
-          'advisor001': { userId: 2001, userName: '한승우', role: 'ADVISOR', password: 'password123' },
-          'advisor002': { userId: 2002, userName: '이수진', role: 'ADVISOR', password: 'password123' },
-          'advisor003': { userId: 2003, userName: '박미승', role: 'ADVISOR', password: 'password123' },
-          'admin001': { userId: 3001, userName: '관리자', role: 'ADMIN', password: 'password123' }
-        };
-        
-        const userData = validUsers[data.userId as keyof typeof validUsers];
-        
-        if (!userData) {
-          throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
-        }
-        
-        // 비밀번호 검증
-        if (userData.password !== data.password) {
-          throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
-        }
-        
-        // Mock 응답 생성
-        const mockResponse: LoginResponse = {
-          accessToken: `MOCK_TOKEN_${Date.now()}_ACCESS_${data.userId}`,
-          refreshToken: `MOCK_TOKEN_${Date.now()}_REFRESH_${data.userId}`,
-          userId: userData.userId,
-          userName: userData.userName,
-          role: userData.role,
-          message: 'Mock 로그인 성공'
-        };
-        
-        // 사용자 정보 객체 생성
-        const mockUserInfo = {
-          userId: mockResponse.userId,
-          userName: mockResponse.userName,
-          role: mockResponse.role
-        };
-
-        // localStorage에 Mock 토큰과 사용자 정보 저장
-        saveTokensToStorage(mockResponse.accessToken, mockResponse.refreshToken, mockUserInfo);
-        
-        return mockResponse;
-      }
+      // Mock 데이터는 더 이상 사용하지 않음 (실제 백엔드 API 사용)
       
       throw error;
     }
@@ -262,16 +162,16 @@ class AuthService {
 
   // 로그아웃
   static async logout(): Promise<void> {
-    const currentRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    
-    if (currentRefreshToken) {
+    const token = this.getAccessToken();
+    if (token) {
       try {
         await fetch(`/api/auth/logout`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
           },
-          body: JSON.stringify({ refreshToken: currentRefreshToken }),
+
         });
       } catch (error) {
         console.error('로그아웃 API 호출 실패:', error);
@@ -283,71 +183,24 @@ class AuthService {
       }
     }
     
-    // localStorage에서 토큰 제거
-    clearStoredTokens();
+    // localStorage와 메모리에서 모든 인증 정보 제거
+    this.removeAccessToken();
+    localStorage.removeItem(USER_INFO_KEY);
+    userInfo = null;
   }
 
-  // 토큰 가져오기
-  static getAccessToken(): string | null {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
-  }
 
-  // 토큰 갱신
+
+  // 토큰 갱신 (refresh token은 서버에서 관리하므로 제거)
   static async refreshToken(): Promise<string | null> {
-    const currentRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (!currentRefreshToken) {
-      return null;
-    }
-
-    try {
-      const response = await fetch(`/api/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: currentRefreshToken }),
-      });
-
-      if (!response.ok) {
-        throw new Error('토큰 갱신 실패');
-      }
-
-      // 백엔드에서 문자열로 토큰만 반환
-      const newAccessToken = await response.text();
-      
-      if (newAccessToken) {
-        // localStorage에 새로운 토큰 저장 (기존 refreshToken과 userInfo 유지)
-        const currentUserInfo = localStorage.getItem(USER_INFO_KEY);
-        if (currentRefreshToken && currentUserInfo) {
-          const userInfoData = JSON.parse(currentUserInfo);
-          saveTokensToStorage(newAccessToken, currentRefreshToken, userInfoData);
-        }
-        
-        return newAccessToken;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('토큰 갱신 실패:', error);
-      // CORS 에러나 네트워크 에러인 경우 로그아웃 처리하지 않고 null 반환
-      if (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch'))) {
-        console.warn('네트워크 에러로 인한 토큰 갱신 실패, 로그아웃 처리하지 않음');
-        return null;
-      }
-      // 토큰 갱신 실패 시 로그아웃 처리
-      this.logout();
-      return null;
-    }
+    // refresh token은 서버에서 관리하므로 이 메서드는 더 이상 사용하지 않음
+    console.warn('토큰 갱신은 서버에서 관리합니다.');
+    return null;
   }
 
-  // 인증된 API 요청 헬퍼 (토큰 갱신 포함)
+  // 인증된 API 요청 헬퍼
   static async authenticatedRequest(url: string, options: any = {}) {
-    let token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    
-    // 토큰이 없으면 갱신 시도
-    if (!token) {
-      token = await this.refreshToken();
-    }
+    const token = this.getAccessToken();
     
     const config = {
       ...options,
@@ -358,66 +211,97 @@ class AuthService {
       },
     };
     
-    const response = await fetch(url, config);
-    
-    // 401 에러 시 토큰 갱신 재시도
-    if (response.status === 401) {
-      const newToken = await this.refreshToken();
-      if (newToken) {
-        config.headers.Authorization = `Bearer ${newToken}`;
-        return fetch(url, config);
-      }
-    }
-    
-    return response;
+    return fetch(url, config);
   }
 
   // 자동 로그인 체크
   static checkAutoLogin(): boolean {
-    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const userInfo = localStorage.getItem(USER_INFO_KEY);
-    return !!(accessToken && userInfo);
+    const token = this.getAccessToken();
+    const storedUserInfo = localStorage.getItem(USER_INFO_KEY);
+    
+    if (token && storedUserInfo && !userInfo) {
+      // localStorage에서 사용자 정보 복원
+      try {
+        userInfo = JSON.parse(storedUserInfo);
+      } catch (error) {
+        console.error('사용자 정보 파싱 실패:', error);
+        localStorage.removeItem(USER_INFO_KEY);
+        return false;
+      }
+    }
+    
+    return !!(token && userInfo);
   }
 
-  // 토큰 만료 확인 및 자동 갱신
+  // 토큰 만료 확인 (간단한 버전)
   static async checkTokenExpiry(): Promise<boolean> {
     const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
     if (!accessToken) {
       return false;
     }
-
-    const timeUntilExpiry = getTimeUntilExpiry(accessToken);
-    if (!timeUntilExpiry) {
-      console.error('토큰 만료 시간을 확인할 수 없음');
-      return false;
-    }
-
-    // 토큰이 이미 만료된 경우
-    if (timeUntilExpiry <= 0) {
-      console.log('토큰이 만료됨, 갱신 시도');
-      const newToken = await this.refreshToken();
-      return !!newToken;
-    }
-
-    // 5분(300,000ms) 이내에 만료되는 경우 자동 갱신
-    if (timeUntilExpiry <= 5 * 60 * 1000) {
-      console.log('토큰이 5분 이내에 만료됨, 자동 갱신 시도');
-      const newToken = await this.refreshToken();
-      return !!newToken;
-    }
-
-    return true; // 토큰이 유효함
+    
+    // 토큰이 있으면 유효한 것으로 간주 (서버에서 토큰 만료 관리)
+    return true;
   }
 
   // 토큰 상태 초기화 (앱 시작 시 호출)
   static initialize(): void {
-    validateAndCleanupTokens();
+    // localStorage에서 사용자 정보 복원
+    const storedUserInfo = localStorage.getItem(USER_INFO_KEY);
+    if (storedUserInfo) {
+      try {
+        userInfo = JSON.parse(storedUserInfo);
+      } catch (error) {
+        console.error('사용자 정보 파싱 실패:', error);
+        localStorage.removeItem(USER_INFO_KEY);
+      }
+    }
   }
 
   // 사용자 정보 가져오기
   static getUserInfo(): any {
-    const userInfo = localStorage.getItem(USER_INFO_KEY);
-    return userInfo ? JSON.parse(userInfo) : null;
+    if (!userInfo) {
+      const storedUserInfo = localStorage.getItem(USER_INFO_KEY);
+      if (storedUserInfo) {
+        try {
+          userInfo = JSON.parse(storedUserInfo);
+        } catch (error) {
+          console.error('사용자 정보 파싱 실패:', error);
+          localStorage.removeItem(USER_INFO_KEY);
+        }
+      }
+    }
+    return userInfo;
+  }
+
+  // 사용자 프로필 조회 (백엔드 API 호출)
+  static async getUserProfile(): Promise<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string }> {
+    const token = this.getAccessToken();
+    if (!token) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
+    const response = await fetch('/api/users/me', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`사용자 정보 조회 실패: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    // BaseResponse 구조로 응답이 올 경우
+    if (result.isSuccess) {
+      return result.result;
+    }
+    
+    // 직접 데이터가 올 경우
+    return result;
   }
 
   // 토큰 검증
