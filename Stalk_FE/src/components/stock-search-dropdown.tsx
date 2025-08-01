@@ -71,7 +71,7 @@ const StockSearchDropdown: React.FC<StockSearchDropdownProps> = ({
     setIsLoading(true);
     try {
       const response = await axios.get(
-        `http://localhost:8081/api/stock/search/${query}`
+        `https://i13e205.p.ssafy.io:8443/api/stock/search/${query}`
       );
       
       if (response.data.success && response.data.data) {
