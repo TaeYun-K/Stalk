@@ -23,7 +23,8 @@ public class ConsultationSessionService {
   private final OpenVidu openVidu;
   // 메모리나 DB에 세션 객체를 캐싱할 수 있습니다.
 
-  @Value("https://i13e205.p.ssafy.io:8443")
+
+  @Value("${openvidu.url}")
   private String openviduUrl;
   private final Map<String, Session> sessionMap = new ConcurrentHashMap<>();
   private final Map<String, Instant> createdAtMap = new ConcurrentHashMap<>();
