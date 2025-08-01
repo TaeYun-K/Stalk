@@ -1,3 +1,4 @@
+console.log('StockChart module loading...');
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Chart as ChartJS,
@@ -9,16 +10,21 @@ import {
   Tooltip,
   Legend,
   BarElement,
+  LineController,
+  BarController,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { Canvas, Line as FabricLine, Rect, Circle, IText } from 'fabric';
 import axios from 'axios';
+console.log('StockChart imports completed');
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  LineController,
+  BarController,
   Title,
   Tooltip,
   Legend,
@@ -51,22 +57,22 @@ type DrawingTool = 'pen' | 'select';
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 const CANVAS_INIT_DELAY_MS = 1000;
 
-const StockChart: React.FC<StockChartProps> = ({ 
-  selectedStock, 
-  darkMode = false, 
+const StockChart: React.FC<StockChartProps> = ({
+  selectedStock,
+  darkMode = false,
   realTimeUpdates = false, // Disabled by default to prevent excessive API calls
   chartType: propChartType = 'candlestick',
   period: propPeriod = 30,
   drawingMode: propDrawingMode = false
 }) => {
   console.log("StockChart - Component rendered with selectedStock:", selectedStock);
-  
+
   const [chartData, setChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>(propChartType);
   const [period, setPeriod] = useState<string>(propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Update internal state when props change
   useEffect(() => {
     if (propChartType !== chartType) {
@@ -80,12 +86,12 @@ const StockChart: React.FC<StockChartProps> = ({
       setIsDrawingMode(propDrawingMode);
     }
   }, [propChartType, propPeriod, propDrawingMode]);
-  
+
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
   const [drawingTool, setDrawingTool] = useState<DrawingTool>('pen');
   const [strokeColor, setStrokeColor] = useState<string>('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState<number>(2);
-  
+
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const fabricCanvasRef = useRef<Canvas | null>(null);
   const chartRef = useRef<any>(null);
@@ -116,7 +122,7 @@ const StockChart: React.FC<StockChartProps> = ({
           if (existingCanvas) {
             existingCanvas.remove();
           }
-          
+
           const canvasElement = document.createElement('canvas');
           canvasElement.id = 'drawing-canvas';
           canvasElement.style.position = 'absolute';
@@ -125,15 +131,15 @@ const StockChart: React.FC<StockChartProps> = ({
           canvasElement.style.pointerEvents = 'none';
           canvasElement.style.zIndex = '1';
           canvasElement.style.background = 'transparent';
-          
+
           chartContainerRef.current.appendChild(canvasElement);
-          
+
           const containerWidth = chartContainerRef.current.offsetWidth || 800;
           const containerHeight = chartContainerRef.current.offsetHeight || 400;
-          
+
           canvasElement.width = containerWidth;
           canvasElement.height = containerHeight;
-          
+
           fabricCanvasRef.current = new Canvas(canvasElement, {
             isDrawingMode: false,
             width: containerWidth,
@@ -142,12 +148,12 @@ const StockChart: React.FC<StockChartProps> = ({
             renderOnAddRemove: true,
             enableRetinaScaling: false,
           });
-          
+
           if (fabricCanvasRef.current.freeDrawingBrush) {
             fabricCanvasRef.current.freeDrawingBrush.color = strokeColor;
             fabricCanvasRef.current.freeDrawingBrush.width = strokeWidth;
           }
-          
+
           console.log('Fabric canvas initialized successfully');
         } catch (error) {
           console.error('Error initializing Fabric.js canvas:', error);
@@ -156,7 +162,7 @@ const StockChart: React.FC<StockChartProps> = ({
     };
 
     const timer = setTimeout(initCanvas, CANVAS_INIT_DELAY_MS);
-    
+
     return () => {
       clearTimeout(timer);
       if (fabricCanvasRef.current) {
@@ -175,15 +181,15 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         const canvas = fabricCanvasRef.current;
         const canvasElement = canvas.getElement();
-        
+
         if (isDrawingMode) {
           console.log('Enabling drawing mode with tool:', drawingTool);
           canvasElement.style.pointerEvents = 'auto';
           canvasElement.style.zIndex = '10';
-          
+
           canvas.isDrawingMode = drawingTool === 'pen';
           canvas.selection = drawingTool !== 'pen';
-          
+
           if (drawingTool === 'pen' && canvas.freeDrawingBrush) {
             canvas.freeDrawingBrush.color = strokeColor;
             canvas.freeDrawingBrush.width = strokeWidth;
@@ -195,7 +201,7 @@ const StockChart: React.FC<StockChartProps> = ({
           canvas.isDrawingMode = false;
           canvas.selection = false;
         }
-        
+
         canvas.renderAll();
       } catch (error) {
         console.error('Error updating drawing mode:', error);
@@ -220,43 +226,43 @@ const StockChart: React.FC<StockChartProps> = ({
       console.log('Already loading data, skipping duplicate request');
       return;
     }
-    
+
     // Don't show loading state for updates to prevent flicker
     if (!isUpdate) {
       setIsLoading(true);
     }
     setError(null);
-    
+
     try {
       console.log("StockChart - Making request to:", `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`);
       const response = await axios.get(
         `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
       );
-      
+
       console.log("StockChart - Response received:", response.data);
-      
+
       if (response.data.success) {
         const data: ChartDataPoint[] = response.data.data;
         const aggregationType = response.data.aggregationType || 'daily';
         console.log("StockChart - Raw data points:", data);
         console.log("StockChart - Aggregation type:", aggregationType);
-        
+
         if (!data || data.length === 0) {
           console.error("StockChart - No data points in response");
           setError("차트 데이터가 없습니다.");
           return;
         }
-        
+
         // Sort by date in ascending order (oldest first)
         const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
         console.log("StockChart - Sorted data:", sortedData);
-        
+
         const labels = sortedData.map(item => {
           const date = item.date;
           const year = date.substring(0, 4);
           const month = date.substring(4, 6);
           const day = date.substring(6, 8);
-          
+
           // Format labels based on aggregation type
           switch (aggregationType) {
             case 'weekly':
@@ -267,10 +273,10 @@ const StockChart: React.FC<StockChartProps> = ({
               return `${month}/${day}`;  // Daily: show month/day (e.g., "7/31")
           }
         });
-        
+
         const prices = sortedData.map(item => item.close);
         const volumes = sortedData.map(item => item.volume);
-        
+
         console.log("StockChart - Labels:", labels);
         console.log("StockChart - Prices:", prices);
         console.log("StockChart - Volumes:", volumes);
@@ -278,16 +284,16 @@ const StockChart: React.FC<StockChartProps> = ({
         // If we're updating and have an existing chart, update it smoothly
         if (isUpdate && chartRef.current && chartData) {
           const chart = chartRef.current;
-          
+
           // Update the data arrays directly
           chart.data.labels = labels;
           chart.data.datasets[0].data = prices;
-          
+
           // Always update volume data (second dataset)
           if (chart.data.datasets[1]) {
             chart.data.datasets[1].data = volumes;
           }
-          
+
           // Update the chart with animation
           chart.update('active');
         } else {
@@ -317,7 +323,7 @@ const StockChart: React.FC<StockChartProps> = ({
               },
             ],
           };
-          
+
           console.log("StockChart - Setting chart data:", newChartData);
           setChartData(newChartData);
         }
@@ -570,7 +576,7 @@ const StockChart: React.FC<StockChartProps> = ({
       </div>
     );
   }
-  
+
   console.log("StockChart - Rendering chart for stock:", selectedStock.ticker);
 
   return (
@@ -593,8 +599,8 @@ const StockChart: React.FC<StockChartProps> = ({
                 <div className="ml-14 h-full pb-10 relative">
                   <div className="absolute inset-0 flex items-end justify-around">
                     {[...Array(12)].map((_, i) => (
-                      <div 
-                        key={i} 
+                      <div
+                        key={i}
                         className="w-8 bg-gray-200 dark:bg-gray-700 rounded-t animate-pulse"
                         style={{ height: `${Math.random() * 60 + 20}%`, animationDelay: `${i * 0.1}s` }}
                       ></div>
@@ -609,7 +615,7 @@ const StockChart: React.FC<StockChartProps> = ({
                 </div>
               </div>
             </div>
-            
+
             {/* Loading overlay */}
             <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm z-10">
               <div className="relative">
@@ -632,19 +638,19 @@ const StockChart: React.FC<StockChartProps> = ({
             </div>
           </>
         )}
-        
+
         {error && (
           <div className="flex flex-col justify-center items-center h-full text-red-600 text-base gap-4">
             {error}
-            <button 
-              onClick={fetchChartData} 
+            <button
+              onClick={fetchChartData}
               className="px-4 py-2 bg-blue-600 text-white border-none rounded-md cursor-pointer text-sm transition-colors hover:bg-blue-700"
             >
               다시 시도
             </button>
           </div>
         )}
-        
+
         {chartData && !isLoading && !error && (
           <div className="w-full h-full">
             <Bar data={chartData} options={chartOptions} ref={chartRef} />
