@@ -7,6 +7,7 @@ import {
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
 import axios from "axios";
+import AuthService from "@/services/authService";
 
 import cameraOffIcon from "@/assets/images/icons/consultation/camera-off.svg";
 import cameraOnIcon from "@/assets/images/icons/consultation/camera-on.svg";
@@ -74,6 +75,10 @@ const VideoConsultationPage: React.FC = () => {
   const [ov, setOv] = useState<OpenVidu | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
+  // 사용자 정보 상태 추가
+  const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
+  const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(true);
+
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
@@ -120,10 +125,39 @@ const VideoConsultationPage: React.FC = () => {
     return role === 'ADVISOR' ? '전문가' : '의뢰인';
   };
 
-  const getCurrentUserDisplayName = (): string => {
-    // 실제 구현에서는 사용자 정보를 가져와야 함
-    return userRole === 'ADVISOR' ? '김전문가' : '김의뢰인';
+  // 사용자 정보 가져오기
+  const fetchUserInfo = async () => {
+    try {
+      setIsLoadingUserInfo(true);
+      const userProfile = await AuthService.getUserProfile();
+      setUserInfo(userProfile);
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
+      // 기본값 설정
+      setUserInfo({
+        name: userRole === 'ADVISOR' ? '김전문가' : '김의뢰인',
+        role: userRole || 'USER',
+        userId: '0',
+        contact: '',
+        email: '',
+        profileImage: ''
+      });
+    } finally {
+      setIsLoadingUserInfo(false);
+    }
   };
+
+  // 컴포넌트 마운트 시 사용자 정보 가져오기
+  useEffect(() => {
+    fetchUserInfo();
+  }, []);
+
+  // 사용자 정보가 로드된 후 OpenVidu 초기화
+  useEffect(() => {
+    if (!isLoadingUserInfo && userInfo) {
+      initializeOpenVidu();
+    }
+  }, [isLoadingUserInfo, userInfo]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -152,8 +186,15 @@ const VideoConsultationPage: React.FC = () => {
       if (ovToken) {
         const session = openVidu.initSession();
 
-        // Connect to the session
-        await session.connect(ovToken);
+        // 사용자 정보를 포함한 연결 데이터 준비
+        const connectionData = {
+          role: userRole || 'USER',
+          userData: userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인'),
+          userId: userInfo?.userId || '0'
+        };
+
+        // Connect to the session with user data
+        await session.connect(ovToken, JSON.stringify(connectionData));
         setSession(session);
         
         // Subscribe to session events
@@ -413,8 +454,6 @@ const VideoConsultationPage: React.FC = () => {
   };
 
   useEffect(() => {
-    initializeOpenVidu();
-
     return () => {
       if (localStream) {
         localStream.getTracks().forEach((track) => track.stop());
@@ -479,13 +518,20 @@ const VideoConsultationPage: React.FC = () => {
     if (newMessage.trim() && session) {
       const message: ChatMessage = {
         id: Date.now().toString(),
-        sender: "김철수",
+        sender: getCurrentUserDisplayName(),
         message: newMessage.trim(),
         timestamp: new Date(),
       };
       setChatMessages((prev) => [...prev, message]);
       setNewMessage("");
     }
+  };
+
+  const getCurrentUserDisplayName = (): string => {
+    if (isLoadingUserInfo) {
+      return '로딩 중...';
+    }
+    return userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인');
   };
 
   return (
