@@ -163,6 +163,7 @@ public enum BaseResponseStatus {
 
 
 
+
   // 로그아웃
   LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
 
