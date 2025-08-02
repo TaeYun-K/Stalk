@@ -31,7 +31,9 @@ public class AuthService {
   }
 
   public LoginResponse login(LoginRequest loginRequest) {
+    // System.out.println("loginRequest.getUserId() : " + loginRequest.getUserId());
     User user = userLoginMapper.findByUserId(loginRequest.getUserId());
+    // System.out.println("user id: " + user.toString());
     if (user == null || !passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
       throw new RuntimeException("Invalid user ID or password");
     }
@@ -43,6 +45,7 @@ public class AuthService {
     // Access Token 및 Refresh Token 생성
     String accessToken = jwtUtil.createAccessToken(user.getUserId(), user.getRole());
     String refreshToken = jwtUtil.createRefreshToken(user.getUserId(), user.getRole());
+    System.out.println("refreshtoken : " + refreshToken);
 
     // Refresh Token을 Redis에 저장
     redisTemplate.opsForValue().set(

@@ -1,141 +1,146 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ===========================
+# Dependencies
+# ===========================
 /node_modules
+node_modules/
 /.pnp
 .pnp.js
+jspm_packages/
 
-# testing
-/coverage
-.nyc_output
-
-# production
-/build
-/dist
-
-# misc
-.DS_Store
+# ===========================
+# Environment Variables
+# ===========================
 .env
 .env.local
-.env.development
 .env.development.local
-.env.test
 .env.test.local
-.env.production
 .env.production.local
 
-# logs
+# Keep these for Docker environment
+# .env.development
+# .env.test  
+# .env.production
+
+# ===========================
+# Build & Production
+# ===========================
+/build
+/dist
+dist/
+.next/
+.nuxt
+.out
+.output
+.vercel
+.netlify
+
+# ===========================
+# Testing & Coverage
+# ===========================
+/coverage
+coverage/
+*.lcov
+.nyc_output
+.jest
+__tests__/coverage/
+
+# ===========================
+# Cache & Temporary Files
+# ===========================
+*.tsbuildinfo
+.cache
+.parcel-cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.rollup.cache/
+.swc/
+.turbo/
+.eslintcache
+.stylelintcache
+.npm
+.yarn-integrity
+*.tgz
+tmp/
+temp/
+
+# ===========================
+# Logs
+# ===========================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 *.log
 
-# runtime data
+# ===========================
+# Runtime Data
+# ===========================
 pids
 *.pid
 *.seed
 *.pid.lock
 
-# coverage directory used by tools like istanbul
-coverage
-*.lcov
+# ===========================
+# Package Managers
+# ===========================
+# yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
-# nyc test coverage
-.nyc_output
+# pnpm
+.pnpm-debug.log*
 
-# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
-.grunt
-
-# Bower dependency directory (https://bower.io/)
-bower_components
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons (https://nodejs.org/api/addons.html)
-build/Release
-
-# Dependency directories
-node_modules/
-jspm_packages/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
+# npm
 .npm
+package-lock.json
 
-# Optional eslint cache
-.eslintcache
 
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
 
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env
-.env.test
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
-tmp/
-temp/
-
-# Editor directories and files
-.vscode/
+# ===========================
+# IDE & Editors
+# ===========================
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
 .idea/
 *.swp
 *.swo
 *~
+.history/
 
-# OS generated files
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
+# ===========================
+# OS Generated Files
+# ===========================
 # Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
 *.lnk
 
 # macOS
+.DS_Store
 .AppleDouble
 .LSOverride
-
-# Icon must end with two \r
 Icon
-
-# Thumbnails
 ._*
-
-# Files that might appear in the root of a volume
 .DocumentRevisions-V100
 .fseventsd
 .Spotlight-V100
@@ -143,10 +148,66 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
 .AppleDB
 .AppleDesktop
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Linux
+*~
+
+# ===========================
+# React/Vite Specific
+# ===========================
+# Vite
+.vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# ===========================
+# TypeScript
+# ===========================
+*.tsbuildinfo
+
+# ===========================
+# Storybook
+# ===========================
+.storybook-out
+storybook-static/
+
+# ===========================
+# Misc Tools
+# ===========================
+.grunt
+bower_components/
+.lock-wscript
+build/Release
+.node_repl_history
+
+# ===========================
+# Security & Keys
+# ===========================
+*.pem
+*.key
+.secrets
+
+# ===========================
+# Local Database & Storage
+# ===========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ===========================
+# Debugging
+# ===========================
+.vscode/launch.json
+chrome-profiler-events*.json
+
+# ===========================
+# Project Specific
+# ===========================
+# Add any project-specific ignores here
+/uploads/
+/public/uploads/
