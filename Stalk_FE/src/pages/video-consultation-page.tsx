@@ -26,6 +26,7 @@ interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
   consultationId: string;
   sessionId: string;        // OpenVidu 세션 ID
+  userRole?: 'ADVISOR' | 'USER';  // 사용자 역할 추가
 }
 
 
@@ -65,7 +66,7 @@ const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
-  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
+  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId, userRole } = (state as LocationState) || {};
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
@@ -88,6 +89,41 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] =
     useState<boolean>(true);
+
+  // 참가자 역할 구분을 위한 함수들
+  const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
+    try {
+      if (subscriber.stream.connection.data) {
+        const data = JSON.parse(subscriber.stream.connection.data);
+        return data.role || 'USER';
+      }
+    } catch (error) {
+      console.error('Error parsing subscriber data:', error);
+    }
+    // 기본값: 구독자는 반대 역할
+    return userRole === 'ADVISOR' ? 'USER' : 'ADVISOR';
+  };
+
+  const getParticipantName = (subscriber: Subscriber): string => {
+    try {
+      if (subscriber.stream.connection.data) {
+        const data = JSON.parse(subscriber.stream.connection.data);
+        return data.userData || data.name || '참가자';
+      }
+    } catch (error) {
+      console.error('Error parsing subscriber data:', error);
+    }
+    return '참가자';
+  };
+
+  const getRoleDisplayName = (role: 'ADVISOR' | 'USER'): string => {
+    return role === 'ADVISOR' ? '전문가' : '의뢰인';
+  };
+
+  const getCurrentUserDisplayName = (): string => {
+    // 실제 구현에서는 사용자 정보를 가져와야 함
+    return userRole === 'ADVISOR' ? '김전문가' : '김의뢰인';
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -518,10 +554,7 @@ const VideoConsultationPage: React.FC = () => {
                     </div>
                     <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
                       <span className="text-sm font-medium">
-                        {subscriber.stream.connection.data ? 
-                          JSON.parse(subscriber.stream.connection.data).clientData || '참가자' : 
-                          '참가자'
-                        }
+                        {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
                       </span>
                     </div>
                     <div className="absolute bottom-4 right-4 flex space-x-2">
@@ -559,7 +592,7 @@ const VideoConsultationPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                    <span className="text-sm font-medium">참가자 대기 중</span>
+                    <span className="text-sm font-medium">{getRoleDisplayName(userRole === 'ADVISOR' ? 'USER' : 'ADVISOR')} 대기 중</span>
                   </div>
                 </div>
               )}
@@ -605,7 +638,7 @@ const VideoConsultationPage: React.FC = () => {
                   )}
                 </div>
                 <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">김철수 (나)</span>
+                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName(userRole || 'USER')})</span>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <div
@@ -726,10 +759,7 @@ const VideoConsultationPage: React.FC = () => {
                             />
                           </div>
                           <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                            {subscriber.stream.connection.data ? 
-                              JSON.parse(subscriber.stream.connection.data).clientData || '참가자' : 
-                              '참가자'
-                            }
+                            {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
                           </div>
                           <div className="absolute top-2 right-2 flex space-x-1">
                             <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
@@ -788,7 +818,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          김철수 (나)
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userRole || 'USER')})
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
@@ -846,8 +876,8 @@ const VideoConsultationPage: React.FC = () => {
                         나
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium">나</p>
-                        <p className="text-xs text-gray-400">의뢰인</p>
+                        <p className="text-sm font-medium">{getCurrentUserDisplayName()}</p>
+                        <p className="text-xs text-gray-400">{getRoleDisplayName(userRole || 'USER')}</p>
                       </div>
                       <div className="flex space-x-1">
                         <div
@@ -891,19 +921,13 @@ const VideoConsultationPage: React.FC = () => {
                       className="flex items-center space-x-3"
                     >
                       <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-sm font-bold">
-                        {subscriber.stream.connection.data ? 
-                          JSON.parse(subscriber.stream.connection.data).clientData?.[0] || '참' : 
-                          '참'
-                        }
+                        {getParticipantName(subscriber)[0] || '참'}
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">
-                          {subscriber.stream.connection.data ? 
-                            JSON.parse(subscriber.stream.connection.data).clientData || '참가자' : 
-                            '참가자'
-                          }
+                          {getParticipantName(subscriber)}
                         </p>
-                        <p className="text-xs text-gray-400">전문가</p>
+                        <p className="text-xs text-gray-400">{getRoleDisplayName(getParticipantRole(subscriber))}</p>
                       </div>
                       <div className="flex space-x-1">
                         <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
