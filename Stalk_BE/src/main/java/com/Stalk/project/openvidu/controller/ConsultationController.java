@@ -106,7 +106,7 @@ public class ConsultationController {
       log.info("✅ 세션 종료 성공: consultationId={}", consultationId);
 
       // 성공 래핑 (result는 null)
-      BaseResponse<Void> response = new BaseResponse<>(null);
+      BaseResponse<Void> response = new BaseResponse<>(BaseResponseStatus.SUCCESS);
       return ResponseEntity
           .ok(response);  // 필요하다면 .status(HttpStatus.NO_CONTENT).body(response) 로 204 사용 가능
 
