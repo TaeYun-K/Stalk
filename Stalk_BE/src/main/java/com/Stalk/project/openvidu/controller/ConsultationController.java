@@ -2,6 +2,9 @@ package com.Stalk.project.openvidu.controller;
 
 import com.Stalk.project.openvidu.dto.out.SessionTokenResponseDto;
 import com.Stalk.project.openvidu.service.ConsultationSessionService;
+import com.Stalk.project.response.BaseResponse;
+import com.Stalk.project.response.BaseResponseStatus;
+import com.fasterxml.jackson.databind.ser.Serializers.Base;
 import io.openvidu.java.client.OpenViduHttpException;
 import io.openvidu.java.client.OpenViduJavaClientException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,31 +32,63 @@ public class ConsultationController {
 
   @Operation(summary = "상담방 생성", description = "주어진 consultation로 Openvidu 세션을 생성하고 토큰을 반환합니다.")
   @PostMapping("/{consultationId}/session")
-  public ResponseEntity<SessionTokenResponseDto> createSessionToken(
+  public ResponseEntity<BaseResponse<SessionTokenResponseDto>> createSessionToken(
       @PathVariable String consultationId) {
     
     log.info("▶ 상담방 세션 토큰 생성 요청: consultationId={}", consultationId);
     try {
       SessionTokenResponseDto dto = sessionService.createSessionAndGetToken(consultationId);
       log.info("✅ 세션 토큰 생성 성공: {}", dto.getToken());
-      return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+
+      BaseResponse<SessionTokenResponseDto> response = new BaseResponse<>(dto);
+      return ResponseEntity
+          .status(HttpStatus.CREATED)
+          .body(response);
     } catch (Exception e) {
       log.error("❌ 세션 토큰 생성 실패: consultationId={}", consultationId, e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+      BaseResponse<SessionTokenResponseDto> response =
+          new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR);
+      return ResponseEntity
+          .status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(response);
     }
   }
 
-  @Operation(summary = "상담방 생성 여부 조회", description = "해당 consultationId의 방이 생성되면 token 반환, 아니면 404 반환")
+  @Operation(
+      summary = "상담방 생성 여부 조회",
+      description = "해당 consultationId의 방이 이미 생성되어 있으면 토큰을, 없으면 404 상태의 에러 응답을 반환합니다."
+  )
   @GetMapping("/{consultationId}/session")
-  public ResponseEntity<SessionTokenResponseDto > getSession(
-      @PathVariable String consultationId) {
+  public ResponseEntity<BaseResponse<SessionTokenResponseDto>> getSession(
+      @PathVariable String consultationId
+  ) {
+    log.info("▶ 상담방 세션 조회 요청: consultationId={}", consultationId);
     try {
-      SessionTokenResponseDto  info = sessionService.getSessionInfo(consultationId);
-      return ResponseEntity.ok(info);
+      // 기존 세션 정보만 조회
+      SessionTokenResponseDto info = sessionService.getSessionInfo(consultationId);
+      log.info("✅ 세션 조회 성공: {}", info.getToken());
+
+      BaseResponse<SessionTokenResponseDto> response = new BaseResponse<>(info);
+      return ResponseEntity
+          .ok(response);
+
     } catch (NoSuchElementException e) {
-      return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+      log.warn("⚠️ 세션을 찾을 수 없음: consultationId={}", consultationId);
+
+      BaseResponse<SessionTokenResponseDto> response =
+          new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION);
+      return ResponseEntity
+          .status(HttpStatus.NOT_FOUND)
+          .body(response);
+
     } catch (Exception e) {
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+      log.error("❌ 세션 조회 중 오류 발생: consultationId={}", consultationId, e);
+
+      BaseResponse<SessionTokenResponseDto> response =
+          new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR);
+      return ResponseEntity
+          .status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(response);
     }
   }
 
@@ -62,20 +97,40 @@ public class ConsultationController {
       description = "주어진 consultationId에 해당하는 OpenVidu 세션을 종료합니다."
   )
   @DeleteMapping("/{consultationId}/session")
-  public ResponseEntity<Void> closeSession(
-      @PathVariable String consultationId) {
+  public ResponseEntity<BaseResponse<Void>> closeSession(
+      @PathVariable String consultationId
+  ) {
+    log.info("▶ 상담방 세션 종료 요청: consultationId={}", consultationId);
     try {
       sessionService.closeSession(consultationId);
-      // 204 No Content
-      return ResponseEntity.noContent().build();
+      log.info("✅ 세션 종료 성공: consultationId={}", consultationId);
+
+      // 성공 래핑 (result는 null)
+      BaseResponse<Void> response = new BaseResponse<>(BaseResponseStatus.SUCCESS);
+      return ResponseEntity
+          .ok(response);  // 필요하다면 .status(HttpStatus.NO_CONTENT).body(response) 로 204 사용 가능
+
     } catch (ResponseStatusException e) {
-      // 404 등 예외 상태 그대로 전달
-      return ResponseEntity.status(e.getStatusCode()).build();
+      log.warn("⚠️ 세션 종료 중 상태 예외 발생: {}", e.getStatusCode());
+
+      // e.getStatusCode()가 404라면 NOT_FOUND_SESSION 사용
+      BaseResponse<Void> response = new BaseResponse<>(
+          e.getStatusCode() == HttpStatus.NOT_FOUND
+              ? BaseResponseStatus.NOT_FOUND_SESSION
+              : BaseResponseStatus.INTERNAL_SERVER_ERROR
+      );
+      return ResponseEntity
+          .status(e.getStatusCode())
+          .body(response);
+
     } catch (OpenViduJavaClientException | OpenViduHttpException e) {
-      // OpenVidu 서버 연결 오류
+      log.error("❌ OpenVidu 서버 에러로 세션 종료 실패:", e);
+
+      BaseResponse<Void> response =
+          new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR);
       return ResponseEntity
           .status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .build();
+          .body(response);
     }
   }
 }

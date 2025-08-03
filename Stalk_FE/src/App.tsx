@@ -72,12 +72,13 @@ const AppContent: React.FC = () => {
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/');
   const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
+  const isVideoPage = location.pathname.startsWith('/video-consultation');
   
 
 
   return (
     <div className="App min-h-screen bg-white flex flex-col">
-      {location.pathname === '/' ? <HomePageNavbar /> : showNavbar && <Navbar />}
+      {location.pathname === '/' ? <HomePageNavbar /> : (!isVideoPage && showNavbar) && <Navbar />}
       <div className="flex flex-1 overflow-hidden">
         <div className={`flex-1 ${showSidebar ? 'mr-0' : ''} flex flex-col`}>
           <main className="flex-1 overflow-auto">
