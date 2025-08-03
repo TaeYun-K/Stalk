@@ -10,6 +10,7 @@ import profilePanda from '@/assets/images/profiles/Profile_panda.svg';
 import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
 import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
 import ConsultationService from '@/services/consultationService';
+import AuthService from '@/services/authService';
 
 interface ConsultationItem {
   id: string;
@@ -21,6 +22,15 @@ interface ConsultationItem {
   action: string;
 }
 
+// 백엔드 API 응답 타입 정의
+interface UserProfileResponse {
+  userId: string;
+  name: string;
+  contact: string;
+  email: string;
+  profileImage: string;
+  role: 'USER' | 'ADVISOR' | 'ADMIN';
+}
 
 const MyPage = () => {
   const [searchParams] = useSearchParams();
@@ -36,6 +46,64 @@ const MyPage = () => {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  // API 관련 상태
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfileResponse | null>(null);
+
+  // 사용자 정보 로드
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const userProfileData = await AuthService.getUserProfile();
+        
+        // 백엔드 응답 구조에 맞게 데이터 설정 (타입 캐스팅)
+        setUserProfile(userProfileData as UserProfileResponse);
+        
+        // API 응답을 editInfoForm에 설정
+        setEditInfoForm({
+          name: userProfileData?.name || '',
+          contact: userProfileData?.contact || '',
+          email: userProfileData?.email || ''
+        });
+        
+        // 프로필 폼도 업데이트
+        setProfileForm(prev => ({
+          ...prev,
+          nickname: userProfileData?.name || '',
+          selectedAvatar: userProfileData?.profileImage || 'fox' // 백엔드에서 받은 프로필 이미지
+        }));
+        
+      } catch (err) {
+        console.error('사용자 정보 로드 실패:', err);
+        const errorMessage = err instanceof Error ? err.message : '사용자 정보를 불러올 수 없습니다.';
+        setError(errorMessage);
+        
+        // 네트워크 에러인 경우 기본값 설정
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network Error')) {
+          setEditInfoForm({
+            name: userInfo?.userName || '',
+            contact: '010-0000-0000',
+            email: 'ssafy@samsung.com'
+          });
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // 로그인 상태 확인 후 API 호출
+    if (userInfo) {
+      loadUserInfo();
+    } else {
+      setIsLoading(false);
+      setError('로그인이 필요합니다.');
+    }
+  }, [userInfo]);
   
   // 스케줄 관리 상태들
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -45,8 +113,8 @@ const MyPage = () => {
   // 상담일지 관련 상태
   const [selectedConsultation, setSelectedConsultation] = useState<ConsultationItem | null>(null);
   
-  // 사용자 역할에 따른 전문가 여부 확인
-  const isExpert = userInfo?.role === 'ADVISOR';
+  // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
+  const isExpert = userProfile?.role === 'ADVISOR';
   
   // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -63,9 +131,9 @@ const MyPage = () => {
   });
   
   const [editInfoForm, setEditInfoForm] = useState({
-    name: userInfo?.userName || '',
-    contact: '010-0000-0000', // 기본값 설정
-    email: 'ssafy@samsung.com' // 기본값 설정
+    name: '',
+    contact: '',
+    email: ''
   });
   
   const [profileForm, setProfileForm] = useState({
@@ -180,6 +248,15 @@ const MyPage = () => {
   const getSelectedProfileImage = () => {
     const selectedAvatar = avatarOptions.find(avatar => avatar.id === profileForm.selectedAvatar);
     return selectedAvatar ? selectedAvatar.image : profileDefault;
+  };
+
+  // 백엔드에서 받은 프로필 이미지 표시
+  const getProfileImage = () => {
+    if (userProfile?.profileImage) {
+      const avatar = avatarOptions.find(avatar => avatar.id === userProfile.profileImage);
+      return avatar ? avatar.image : profileDefault;
+    }
+    return getSelectedProfileImage();
   };
 
   // 스케줄 관리 관련 함수들
@@ -385,51 +462,86 @@ const MyPage = () => {
                       <button 
                         onClick={() => setShowPasswordModal(true)}
                         className="text-blue-600 hover:text-blue-700 font-medium"
+                        disabled={isLoading}
                       >
                         비밀번호 변경
                       </button>
                       <button 
-                        onClick={() => setShowEditInfoModal(true)}
+                        onClick={() => {
+                          // 현재 로드된 사용자 정보로 모달 폼 초기화
+                          setEditInfoForm({
+                            name: editInfoForm.name,
+                            contact: editInfoForm.contact,
+                            email: editInfoForm.email
+                          });
+                          setShowEditInfoModal(true);
+                        }}
                         className="text-blue-600 hover:text-blue-700 font-medium"
+                        disabled={isLoading}
                       >
                         정보 수정
                       </button>
                     </div>
                   </div>
                   
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">아이디</span>
-                      <span className="text-gray-900 font-medium">{userInfo?.userId || 'N/A'}</span>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600">사용자 정보를 불러오는 중...</span>
                     </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">이름</span>
-                      <span className="text-gray-900 font-medium">{userInfo?.userName || 'N/A'}</span>
+                  ) : error ? (
+                    <div className="text-center py-8">
+                      <div className="text-red-600 mb-2">⚠️ {error}</div>
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="text-blue-600 hover:text-blue-700 text-sm"
+                      >
+                        다시 시도
+                      </button>
                     </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">휴대폰 번호</span>
-                      <span className="text-gray-900 font-medium">{editInfoForm.contact}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">이메일 주소</span>
-                      <span className="text-gray-900 font-medium">{editInfoForm.email}</span>
-                    </div>
-                    {isExpert && (
-                      <div className="flex justify-between items-center py-3">
-                        <span className="text-gray-600">전문 자격 증명</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-gray-900 font-medium">투자자산운용사</span>
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-blue-600 text-sm font-medium">승인</span>
-                          <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">아이디</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.userId || userInfo?.userId || 'N/A'}</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">이름</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.name || editInfoForm.name || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">휴대폰 번호</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.contact || editInfoForm.contact || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">이메일 주소</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.email || editInfoForm.email || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">역할</span>
+                        <span className="text-gray-900 font-medium">
+                          {userProfile?.role === 'USER' ? '일반 사용자' : 
+                           userProfile?.role === 'ADVISOR' ? '전문가' : 
+                           userProfile?.role === 'ADMIN' ? '관리자' : 'N/A'}
+                        </span>
+                      </div>
+                      {isExpert && (
+                        <div className="flex justify-between items-center py-3">
+                          <span className="text-gray-600">전문 자격 증명</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-900 font-medium">투자자산운용사</span>
+                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-blue-600 text-sm font-medium">승인</span>
+                            <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 커뮤니티 프로필 Section */}
@@ -447,7 +559,7 @@ const MyPage = () => {
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 rounded-full flex items-center justify-center">
                       <img 
-                        src={getSelectedProfileImage()} 
+                        src={getProfileImage()} 
                         alt="profile" 
                         className="w-10 h-10 rounded-full"
                       />
@@ -540,7 +652,7 @@ const MyPage = () => {
                           {consultationTab === '상담 완료' && (
                             <td className="px-4 py-3">
                               <button 
-                                onClick={() => handleEnterConsultation(item)}
+                                onClick={() => handleConsultationDiaryClick(item)}
                                 className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
                               >
                                 상담일지
