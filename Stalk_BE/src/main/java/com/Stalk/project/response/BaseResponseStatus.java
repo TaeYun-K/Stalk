@@ -162,6 +162,14 @@ public enum BaseResponseStatus {
   NOT_FOUND_SESSION(HttpStatus.NOT_FOUND,false ,1506,"상담 세션을 찾을 수 없습니다."),
 
 
+  /**
+   * 1600: Admin 관련 에러
+   */
+  ADMIN_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1601, "관리자 권한이 필요합니다."),
+  APPROVAL_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1602, "인증 요청을 찾을 수 없습니다."),
+  ALREADY_PROCESSED_REQUEST(HttpStatus.BAD_REQUEST, false, 1603, "이미 처리된 요청입니다."),
+  APPROVAL_PROCESSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1604, "승인 처리에 실패했습니다."),
+  REJECTION_PROCESSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1605, "거절 처리에 실패했습니다."),
 
 
   // 로그아웃
