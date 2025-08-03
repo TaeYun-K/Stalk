@@ -1,12 +1,15 @@
 package com.Stalk.project.config;
 
+import com.Stalk.project.login.service.MyUserDetailsService;
 import com.Stalk.project.login.util.JwtAuthenticationFilter;
-import com.Stalk.project.login.util.JwtUtil;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -23,14 +26,47 @@ import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
-  private final JwtUtil jwtUtil;
+  private final MyUserDetailsService userDetailsService;
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final JwtAuthenticationEntryPoint jwtEntryPoint;       // 추가
+  private final JwtAccessDeniedHandler jwtAccessDeniedHandler;   // 추가
 
-  public SecurityConfig(JwtUtil jwtUtil, JwtAuthenticationFilter jwtAuthenticationFilter) {
-    this.jwtUtil = jwtUtil;
-    this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+  /**
+   * DAO 기반 인증 Provider
+   * - UserDetailsService + PasswordEncoder
+   */
+  @Bean
+  public DaoAuthenticationProvider authenticationProvider() {
+    DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+    provider.setUserDetailsService(userDetailsService);
+    provider.setPasswordEncoder(passwordEncoder());
+    return provider;
+  }
+
+  /**
+   * AuthenticationManager 빈 추가 (로그인 인증 처리용)
+   * 사용자 자격 증명(아이디·비밀번호 등)을 실제로 검증하는 핵심 인터페이스
+   * spring boot가 자동으로 설정해 놓은 AuthenticationProvider들을 모아서 AuthenticationManager 인스턴스를 반환
+   * AuthenticationManager의 역할
+   * 내부적으로 DaoAuthenticationProvider → UserDetailsService + PasswordEncoder 조합으로 구성
+   * authenticate(new UsernamePasswordAuthenticationToken(id, pwd)) 호출 시, AuthService가 DB에서 사용자(UserDetails)를 로드
+   * PasswordEncoder.matches(rawPassword, encodedPasswordFromUserDetails) 로 비밀번호 검증
+   * 성공하면 Authentication 객체를 반환, 실패하면 BadCredentialsException 발생
+   */
+  @Bean
+  public AuthenticationManager authenticationManager(
+      AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    return authenticationConfiguration.getAuthenticationManager();
+  }
+
+
+  @Bean
+  public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
   }
 
   @Bean
@@ -58,7 +94,14 @@ public class SecurityConfig {
          */
         .sessionManagement(session -> session
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        // 인증 Provider 등록
+        .authenticationProvider(authenticationProvider())
         // 엔드포인트 권한 설정
+        // 예외 핸들러 등록
+        .exceptionHandling(e -> e
+            .authenticationEntryPoint(jwtEntryPoint)
+            .accessDeniedHandler(jwtAccessDeniedHandler)
+        )
         .authorizeHttpRequests(authz -> authz
             // Swagger UI 와 API docs 허용
             .requestMatchers(
@@ -91,19 +134,4 @@ public class SecurityConfig {
     return source;
   }
 
-  @Bean
-  public PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder();
-  }
-
-  /*
-   * AuthenticationManager 빈 추가 (로그인 인증 처리용)
-   * 사용자 자격 증명(아이디·비밀번호 등)을 실제로 검증하는 핵심 인터페이스
-   * spring boot가 자동으로 설정해 놓은 AuthenticationProvider들을 모아서 AuthenticationManager 인스턴스를 반환
-   */
-  @Bean
-  public AuthenticationManager authenticationManager(
-      AuthenticationConfiguration authenticationConfiguration) throws Exception {
-    return authenticationConfiguration.getAuthenticationManager();
-  }
 }
