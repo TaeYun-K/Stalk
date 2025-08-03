@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
-//@RestControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
   /**
