@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -39,4 +40,20 @@ public class AdvisorResponseDto {
 
     @Schema(description = "생성일시")
     private LocalDateTime createdAt;
+
+    @Schema(description = "자격증 목록")
+    private List<CertificateDto> certificates;
+
+    @Data
+    @NoArgsConstructor
+    public static class CertificateDto {
+        @Schema(description = "전문가 ID (내부용)", hidden = true)
+        private Long advisorId; // 쿼리 결과 매핑용 (JSON 응답에서는 제외)
+
+        @Schema(description = "자격증명", example = "투자상담사")
+        private String certificateName;
+
+        @Schema(description = "발급기관", example = "한국금융투자협회")
+        private String issuedBy;
+    }
 }

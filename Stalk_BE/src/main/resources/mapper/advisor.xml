@@ -211,6 +211,43 @@
     ORDER BY issued_at DESC
   </select>
 
+  <!-- CertificateDto를 위한 ResultMap 정의 -->
+  <resultMap id="CertificateResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorResponseDto$CertificateDto">
+    <result property="certificateName" column="certificate_name" jdbcType="VARCHAR"/>
+    <result property="issuedBy" column="issued_by" jdbcType="VARCHAR"/>
+  </resultMap>
+
+  <!-- 단일 전문가의 자격증 정보 조회 (목록 조회용) -->
+  <select id="findCertificatesByAdvisorId" resultMap="CertificateResultMap">
+    SELECT
+      certificate_name,
+      issued_by
+    FROM advisor_certificates
+    WHERE advisor_id = #{advisorId}
+    ORDER BY issued_at DESC
+  </select>
+
+  <!-- 자격증 정보 + advisor_id를 위한 ResultMap 정의 -->
+  <resultMap id="CertificateWithAdvisorIdResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorResponseDto$CertificateDto">
+    <result property="advisorId" column="advisor_id" jdbcType="BIGINT"/>
+    <result property="certificateName" column="certificate_name" jdbcType="VARCHAR"/>
+    <result property="issuedBy" column="issued_by" jdbcType="VARCHAR"/>
+  </resultMap>
+
+  <!-- 여러 전문가의 자격증 정보 조회 (목록 조회용) - advisor_id 포함 -->
+  <select id="findCertificatesByAdvisorIds" resultMap="CertificateWithAdvisorIdResultMap">
+    SELECT
+    advisor_id,
+    certificate_name,
+    issued_by
+    FROM advisor_certificates
+    WHERE advisor_id IN
+    <foreach collection="advisorIds" item="advisorId" open="(" separator="," close=")">
+      #{advisorId}
+    </foreach>
+    ORDER BY advisor_id, issued_at DESC
+  </select>
+
   <!-- 어드바이저 리뷰 조회 (커뮤니티 프로필 이미지 포함) - ResultMap 사용 -->
   <select id="findAdvisorReviewsWithProfile" resultMap="ReviewResultMap">
     SELECT

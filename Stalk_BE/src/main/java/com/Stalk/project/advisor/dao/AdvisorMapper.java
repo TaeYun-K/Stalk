@@ -94,4 +94,14 @@ public interface AdvisorMapper {
    * 전문가 리뷰 정보 조회 (프로필 포함)
    */
   List<AdvisorDetailResponseDto.ReviewDto> findAdvisorReviewsWithProfile(@Param("advisorId") Long advisorId);
+
+  /**
+   * 여러 전문가의 자격증 정보 조회 (목록 조회용)
+   */
+  List<AdvisorResponseDto.CertificateDto> findCertificatesByAdvisorIds(@Param("advisorIds") List<Long> advisorIds);
+
+  /**
+   * 단일 전문가의 자격증 정보 조회 (목록 조회용)
+   */
+  List<AdvisorResponseDto.CertificateDto> findCertificatesByAdvisorId(@Param("advisorId") Long advisorId);
 }
