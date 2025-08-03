@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
 
 @Component
 // OncePerRequestFilter 상속으로 매 요청마다 한 번 실행
@@ -62,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // 유효하면 사용자 ID·역할 가져와 UsernamePasswordAuthenticationToken 생성
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
-                        userDetails,
+                        userDetails.getUsername(),
                         null,
                         userDetails.getAuthorities()
                     );
@@ -70,7 +69,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }catch (JwtException | IllegalArgumentException ex) {
                 // 1) 로그 기록
-                logger.error("Invalid JWT: {}", ex);
+                logger.error("Invalid JWT token", ex);
                 // 2) 컨텍스트 클리어
                 SecurityContextHolder.clearContext();
                 // 3) 401 응답
