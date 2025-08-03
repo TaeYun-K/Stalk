@@ -26,25 +26,25 @@ public class AuthController {
 
   @PostMapping("/refresh")
   public ResponseEntity<String> refresh(@RequestBody(required = false) RefreshRequest body) {
-    // 1) body에 토큰이 반드시 있어야 한다
+    // body에 토큰이 반드시 있어야 함
     if (body == null || body.getRefreshToken() == null || body.getRefreshToken().isBlank()) {
       throw new BadCredentialsException("Refresh token is required in request body");
     }
 
-    // 2) 서비스 호출
+    // 서비스 호출
     String newAccessToken = authService.refreshAccessToken(body.getRefreshToken());
     return ResponseEntity.ok(newAccessToken);
   }
 
   @PostMapping("/logout")
   public ResponseEntity<Void> logout(@RequestBody RefreshRequest body) {
-    // 1) 요청 바디에 토큰이 반드시 있어야 함
+    // 요청 바디에 토큰이 반드시 있어야 함
     if (body == null || body.getRefreshToken() == null || body.getRefreshToken().isBlank()) {
       throw new BadCredentialsException("Refresh token is required in request body");
     }
-    // 2) 서비스에 무효화 요청
+    // 서비스에 무효화 요청
     authService.logout(body.getRefreshToken());
-    // 3) 200 OK, 빈 바디
+    // 200 OK, 빈 바디
     return ResponseEntity.ok().build();
   }
 }

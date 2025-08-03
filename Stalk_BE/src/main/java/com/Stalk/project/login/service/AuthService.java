@@ -31,13 +31,13 @@ public class AuthService {
   }
 
   public LoginResponse login(LoginRequest loginRequest) {
-    // System.out.println("loginRequest.getUserId() : " + loginRequest.getUserId());
+
     User user = userLoginMapper.findByUserId(loginRequest.getUserId());
-    // System.out.println("user id: " + user.toString());
+    // 사용자 존재 및 비밀번호 일치 확인
     if (user == null || !passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
       throw new RuntimeException("Invalid user ID or password");
     }
-
+    // 계정 활성화 여부
     if (!user.getIsActive()) {
       throw new RuntimeException("Account is not active");
     }
@@ -69,15 +69,15 @@ public class AuthService {
    * 로그아웃: 클라이언트가 보낸 refresh token을 무효화(서버에 저장된 키 삭제)
    */
   public void logout(String refreshToken) {
-    // 1 토큰 유효성 검사
+    // 토큰 유효성 검사
     if (!jwtUtil.validateToken(refreshToken)) {
       throw new BadCredentialsException("Invalid or expired refresh token");
     }
 
-    // 2 토큰에서 userId 추출
+    // 토큰에서 userId 추출
     String userId = jwtUtil.getUserIdFromToken(refreshToken);
 
-    // 3 Redis에 저장된 키 삭제
+    // Redis에 저장된 키 삭제
     String key = "refresh_token:" + userId;
     Boolean deleted = redisTemplate.delete(key);
     System.out.println(deleted);
@@ -87,17 +87,20 @@ public class AuthService {
    * 클라이언트가 보낸 refreshToken을 검증하고, Redis에 저장된 토큰과 일치하면 새로운 accessToken을 생성해 반환.
    */
   public String refreshAccessToken(String refreshToken) {
+    // 토큰 구조 및 서명 확인
     if (!jwtUtil.validateToken(refreshToken)) {
       throw new BadCredentialsException("Invalid refresh token");
     }
 
+    // Redis에 저장된 토큰과 일치하는지 확인
     String userId = jwtUtil.getUserIdFromToken(refreshToken);
     String storedRefreshToken = redisTemplate.opsForValue().get("refresh_token:" + userId);
 
-    if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
-      throw new RuntimeException("Refresh token not found or mismatched");
+    if (!storedRefreshToken.equals(refreshToken)) {
+      throw new RuntimeException("Refresh token mismatched");
     }
-    System.out.println(userId);
+
+    // 사용자 활성화 여부 재확인
     User user = userLoginMapper.findByUserId(userId);
     if (user == null || !user.getIsActive()) {
       throw new RuntimeException("User not found or inactive");
