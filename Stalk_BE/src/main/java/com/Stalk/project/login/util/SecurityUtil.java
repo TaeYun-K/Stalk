@@ -54,10 +54,26 @@ public class SecurityUtil {
     
     /**
      * 현재 사용자가 ADVISOR 역할인지 확인
-     * @return true if ADVISOR, false if USER
+     * @return true if ADVISOR, false if NOT
      */
     public static boolean isCurrentUserAdvisor() {
         return "ADVISOR".equals(getCurrentUserRole());
+    }
+
+    /**
+     * 현재 사용자가 일반 사용자인지 확인
+     * @return true if USER, false if NOT
+     */
+    public static boolean isCurrentUserRegularUser() {
+        return "USER".equals(getCurrentUserRole());
+    }
+
+    /**
+     * 현재 사용자가 관리자인지 확인
+     * @return true if ADMIN, false if NOT
+     */
+    public static boolean isCurrentUserAdmin() {
+        return "ADMIN".equals(getCurrentUserRole());
     }
     
     /**
@@ -72,13 +88,5 @@ public class SecurityUtil {
             throw new RuntimeException("사용자를 찾을 수 없습니다: " + userId);
         }
         return user.getId(); // users.id (PK) 반환
-    }
-    
-    /**
-     * 현재 사용자가 일반 사용자인지 확인
-     * @return true if USER, false if ADVISOR
-     */
-    public static boolean isCurrentUserRegularUser() {
-        return "USER".equals(getCurrentUserRole());
     }
 }

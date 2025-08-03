@@ -156,6 +156,21 @@ public enum BaseResponseStatus {
   USER_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1504, "사용자 정보 수정에 실패했습니다."),
   INVALID_PHONE_FORMAT(HttpStatus.BAD_REQUEST, false, 1505, "전화번호는 010으로 시작하는 11자리 숫자여야 합니다."),
 
+  /**
+   * Openvidu Session 관련 에러
+   */
+  NOT_FOUND_SESSION(HttpStatus.NOT_FOUND,false ,1506,"상담 세션을 찾을 수 없습니다."),
+
+
+  /**
+   * 1600: Admin 관련 에러
+   */
+  ADMIN_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1601, "관리자 권한이 필요합니다."),
+  APPROVAL_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1602, "인증 요청을 찾을 수 없습니다."),
+  ALREADY_PROCESSED_REQUEST(HttpStatus.BAD_REQUEST, false, 1603, "이미 처리된 요청입니다."),
+  APPROVAL_PROCESSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1604, "승인 처리에 실패했습니다."),
+  REJECTION_PROCESSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1605, "거절 처리에 실패했습니다."),
+
 
   // 로그아웃
   LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
@@ -164,5 +179,6 @@ public enum BaseResponseStatus {
   private final boolean isSuccess;
   private final int code;
   private final String message;
+
 
 }
