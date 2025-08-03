@@ -16,11 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,7 +27,7 @@ public class AdvisorService {
   private final AdvisorMapper advisorMapper;
 
   /**
-   * 어드바이저 목록 조회
+   * 어드바이저 목록 조회 (자격증 정보 포함 - 최적화됨)
    */
   public CursorPage<AdvisorResponseDto> getAdvisorList(AdvisorListRequestDto requestDto) {
     // cursor가 null인 경우 첫 페이지 조회
@@ -51,13 +47,36 @@ public class AdvisorService {
       nextCursor = lastAdvisor.getId();
     }
 
+    // 전문가 ID 목록 추출
+    List<Long> advisorIds = advisors.stream()
+                    .map(AdvisorResponseDto::getId)
+                    .collect(Collectors.toList());
+
+    // 모든 전문가의 자격증을 한 번에 조회 (1번의 쿼리로 최적화)
+    List<AdvisorResponseDto.CertificateDto> allCertificates =
+                    advisorMapper.findCertificatesByAdvisorIds(advisorIds);
+
+    // 전문가별로 자격증 그룹핑
+    Map<Long, List<AdvisorResponseDto.CertificateDto>> certificateMap = allCertificates.stream()
+                    .collect(Collectors.groupingBy(AdvisorResponseDto.CertificateDto::getAdvisorId));
+
+    // 각 전문가에 자격증 설정
+    advisors.forEach(advisor -> {
+      List<AdvisorResponseDto.CertificateDto> certificates =
+                      certificateMap.getOrDefault(advisor.getId(), Collections.emptyList());
+      advisor.setCertificates(certificates);
+    });
+
+    log.info("어드바이저 목록 조회 완료: count={}, hasNext={}, totalCertificates={}",
+                    advisors.size(), hasNext, allCertificates.size());
+
     return CursorPage.<AdvisorResponseDto>builder()
-        .content(advisors)
-        .nextCursor(nextCursor)
-        .hasNext(hasNext)
-        .pageSize(requestDto.getPageSize())
-        .pageNo(requestDto.getPageNo())
-        .build();
+                    .content(advisors)
+                    .nextCursor(nextCursor)
+                    .hasNext(hasNext)
+                    .pageSize(requestDto.getPageSize())
+                    .pageNo(requestDto.getPageNo())
+                    .build();
   }
 
   /**
