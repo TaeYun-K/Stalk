@@ -53,10 +53,26 @@ const ExpertsPage = () => {
     const fetchExperts = async () => {
       try {
         setLoading(true);
+        
+        // 토큰 확인
+        const token = AuthService.getAccessToken();
+        if (!token) {
+          throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.');
+        }
+        
         const response = await AuthService.authenticatedRequest('/api/advisors');
+        
+        if (response.status === 401) {
+          // 401 에러 시 토큰 제거하고 로그인 페이지로 리다이렉트
+          AuthService.removeAccessToken();
+          navigate('/login');
+          return;
+        }
+        
         if (!response.ok) {
           throw new Error('Failed to fetch experts');
         }
+        
         const data: ApiResponse = await response.json();
         if (data.isSuccess) {
           setExperts(data.result.content);
@@ -72,7 +88,7 @@ const ExpertsPage = () => {
     };
 
     fetchExperts();
-  }, []);
+  }, [navigate]);
 
   const filteredExperts = experts.filter(expert => {
     const matchesCategory = selectedCategory === 'all' || expert.preferredStyle.toLowerCase() === selectedCategory;

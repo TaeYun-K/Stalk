@@ -3,6 +3,7 @@ import Navbar from '@/components/navbar';
 import Sidebar from '@/components/sidebar';
 import Footer from '@/components/footer';
 import ExpertProfileImage from '@/assets/expert_profile_image.png';
+import certificationExample from '@/assets/images/dummy/certification_example.svg';
 
 interface CareerEntry {
   id: string;
@@ -76,12 +77,19 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       setQualificationItemStates(prev => ({ ...prev, ...initialStates }));
     }
   }, [qualificationEntries]);
+  
+  // 새로운 자격사항 입력을 위한 상태 (인증번호 입력용)
   const [newQualificationEntry, setNewQualificationEntry] = useState<Omit<QualificationEntry, 'id'>>({
     name: '',
     issuer: '',
     acquisitionDate: '',
     serialNumber: ''
   });
+  
+  // 새로운 자격사항의 인증번호 입력을 위한 개별 상태
+  const [newCertificationNumber1, setNewCertificationNumber1] = useState<string>('');
+  const [newCertificationNumber2, setNewCertificationNumber2] = useState<string>('');
+  const [newCertificationNumber3, setNewCertificationNumber3] = useState<string>('');
 
   // 캘린더 상태
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -269,10 +277,16 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
 
   // 자격사항 추가/삭제
   const addQualificationEntry = () => {
-    if (newQualificationEntry.name && newQualificationEntry.issuer && newQualificationEntry.acquisitionDate && newQualificationEntry.serialNumber) {
+    // 인증번호 입력의 세 부분을 결합
+    const combinedIssuer = `${newCertificationNumber1}-${newCertificationNumber2}-${newCertificationNumber3}`;
+    
+    if (newQualificationEntry.name && newCertificationNumber1 && newCertificationNumber2 && newCertificationNumber3) {
       const newEntry: QualificationEntry = {
         id: Date.now().toString(),
-        ...newQualificationEntry
+        name: newQualificationEntry.name,
+        issuer: combinedIssuer,
+        acquisitionDate: '',
+        serialNumber: ''
       };
       setQualificationEntries([...qualificationEntries, newEntry]);
       setQualificationItemStates(prev => ({
@@ -280,6 +294,9 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         [newEntry.id]: 'saved'
       }));
       setNewQualificationEntry({ name: '', issuer: '', acquisitionDate: '', serialNumber: '' });
+      setNewCertificationNumber1('');
+      setNewCertificationNumber2('');
+      setNewCertificationNumber3('');
     }
   };
 
@@ -290,6 +307,9 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   // 새로운 자격사항 입력 초기화
   const clearNewQualificationEntry = () => {
     setNewQualificationEntry({ name: '', issuer: '', acquisitionDate: '', serialNumber: '' });
+    setNewCertificationNumber1('');
+    setNewCertificationNumber2('');
+    setNewCertificationNumber3('');
   };
 
   // 자격사항 편집 함수들
@@ -660,17 +680,24 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
               {/* 자격사항 섹션 */}
               <div className="space-y-4">
                 <h3 className="text-left text-xl font-semibold text-black">자격(면허)사항</h3>
-                
+                <div className="mb-6">
+                  <img src={certificationExample} alt="자격사항 예시" className="w-full max-w-2xl mx-auto" />
+                </div>
+                <div className="w-full pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
+                  <ul className="text-left text-sm text-gray-700 space-y-3 py-2">
+                    <li>• 위 합격증 원본대조 번호 입력 방식을 보고 아래 창에 입력해주세요.</li>
+                    <li>• 입력 시 하이픈('-') 없이 숫자만 입력하시기 바랍니다.</li>
+                  </ul>
+                </div>
+
                 {/* 자격사항 테이블 */}
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-blue-600 text-white">
-                        <th className="p-2 text-center font-medium text-sm">자격(증명)명</th>
-                        <th className="p-2 text-center font-medium text-sm">발급처</th>
-                        <th className="p-2 text-center font-medium text-sm">취득일자</th>
-                        <th className="p-2 text-center font-medium text-sm">일련번호</th>
-                        <th className="p-2 text-center font-medium text-sm bg-white">관리</th>
+                        <th className="p-2 text-center font-medium text-sm">자격(면허)명</th>
+                        <th className="p-2 text-center font-medium text-sm">인증번호 입력</th>
+                        <th className="p-2 text-center font-medium text-sm"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -683,12 +710,12 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                           <tr key={entry.id}>
                             {isEditing && editingQualificationData ? (
                               <>
-                                                                 <td className="p-2">
+                                  <td className="p-2 align-top">
                                    <select
                                      value={editingQualificationData.name}
                                      onChange={(e) => setEditingQualificationData({...editingQualificationData, name: e.target.value})}
                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                                   >
+                                     >
                                      {qualificationOptions.map((option, index) => (
                                        <option key={index} value={option === '전문 자격을 선택하세요' ? '' : option}>
                                          {option}
@@ -696,48 +723,36 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                                      ))}
                                    </select>
                                  </td>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={editingQualificationData.issuer}
-                                    onChange={(e) => setEditingQualificationData({...editingQualificationData, issuer: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  />
+                                 <td className="pl-2 py-2 flex gap-1 justify-between">
+                                  <div>
+                                    <input
+                                      type="text"
+                                      value={newQualificationEntry.certificate_file_sn}
+                                      onChange={(e) => setNewQualificationEntry({...newQualificationEntry, issuer: e.target.value})}
+                                      placeholder="합격증 번호 중앙 8자리"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <input
+                                      type="text"
+                                      value={newQualificationEntry.birth}
+                                      onChange={(e) => setNewQualificationEntry({...newQualificationEntry, issuer: e.target.value})}
+                                      placeholder="생년월일 8자리"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                                    />
+                                    </div>
+                                  <div>
+                                    <input
+                                      type="text"
+                                      value={newQualificationEntry.certificate_file_number}
+                                      onChange={(e) => setNewQualificationEntry({...newQualificationEntry, issuer: e.target.value})}
+                                      placeholder="발급번호 마지막 6자리"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                                    />
+                                  </div>
                                 </td>
-                                                                 <td className="p-2 relative">
-                                   <div className="flex">
-                                     <input
-                                       type="text"
-                                       value={editingQualificationData.acquisitionDate}
-                                       onChange={(e) => handleDateChange(e.target.value, (value) => setEditingQualificationData({...editingQualificationData, acquisitionDate: value}))}
-                                       placeholder="0000.00.00"
-                                       maxLength={10}
-                                       className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
-                                         editingQualificationData.acquisitionDate && !isValidDate(editingQualificationData.acquisitionDate) ? 'border-red-500' : 'border-gray-300'
-                                       }`}
-                                     />
-                                     <button
-                                       type="button"
-                                       onClick={() => {
-                                         setShowDatePicker(showDatePicker === 'edit-acquisition' ? null : 'edit-acquisition');
-                                         setCurrentDatePicker(new Date());
-                                       }}
-                                       className="px-3 py-2 bg-gray-50 hover:bg-gray-100 text-sm"
-                                     >
-                                       📅
-                                     </button>
-                                   </div>
-                                   {showDatePicker === 'edit-acquisition' && renderDatePicker(editingQualificationData.acquisitionDate, (value) => setEditingQualificationData({...editingQualificationData, acquisitionDate: value}))}
-                                 </td>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={editingQualificationData.serialNumber}
-                                    onChange={(e) => setEditingQualificationData({...editingQualificationData, serialNumber: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  />
-                                </td>
-                                <td className="p-2">
+                                <td className="pl-2">
                                   <div className="flex space-x-1">
                                     <button
                                       onClick={saveQualificationEdit}
@@ -756,11 +771,11 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                               </>
                             ) : (
                               <>
-                                <td className="p-3 text-sm">{entry.name}</td>
-                                <td className="p-3 text-sm">{entry.issuer}</td>
-                                <td className="p-3 text-sm">{entry.acquisitionDate}</td>
-                                <td className="p-3 text-sm">{entry.serialNumber}</td>
-                                <td className="p-2">
+                                <td className="p-3 text-sm">{entry.certificate_name}</td>
+                                <td className="p-3 text-sm">{entry.certificate_file_sn}</td>
+                                <td className="p-3 text-sm">{entry.birth}</td>
+                                <td className="p-3 text-sm">{entry.cetificate_file_number}</td>
+                                <td className="p-3">
                                   {itemState === 'saved' && (
                                     <div className="flex space-x-1">
                                       <button
@@ -784,9 +799,9 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                         );
                       })}
 
-                                             {/* 새로운 자격사항 입력 행 */}
+                      {/* 새로운 자격사항 입력 행 */}
                        <tr>
-                         <td className="p-2">
+                         <td className="p-2 align-top">
                            <select
                              value={newQualificationEntry.name}
                              onChange={(e) => setNewQualificationEntry({...newQualificationEntry, name: e.target.value})}
@@ -799,50 +814,39 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                              ))}
                            </select>
                          </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={newQualificationEntry.issuer}
-                            onChange={(e) => setNewQualificationEntry({...newQualificationEntry, issuer: e.target.value})}
-                            placeholder="발급처"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
+                        <td className="pl-2 py-2 flex gap-1 justify-between">
+                          <div>
+                            <input
+                              type="text"
+                              value={newCertificationNumber1}
+                              onChange={(e) => setNewCertificationNumber1(e.target.value)}
+                              placeholder="합격증 번호 중앙 8자리"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                            />
+                            <h4 className="pt-2 text-center text-xs text-gray-500">중앙에 위치한 합격증 번호 (8자리)</h4>
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              value={newCertificationNumber2}
+                              onChange={(e) => setNewCertificationNumber2(e.target.value)}
+                              placeholder="생년월일 8자리"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                            />
+                            <h4 className="pt-2 text-center text-xs text-gray-500">생년월일(YYYYMMDD)</h4>
+                            </div>
+                          <div>
+                            <input
+                              type="text"
+                              value={newCertificationNumber3}
+                              onChange={(e) => setNewCertificationNumber3(e.target.value)}
+                              placeholder="발급번호 마지막 6자리"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                            />
+                            <h4 className="pt-2 text-center text-xs text-gray-500">발급번호 마지막 6자리</h4>
+                          </div>
                         </td>
-                                                 <td className="p-2 relative">
-                           <div className="flex">
-                             <input
-                               type="text"
-                               value={newQualificationEntry.acquisitionDate}
-                               onChange={(e) => handleDateChange(e.target.value, (value) => setNewQualificationEntry({...newQualificationEntry, acquisitionDate: value}))}
-                               placeholder="0000.00.00"
-                               maxLength={10}
-                               className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
-                                 newQualificationEntry.acquisitionDate && !isValidDate(newQualificationEntry.acquisitionDate) ? 'border-red-500' : 'border-gray-300'
-                               }`}
-                             />
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 setShowDatePicker(showDatePicker === 'new-acquisition' ? null : 'new-acquisition');
-                                 setCurrentDatePicker(new Date());
-                               }}
-                               className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-sm"
-                             >
-                               📅
-                             </button>
-                           </div>
-                           {showDatePicker === 'new-acquisition' && renderDatePicker(newQualificationEntry.acquisitionDate, (value) => setNewQualificationEntry({...newQualificationEntry, acquisitionDate: value}))}
-                         </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={newQualificationEntry.serialNumber}
-                            onChange={(e) => setNewQualificationEntry({...newQualificationEntry, serialNumber: e.target.value})}
-                            placeholder="일련번호"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
-                        </td>
-                        <td className="p-2">
+                        <td className="p-2 align-top">
                           <div className="flex space-x-1">
                             <button
                               onClick={addQualificationEntry}
@@ -864,6 +868,12 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
               <div className="space-y-4">
                 <h3 className="text-left text-xl font-semibold text-black">경력사항</h3>
                 
+                <div className="w-full pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
+                  <ul className="text-left text-sm text-gray-700 space-y-3 py-2">
+                    <li>• 퇴사일자에 빈 값으로 두시면 "재직 중"으로 인식됩니다.</li>
+                  </ul>
+                </div>
+
                 {/* 경력사항 테이블 */}
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -873,7 +883,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                         <th className="p-2 text-center font-medium text-sm">퇴사일자</th>
                         <th className="p-2 text-center font-medium text-sm">회사명(부서명)</th>
                         <th className="p-2 text-center font-medium text-sm">직책</th>
-                        <th className="p-2 text-center font-medium text-sm bg-white">관리</th>
+                        <th className="p-2 text-center font-medium text-sm"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1309,7 +1319,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className={`w-2 h-2 rounded-full ${isOperatingHoursComplete() ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                    <span>초기 상담 영업업 시간 설정</span>
+                    <span>초기 상담 영업 시간 설정</span>
                   </div>
                 </div>
               </div>
