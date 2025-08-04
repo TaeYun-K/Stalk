@@ -4,7 +4,7 @@ import '@/App.css';
 
 // Context
 import { WatchlistProvider } from '@/context/WatchlistContext';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AuthProvider } from '@/context/AuthContext';
 
 // Components
 import Navbar from '@/components/navbar';
@@ -12,31 +12,38 @@ import HomePageNavbar from '@/components/homepage-navbar';
 import Sidebar from '@/components/sidebar';
 import Footer from '@/components/footer';
 import ScrollToTop from '@/components/ScrollToTop';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import AdminProtectedRoute from '@/components/AdminProtectedRoute';
 
-// Pages
+
+// Pages =================================================================================================
 import HomePage from '@/pages/home-page';
 
-import AdminPage from '@/pages/admin-page';
 
+// Login & Signup =================================================================================================
 import LoginPage from '@/pages/login-page';
+import SignupChoicePage from '@/pages/signup-choice-page';
 import SignupPage from '@/pages/signup-page';
 import SignupComplete from '@/pages/signup-complete';
 
+// Experts =================================================================================================
 import ExpertsPage from '@/pages/experts-page';
-import ProductsPage from '@/pages/products-page';
-import CommunityPage from '@/pages/community-page';
-import MyPage from '@/pages/my-page';
-
-import WritePostPage from '@/pages/write-post-page';
-
-import ExpertDetailPage from '@/pages/expert-detail-page';
-import FavoritesPage from '@/pages/favorites-page';
-import SignupChoicePage from '@/pages/signup-choice-page';
-import SearchPage from '@/pages/search-page';
 import ExpertsIntroductionRegistrationPage from '@/pages/experts-introduction-registration-page';
+import ExpertDetailPage from '@/pages/expert-detail-page';
+
+// Products =================================================================================================
+import ProductsPage from '@/pages/products-page';
+
+
+// Community =================================================================================================
+import CommunityPage from '@/pages/community-page';
+import WritePostPage from '@/pages/write-post-page';
+import KnowledgeBoardPage from '@/pages/knowledge-board-page';
+import MyPage from '@/pages/my-page';
+import FavoritesPage from '@/pages/favorites-page';
+import SearchPage from '@/pages/search-page';
 import VideoConsultationPage from '@/pages/video-consultation-page';
+import AdminPage from '@/pages/admin-page';
+
 
 // Navbar를 숨길 페이지 목록
 const hideNavbarRoutes: string[] = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete'];
@@ -60,7 +67,8 @@ const showSidebarRoutes: string[] = [
   '/holdings',
   '/reservations',
   '/expert-detail',
-  '/expert-registration'
+  '/expert-registration',
+  '/knowledge-board'
 ];
 
 // Footer를 숨길 페이지 목록
@@ -68,9 +76,8 @@ const hideFooterRoutes: string[] = ['/SignupChoicePage', '/login'];
 
 const AppContent: React.FC = () => {
   const location = useLocation();
-  const { isLoggedIn, isLoading, userInfo } = useAuth();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
-  const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/');
+  const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/') || location.pathname.startsWith('/community/post/');
   const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
   const isVideoPage = location.pathname.startsWith('/video-consultation');
   
@@ -85,22 +92,29 @@ const AppContent: React.FC = () => {
             <Routes>
               {/* Public Routes */}
               <Route path="/products" element={<ProductsPage />} />
-              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin" element={
+                <AdminProtectedRoute>
+                  <AdminPage />
+                </AdminProtectedRoute>
+              } />
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/signup-complete" element={<SignupComplete />} />
 
               <Route path="/SignupChoicePage" element={<SignupChoicePage />} />
-              <Route path="/search" element={<SearchPage />} />
-              
+              <Route path="/search" element={<SearchPage />} />              
               {/* Protected Routes */}
               <Route path="/experts" element={<ExpertsPage />} />
               <Route path="/community" element={<CommunityPage />} />
+              <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
+              <Route path="/knowledge-board/:postId" element={<KnowledgeBoardPage />} />
+
               <Route path="/products" element={<div className="p-4"><h1>상품 조회</h1></div>} />
               <Route path="/mypage" element={<MyPage />} />
               
               <Route path="/write-post" element={<WritePostPage />} />
+
               <Route path="/consultations" element={<div className="p-4"><h1>상담 내역</h1></div>} />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />

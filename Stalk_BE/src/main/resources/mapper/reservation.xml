@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.reservation.dao.ReservationMapper">
+<mapper namespace="com.Stalk.project.api.reservation.dao.ReservationMapper">
 
   <!-- ====== 예약 생성 관련 쿼리 ====== -->
 
@@ -73,7 +73,7 @@
 
   <!-- 일반 사용자의 예약 내역 조회 (일반 사용자용) -->
   <select id="findAdvisorReservations"
-    resultType="com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto">
+    resultType="com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto">
     SELECT cs.id                                                 as reservationId,
            cs.date                                               as consultationDate,
            TIME_FORMAT(cs.start_time, '%H:%i')                   as consultationTime,
@@ -94,7 +94,7 @@
 
   <!-- 예약 상세 조회 (취소 가능 여부 확인용) -->
   <select id="findUserReservations"
-    resultType="com.Stalk.project.reservation.dto.out.ReservationDetailResponseDto">
+    resultType="com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto">
     SELECT cs.id                                                 as reservationId,
            cs.date                                               as consultationDate,
            TIME_FORMAT(cs.start_time, '%H:%i')                   as consultationTime,
@@ -115,7 +115,7 @@
 
   <!-- 예약 취소 처리 -->
   <select id="findReservationForCancel"
-    resultType="com.Stalk.project.reservation.dao.ReservationCancelCheckDto">
+    resultType="com.Stalk.project.api.reservation.dao.ReservationCancelCheckDto">
     SELECT cs.id,
            cs.user_id        as userId,
            cs.advisor_id     as advisorId,

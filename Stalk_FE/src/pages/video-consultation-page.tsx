@@ -1085,10 +1085,6 @@ const VideoConsultationPage: React.FC = () => {
               <button
                 onClick={() => {
                   const newShowStockChart = !showStockChart;
-                  console.log("Chart toggle clicked:", {
-                    current: showStockChart,
-                    new: newShowStockChart,
-                  });
                   setShowStockChart(newShowStockChart);
                   if (newShowStockChart) {
                     setShowChat(false);

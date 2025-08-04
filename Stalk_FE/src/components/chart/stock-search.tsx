@@ -28,7 +28,7 @@ const StockSearch: React.FC<StockSearchProps> = ({
     setIsLoading(true);
     try {
       const response = await axios.get(
-        `https://i13e205.p.ssafy.io:8443/api/stalk/search/${query}`
+        `${import.meta.env.VITE_API_URL}/api/stalk/search/${query}`
       );
       if (response.data.success) {
         setSearchResults(response.data.data);
