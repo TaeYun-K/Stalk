@@ -1,4 +1,4 @@
-package com.Stalk.project.openvidu.mapper;
+package com.Stalk.project.api.openvidu.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

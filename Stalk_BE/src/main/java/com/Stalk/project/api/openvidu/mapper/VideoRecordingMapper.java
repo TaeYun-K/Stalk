@@ -1,4 +1,4 @@
-package com.Stalk.project.openvidu.mapper;
+package com.Stalk.project.api.openvidu.mapper;
 
 import com.Stalk.project.openvidu.dto.out.VideoRecording;
 import org.apache.ibatis.annotations.Mapper;
