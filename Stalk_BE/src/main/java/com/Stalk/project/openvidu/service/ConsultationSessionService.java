@@ -1,6 +1,7 @@
 package com.Stalk.project.openvidu.service;
 
 import com.Stalk.project.openvidu.dto.out.SessionTokenResponseDto;
+import com.Stalk.project.openvidu.mapper.ConsultationSessionMapper;
 import io.openvidu.java.client.*;
 
 import java.net.URI;
@@ -21,7 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class ConsultationSessionService {
 
   private final OpenVidu openVidu;
-  // 메모리나 DB에 세션 객체를 캐싱할 수 있습니다.
 
   @Value("${openvidu.url}")
   private String openviduUrl;
@@ -32,6 +32,7 @@ public class ConsultationSessionService {
     this.openVidu = openVidu;
   }
 
+  private ConsultationSessionMapper consultationSessionMapper;
 
   /**
    * 토큰 발급 메서드
@@ -56,26 +57,35 @@ public class ConsultationSessionService {
       try {
         Session newSession = openVidu.createSession();
         createdAtMap.put(id, Instant.now());
+
+        // 2) 세션 생성 시 DB에 sessionId 저장
+        try {
+          consultationSessionMapper.updateSessionId(Long.parseLong(consultationId), newSession.getSessionId());
+          log.info("세션 생성 및 DB 저장 완료: consultationId={}, sessionId={}", consultationId, newSession.getSessionId());
+        } catch (Exception e) {
+          log.error("세션 ID DB 저장 실패: consultationId={}", consultationId, e);
+          // DB 저장 실패해도 세션은 계속 진행
+        }
+
         return newSession;
       } catch (OpenViduJavaClientException | OpenViduHttpException e) {
         throw new IllegalStateException("OpenVidu 세션 생성 실패", e);
       }
     });
 
-    // 2) 토큰 발급
+    // 3) 토큰 발급
     String token = generateToken(session, consultationId);
 
-    // 3) 세션 생성 시각 조회
+    // 4) 세션 생성 시각 조회
     String createdAt = createdAtMap
         .get(consultationId)
         .toString();
 
-    // 4) DTO 반환
+    // 5) DTO 반환
     return new SessionTokenResponseDto(
         session.getSessionId(),
         token,
-        createdAt
-    );
+        createdAt);
   }
 
   /**
@@ -93,8 +103,7 @@ public class ConsultationSessionService {
     return new SessionTokenResponseDto(
         session.getSessionId(),
         token,
-        createdAt
-    );
+        createdAt);
   }
 
   /**
@@ -107,16 +116,15 @@ public class ConsultationSessionService {
       throw new NoSuchElementException("Session not found");
     }
 
-    try {
-      // 1) OpenVidu 세션 종료
-      session.close();
+    String sessionId = session.getSessionId();
 
-      // 2) 메모리에서 세션 정보 제거
+    try {
+      // 1) 메모리에서 세션 정보 제거
       sessionMap.remove(consultationId);
       createdAtMap.remove(consultationId);
 
-      log.info("상담방 종료 완료: {}", consultationId);
-    } catch (OpenViduJavaClientException | OpenViduHttpException e) {
+      log.info("상담 종료 완료: consultationId={}, sessionId={}", consultationId, sessionId);
+    } catch (Exception e) {
       log.error("상담방 종료 실패: {}", consultationId, e);
       throw new IllegalStateException("상담방 종료 실패", e);
     }

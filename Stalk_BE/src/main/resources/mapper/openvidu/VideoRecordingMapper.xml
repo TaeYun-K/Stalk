@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.project.openvidu.mapper.VideoRecordingMapper">
+
+  <!-- 녹화 시작 시 INSERT -->
+  <insert id="insertRecording" parameterType="com.project.openvidu.model.VideoRecording">
+    INSERT INTO video_recordings (
+      consultation_id, recording_id, session_id,
+      start_time, status, created_at
+    )
+    VALUES (
+      #{consultationId}, #{recordingId}, #{sessionId},
+      #{startTime}, #{status}, NOW()
+    )
+  </insert>
+
+  <!-- 녹화 종료 시 UPDATE -->
+  <update id="updateRecordingOnStop">
+    UPDATE video_recordings
+    SET end_time = #{endTime}, url = #{url}, status = #{status}
+    WHERE recording_id = #{recordingId}
+  </update>
+
+</mapper>
