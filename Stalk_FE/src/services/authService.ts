@@ -1,4 +1,4 @@
-import { User, LoginRequest, LoginResponse } from '@/types';
+import { User, LoginRequest, LoginResponse, SignupRequest, AdvisorSignupRequest } from '@/types';
 
 // 메모리에 저장되는 토큰과 사용자 정보
 let accessToken: string | null = null;
@@ -68,7 +68,7 @@ class AuthService {
           'Accept': 'application/json',
         },
         body: JSON.stringify(cleanData),
-        credentials: 'include', // 쿠키를 받기 위해 추가
+        // credentials: 'include' 제거
       });
 
       if (!response.ok) {
@@ -131,7 +131,7 @@ class AuthService {
       try {
         const response = await fetch('/api/auth/refresh', {
           method: 'POST',
-          credentials: 'include', // refresh token 쿠키 전송
+          // credentials: 'include' 제거
         });
 
         if (!response.ok) {
@@ -174,7 +174,7 @@ class AuthService {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      credentials: 'include', // 쿠키 포함
+      // credentials: 'include' 제거
     };
 
     const response = await fetch(url, config);
@@ -251,6 +251,140 @@ class AuthService {
   // 로그인 상태 확인
   static isLoggedIn(): boolean {
     return !!accessToken && !!userInfo;
+  }
+
+  // 일반 회원가입
+  static async signup(data: SignupRequest): Promise<{ success: boolean; message: string }> {
+    try {
+      // 입력값 검증
+      if (!data.userId || !data.password || !data.passwordConfirm || !data.email || 
+          !data.name || !data.nickname || !data.contact) {
+        throw new Error('모든 필수 항목을 입력해주세요.');
+      }
+
+      if (data.password !== data.passwordConfirm) {
+        throw new Error('비밀번호가 일치하지 않습니다.');
+      }
+
+      if (!data.agreedTerms || !data.agreedPrivacy) {
+        throw new Error('필수 약관에 동의해주세요.');
+      }
+
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `회원가입 실패: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('회원가입 API 호출 실패:', error);
+      throw error;
+    }
+  }
+
+  // 전문가 회원가입
+  static async advisorSignup(data: AdvisorSignupRequest): Promise<{ success: boolean; message: string }> {
+    try {
+      // 입력값 검증
+      if (!data.userId || !data.password || !data.passwordConfirm || !data.email || 
+          !data.name || !data.nickname || !data.contact || !data.certificateName || 
+          !data.certificateFileSn || !data.birth || !data.certificateFileNumber || 
+          !data.profileImage) {
+        throw new Error('모든 필수 항목을 입력해주세요.');
+      }
+
+      if (data.password !== data.passwordConfirm) {
+        throw new Error('비밀번호가 일치하지 않습니다.');
+      }
+
+      if (!data.agreedTerms || !data.agreedPrivacy) {
+        throw new Error('필수 약관에 동의해주세요.');
+      }
+
+      const formData = new FormData();
+      
+      // 기본 정보
+      Object.entries(data).forEach(([key, value]) => {
+        if (key === 'profileImage') {
+          formData.append('profileImage', value);
+        } else if (key === 'agreedTerms' || key === 'agreedPrivacy') {
+          formData.append(key, value.toString());
+        } else {
+          formData.append(key, value as string);
+        }
+      });
+
+      const response = await fetch('/api/auth/signup/advisor', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `전문가 회원가입 실패: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('전문가 회원가입 API 호출 실패:', error);
+      throw error;
+    }
+  }
+
+  // 이메일 인증 코드 발송
+  static async sendEmailVerification(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch('/api/auth/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '이메일 인증 코드 발송 실패');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('이메일 인증 코드 발송 실패:', error);
+      throw error;
+    }
+  }
+
+  // 이메일 인증 코드 확인
+  static async verifyEmailCode(email: string, code: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch('/api/auth/email/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, code })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '이메일 인증 코드 확인 실패');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('이메일 인증 코드 확인 실패:', error);
+      throw error;
+    }
   }
 }
 
