@@ -30,7 +30,7 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
   volume
 }) => {
   // Debug logging
-  console.log("StockDetailHeader props:", { ticker, name, price, change, changeRate });
+
   
   const isNegative = changeRate < 0;
   const changeColor = isNegative ? 'text-blue-600' : 'text-red-600';

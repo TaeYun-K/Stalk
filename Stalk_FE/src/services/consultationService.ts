@@ -174,9 +174,7 @@ class ConsultationService {
 
   // OpenVidu 세션 생성 및 토큰 발급
   static async createSessionToken(consultationId: string): Promise<SessionTokenResponse> {
-      const token = AuthService.getAccessToken();
-      
-      const response = await fetch(`https://i13e205.p.ssafy.io:8443/api/consultations/${consultationId}/session`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/consultations/${consultationId}/session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -198,9 +196,7 @@ class ConsultationService {
   // 세션 정보 조회
   static async getSessionInfo(consultationId: string): Promise<SessionInfo> {
     try {
-      const token = AuthService.getAccessToken();
-      
-      const response = await fetch(`https://i13e205.p.ssafy.io:8443/api/consultations/${consultationId}/session`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/consultations/${consultationId}/session`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
