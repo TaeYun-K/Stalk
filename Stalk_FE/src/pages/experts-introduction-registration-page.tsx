@@ -25,6 +25,30 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   const [fileName, setFileName] = useState<string>('');
   const [expertName, setExpertName] = useState<string>('');
   const [expertContact, setExpertContact] = useState<string>('');
+
+  // 전화번호 포맷팅 함수
+  const formatPhoneNumber = (value: string) => {
+    // 숫자만 추출
+    const numbers = value.replace(/[^\d]/g, '');
+    
+    // 11자리 이하로 제한
+    const limitedNumbers = numbers.slice(0, 11);
+    
+    // 전화번호 형식으로 변환
+    if (limitedNumbers.length <= 3) {
+      return limitedNumbers;
+    } else if (limitedNumbers.length <= 7) {
+      return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(3)}`;
+    } else {
+      return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(3, 7)}-${limitedNumbers.slice(7)}`;
+    }
+  };
+
+  // 전화번호 입력 핸들러
+  const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedValue = formatPhoneNumber(e.target.value);
+    setExpertContact(formattedValue);
+  };
   const [expertTitle, setExpertTitle] = useState<string>('');
   const [expertIntroduction, setExpertIntroduction] = useState<string>('');
   
@@ -72,6 +96,146 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   const [editingQualificationData, setEditingQualificationData] = useState<QualificationEntry | null>(null);
   const [editingCareerData, setEditingCareerData] = useState<CareerEntry | null>(null);
   const [qualificationItemStates, setQualificationItemStates] = useState<Record<string, 'saved' | 'editing' | 'deleting'>>({});
+
+  // 자격증 목록
+  const qualificationOptions = [
+    '전문 자격을 선택하세요',
+    '금융투자상담사',
+    '증권분석사',
+    'CFA',
+    'CPA'
+  ];
+
+  // 날짜 관련 상태
+  const [showDatePicker, setShowDatePicker] = useState<string | null>(null);
+  const [currentDatePicker, setCurrentDatePicker] = useState<Date>(new Date());
+
+  // 날짜 포맷팅 함수
+  const formatDate = (value: string) => {
+    // 숫자만 추출
+    const numbers = value.replace(/[^\d]/g, '');
+    
+    // 8자리 이하로 제한
+    const limitedNumbers = numbers.slice(0, 8);
+    
+    // 날짜 형식으로 변환
+    if (limitedNumbers.length <= 4) {
+      return limitedNumbers;
+    } else if (limitedNumbers.length <= 6) {
+      return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(4)}`;
+    } else {
+      return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(4, 6)}.${limitedNumbers.slice(6)}`;
+    }
+  };
+
+  // 날짜 유효성 검사 함수
+  const isValidDate = (dateString: string) => {
+    const regex = /^\d{4}\.\d{2}\.\d{2}$/;
+    if (!regex.test(dateString)) return false;
+    
+    const parts = dateString.split('.');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    const day = parseInt(parts[2]);
+    
+    if (year < 1900 || year > 2100) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && 
+           date.getMonth() === month - 1 && 
+           date.getDate() === day;
+  };
+
+  // 날짜 입력 핸들러
+  const handleDateChange = (value: string, setter: (value: string) => void) => {
+    const formattedValue = formatDate(value);
+    setter(formattedValue);
+  };
+
+  // 달력에서 날짜 선택 핸들러
+  const handleDateSelect = (date: Date, setter: (value: string) => void) => {
+    const formattedDate = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+    setter(formattedDate);
+    setShowDatePicker(null);
+  };
+
+  // 달력 렌더링 함수
+  const renderDatePicker = (currentValue: string, setter: (value: string) => void) => {
+    const daysInMonth = new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth() + 1, 0).getDate();
+    const firstDay = new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth(), 1).getDay();
+    const days = [];
+
+    // 이전 달의 마지막 날들
+    const prevMonth = new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth() - 1);
+    const daysInPrevMonth = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate();
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const date = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), daysInPrevMonth - i);
+      days.push(
+        <div key={`prev-${i}`} className="text-gray-300 text-center py-1 text-xs cursor-pointer">
+          {date.getDate()}
+        </div>
+      );
+    }
+
+    // 현재 달의 날들
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth(), day);
+      days.push(
+        <div
+          key={day}
+          onClick={() => handleDateSelect(date, setter)}
+          className="text-center py-1 text-xs cursor-pointer hover:bg-blue-100 rounded"
+        >
+          {day}
+        </div>
+      );
+    }
+
+    // 다음 달의 첫 날들
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      const date = new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth() + 1, i);
+      days.push(
+        <div key={`next-${i}`} className="text-gray-300 text-center py-1 text-xs cursor-pointer">
+          {date.getDate()}
+        </div>
+      );
+    }
+
+    return (
+      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-[9999] p-2">
+        <div className="flex items-center justify-between mb-2">
+          <button 
+            onClick={() => setCurrentDatePicker(new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth() - 1))}
+            className="text-gray-600 hover:text-gray-800 text-xs"
+          >
+            &lt;
+          </button>
+          <span className="text-xs font-medium">
+            {currentDatePicker.getFullYear()}년 {String(currentDatePicker.getMonth() + 1).padStart(2, '0')}월
+          </span>
+          <button 
+            onClick={() => setCurrentDatePicker(new Date(currentDatePicker.getFullYear(), currentDatePicker.getMonth() + 1))}
+            className="text-gray-600 hover:text-gray-800 text-xs"
+          >
+            &gt;
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
+            <div key={day} className="text-center text-xs font-medium text-gray-600">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days}
+        </div>
+      </div>
+    );
+  };
 
   // 파일 업로드 핸들러
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -423,7 +587,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
               <div className="space-y-4">
                 <h3 className="text-left text-xl font-semibold text-black">프로필 사진 등록</h3>
                 <div className="flex gap-6 items-end">
-                  <div className="w-48 h-64 bg-gray-300 rounded-lg flex items-center justify-center overflow-hidden">
+                  <div className="w-48 h-64 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
                     {profileImage ? (
                       <img 
                         src={URL.createObjectURL(profileImage)} 
@@ -431,11 +595,9 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                         className="w-full h-full object-cover object-top rounded-lg"
                       />
                     ) : (
-                      <img 
-                        src={ExpertProfileImage} 
-                        alt="Default Profile" 
-                        className="w-full h-full object-cover rounded-lg"
-                      />
+                      <div className="w-full h-full object-cover rounded-lg flex items-center justify-center">
+                        <span className="text-gray-500">사진 미리보기</span>
+                      </div>
                     )}
                   </div>
                   
@@ -488,15 +650,16 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                 <input
                   type="text"
                   value={expertContact}
-                  onChange={(e) => setExpertContact(e.target.value)}
-                  placeholder="공개 연락처를 입력하세요"
+                  onChange={handleContactChange}
+                  placeholder="000-0000-0000"
+                  maxLength={13}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
 
               {/* 자격사항 섹션 */}
               <div className="space-y-4">
-                <h3 className="text-left text-xl font-semibold text-black">자격사항</h3>
+                <h3 className="text-left text-xl font-semibold text-black">자격(면허)사항</h3>
                 
                 {/* 자격사항 테이블 */}
                 <div className="overflow-x-auto">
@@ -520,14 +683,19 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                           <tr key={entry.id}>
                             {isEditing && editingQualificationData ? (
                               <>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={editingQualificationData.name}
-                                    onChange={(e) => setEditingQualificationData({...editingQualificationData, name: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  />
-                                </td>
+                                                                 <td className="p-2">
+                                   <select
+                                     value={editingQualificationData.name}
+                                     onChange={(e) => setEditingQualificationData({...editingQualificationData, name: e.target.value})}
+                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                                   >
+                                     {qualificationOptions.map((option, index) => (
+                                       <option key={index} value={option === '전문 자격을 선택하세요' ? '' : option}>
+                                         {option}
+                                       </option>
+                                     ))}
+                                   </select>
+                                 </td>
                                 <td className="p-2">
                                   <input
                                     type="text"
@@ -536,14 +704,31 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                   />
                                 </td>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={editingQualificationData.acquisitionDate}
-                                    onChange={(e) => setEditingQualificationData({...editingQualificationData, acquisitionDate: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  />
-                                </td>
+                                                                 <td className="p-2 relative">
+                                   <div className="flex">
+                                     <input
+                                       type="text"
+                                       value={editingQualificationData.acquisitionDate}
+                                       onChange={(e) => handleDateChange(e.target.value, (value) => setEditingQualificationData({...editingQualificationData, acquisitionDate: value}))}
+                                       placeholder="0000.00.00"
+                                       maxLength={10}
+                                       className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                         editingQualificationData.acquisitionDate && !isValidDate(editingQualificationData.acquisitionDate) ? 'border-red-500' : 'border-gray-300'
+                                       }`}
+                                     />
+                                     <button
+                                       type="button"
+                                       onClick={() => {
+                                         setShowDatePicker(showDatePicker === 'edit-acquisition' ? null : 'edit-acquisition');
+                                         setCurrentDatePicker(new Date());
+                                       }}
+                                       className="px-3 py-2 bg-gray-50 hover:bg-gray-100 text-sm"
+                                     >
+                                       📅
+                                     </button>
+                                   </div>
+                                   {showDatePicker === 'edit-acquisition' && renderDatePicker(editingQualificationData.acquisitionDate, (value) => setEditingQualificationData({...editingQualificationData, acquisitionDate: value}))}
+                                 </td>
                                 <td className="p-2">
                                   <input
                                     type="text"
@@ -599,17 +784,21 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                         );
                       })}
 
-                      {/* 새로운 자격사항 입력 행 */}
-                      <tr>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={newQualificationEntry.name}
-                            onChange={(e) => setNewQualificationEntry({...newQualificationEntry, name: e.target.value})}
-                            placeholder="자격명"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
-                        </td>
+                                             {/* 새로운 자격사항 입력 행 */}
+                       <tr>
+                         <td className="p-2">
+                           <select
+                             value={newQualificationEntry.name}
+                             onChange={(e) => setNewQualificationEntry({...newQualificationEntry, name: e.target.value})}
+                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                           >
+                             {qualificationOptions.map((option, index) => (
+                               <option key={index} value={option === '전문 자격을 선택하세요' ? '' : option}>
+                                 {option}
+                               </option>
+                             ))}
+                           </select>
+                         </td>
                         <td className="p-2">
                           <input
                             type="text"
@@ -619,15 +808,31 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                           />
                         </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={newQualificationEntry.acquisitionDate}
-                            onChange={(e) => setNewQualificationEntry({...newQualificationEntry, acquisitionDate: e.target.value})}
-                            placeholder="취득일자"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
-                        </td>
+                                                 <td className="p-2 relative">
+                           <div className="flex">
+                             <input
+                               type="text"
+                               value={newQualificationEntry.acquisitionDate}
+                               onChange={(e) => handleDateChange(e.target.value, (value) => setNewQualificationEntry({...newQualificationEntry, acquisitionDate: value}))}
+                               placeholder="0000.00.00"
+                               maxLength={10}
+                               className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                 newQualificationEntry.acquisitionDate && !isValidDate(newQualificationEntry.acquisitionDate) ? 'border-red-500' : 'border-gray-300'
+                               }`}
+                             />
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setShowDatePicker(showDatePicker === 'new-acquisition' ? null : 'new-acquisition');
+                                 setCurrentDatePicker(new Date());
+                               }}
+                               className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-sm"
+                             >
+                               📅
+                             </button>
+                           </div>
+                           {showDatePicker === 'new-acquisition' && renderDatePicker(newQualificationEntry.acquisitionDate, (value) => setNewQualificationEntry({...newQualificationEntry, acquisitionDate: value}))}
+                         </td>
                         <td className="p-2">
                           <input
                             type="text"
@@ -681,22 +886,56 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                           <tr key={entry.id}>
                             {isEditing && editingCareerData ? (
                               <>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={editingCareerData.startDate}
-                                    onChange={(e) => setEditingCareerData({...editingCareerData, startDate: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={editingCareerData.endDate}
-                                    onChange={(e) => setEditingCareerData({...editingCareerData, endDate: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                  />
-                                </td>
+                                                                 <td className="p-2 relative">
+                                   <div className="flex">
+                                     <input
+                                       type="text"
+                                       value={editingCareerData.startDate}
+                                       onChange={(e) => handleDateChange(e.target.value, (value) => setEditingCareerData({...editingCareerData, startDate: value}))}
+                                       placeholder="0000.00.00"
+                                       maxLength={10}
+                                       className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                         editingCareerData.startDate && !isValidDate(editingCareerData.startDate) ? 'border-red-500' : 'border-gray-300'
+                                       }`}
+                                     />
+                                     <button
+                                       type="button"
+                                       onClick={() => {
+                                         setShowDatePicker(showDatePicker === 'edit-start' ? null : 'edit-start');
+                                         setCurrentDatePicker(new Date());
+                                       }}
+                                       className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-sm"
+                                     >
+                                       📅
+                                     </button>
+                                   </div>
+                                   {showDatePicker === 'edit-start' && renderDatePicker(editingCareerData.startDate, (value) => setEditingCareerData({...editingCareerData, startDate: value}))}
+                                 </td>
+                                                                 <td className="p-2 relative">
+                                   <div className="flex">
+                                     <input
+                                       type="text"
+                                       value={editingCareerData.endDate}
+                                       onChange={(e) => handleDateChange(e.target.value, (value) => setEditingCareerData({...editingCareerData, endDate: value}))}
+                                       placeholder="0000.00.00"
+                                       maxLength={10}
+                                       className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                         editingCareerData.endDate && !isValidDate(editingCareerData.endDate) ? 'border-red-500' : 'border-gray-300'
+                                       }`}
+                                     />
+                                     <button
+                                       type="button"
+                                       onClick={() => {
+                                         setShowDatePicker(showDatePicker === 'edit-end' ? null : 'edit-end');
+                                         setCurrentDatePicker(new Date());
+                                       }}
+                                       className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-sm"
+                                     >
+                                       📅
+                                     </button>
+                                   </div>
+                                   {showDatePicker === 'edit-end' && renderDatePicker(editingCareerData.endDate, (value) => setEditingCareerData({...editingCareerData, endDate: value}))}
+                                 </td>
                                 <td className="p-2">
                                   <input
                                     type="text"
@@ -759,32 +998,64 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                       })}
 
                       {/* 새로운 경력사항 입력 행 */}
-                      <tr>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={newCareerEntry.startDate}
-                            onChange={(e) => setNewCareerEntry({...newCareerEntry, startDate: e.target.value})}
-                            placeholder="입사일자"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={newCareerEntry.endDate}
-                            onChange={(e) => setNewCareerEntry({...newCareerEntry, endDate: e.target.value})}
-                            placeholder="퇴사일자"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
-                        </td>
+                       <tr>
+                         <td className="p-2 relative">
+                           <div className="flex">
+                             <input
+                               type="text"
+                               value={newCareerEntry.startDate}
+                               onChange={(e) => handleDateChange(e.target.value, (value) => setNewCareerEntry({...newCareerEntry, startDate: value}))}
+                               placeholder="0000.00.00"
+                               maxLength={10}
+                               className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                 newCareerEntry.startDate && !isValidDate(newCareerEntry.startDate) ? 'border-red-500' : 'border-gray-300'
+                               }`}
+                             />
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setShowDatePicker(showDatePicker === 'new-start' ? null : 'new-start');
+                                 setCurrentDatePicker(new Date());
+                               }}
+                               className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-sm"
+                             >
+                               📅
+                             </button>
+                           </div>
+                           {showDatePicker === 'new-start' && renderDatePicker(newCareerEntry.startDate, (value) => setNewCareerEntry({...newCareerEntry, startDate: value}))}
+                         </td>
+                         <td className="p-2 relative">
+                           <div className="flex">
+                             <input
+                               type="text"
+                               value={newCareerEntry.endDate}
+                               onChange={(e) => handleDateChange(e.target.value, (value) => setNewCareerEntry({...newCareerEntry, endDate: value}))}
+                               placeholder="0000.00.00"
+                               maxLength={10}
+                               className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                 newCareerEntry.endDate && !isValidDate(newCareerEntry.endDate) ? 'border-red-500' : 'border-gray-300'
+                               }`}
+                             />
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setShowDatePicker(showDatePicker === 'new-end' ? null : 'new-end');
+                                 setCurrentDatePicker(new Date());
+                               }}
+                               className="px-3 py-2 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-sm"
+                             >
+                               📅
+                             </button>
+                           </div>
+                           {showDatePicker === 'new-end' && renderDatePicker(newCareerEntry.endDate, (value) => setNewCareerEntry({...newCareerEntry, endDate: value}))}
+                         </td>
                         <td className="p-2">
                           <input
                             type="text"
                             value={newCareerEntry.company}
                             onChange={(e) => setNewCareerEntry({...newCareerEntry, company: e.target.value})}
                             placeholder="회사명(부서명)"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           />
                         </td>
                         <td className="p-2">
@@ -793,7 +1064,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                             value={newCareerEntry.position}
                             onChange={(e) => setNewCareerEntry({...newCareerEntry, position: e.target.value})}
                             placeholder="직책"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           />
                         </td>
                         <td className="p-2">
@@ -828,7 +1099,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                   onChange={(e) => setExpertTitle(e.target.value)}
                   placeholder="전문가 소개 타이틀을 입력하세요"
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
@@ -840,7 +1111,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                   onChange={(e) => setExpertIntroduction(e.target.value)}
                   placeholder="전문가 소개를 입력하세요"
                   rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 

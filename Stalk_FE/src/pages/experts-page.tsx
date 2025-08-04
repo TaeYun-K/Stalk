@@ -1,59 +1,94 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ExpertProfileImage from '@/assets/expert_profile_image.png';
+import AuthService from '@/services/authService';
+import { useAuth } from '@/context/AuthContext';
+
+interface Certificate {
+  advisorId: number;
+  certificateName: string;
+  issuedBy: string;
+}
+
+interface Expert {
+  id: number;
+  name: string;
+  profileImageUrl: string;
+  preferredStyle: 'SHORT' | 'LONG';
+  shortIntro: string;
+  averageRating: number;
+  reviewCount: number;
+  consultationFee: number;
+  isApproved: boolean;
+  createdAt: string;
+  certificates: Certificate[];
+}
+
+interface ApiResponse {
+  httpStatus: string;
+  isSuccess: boolean;
+  message: string;
+  code: number;
+  result: {
+    content: Expert[];
+    nextCursor: string | null;
+    hasNext: boolean;
+    pageSize: number;
+    pageNo: number;
+  };
+}
 
 const ExpertsPage = () => {
   const navigate = useNavigate();
+  const { userInfo } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('recent');
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // API 호출
+  useEffect(() => {
+    const fetchExperts = async () => {
+      try {
+        setLoading(true);
+        const response = await AuthService.authenticatedRequest('/api/advisors');
+        if (!response.ok) {
+          throw new Error('Failed to fetch experts');
+        }
+        const data: ApiResponse = await response.json();
+        if (data.isSuccess) {
+          setExperts(data.result.content);
+        } else {
+          throw new Error(data.message || 'Failed to fetch experts');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Error fetching experts:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-
-  const experts = [
-    {
-      id: 1,
-      name: '제임스',
-      title: '컨설턴트',
-      category: 'stock',
-      rating: '4.8',
-      reviews: 127,
-      tags: ['#중급자 대상', '#CFA', '#단기매매'],
-      features: ['30분 영상 상담', '번개 답변'],
-      description: '<무수한 상담 후기 수>로 검증된 변호사/합리적 수임료',
-      image: ExpertProfileImage
-    },
-    {
-      id: 2,
-      name: '박주현',
-      title: '컨설턴트',
-      category: 'fund',
-      rating: '4.6',
-      reviews: 89,
-      tags: ['#입문자 대상', '#금융', '#장기'],
-      features: ['15분 영상 상담', '번개 답변'],
-      description: '꼼꼼하고 정확하게 상담하여 명쾌한 해결책을 제시합니다',
-      image: ExpertProfileImage
-    }
-  ];
+    fetchExperts();
+  }, []);
 
   const filteredExperts = experts.filter(expert => {
-    const matchesCategory = selectedCategory === 'all' || expert.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || expert.preferredStyle.toLowerCase() === selectedCategory;
     const matchesSearch = expert.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expert.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expert.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+                         expert.shortIntro.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
   // 정렬 적용
   const sortedExperts = [...filteredExperts].sort((a, b) => {
     if (sortBy === 'recent') {
-      // 최근 등록순 (ID 기준, 높은 ID가 최근)
-      return b.id - a.id;
+      // 최근 등록순 (createdAt 기준)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     } else if (sortBy === 'many reviews') {
       // 리뷰 많은순
-      return b.reviews - a.reviews;
+      return b.reviewCount - a.reviewCount;
     }
     return 0;
   });
@@ -80,9 +115,62 @@ const ExpertsPage = () => {
     navigate(`/expert-detail/${expertId}`);
   };
 
+  const getPreferredStyleText = (style: string) => {
+    return style === 'SHORT' ? '단기' : '장기';
+  };
+
+  const formatConsultationFee = (fee: number) => {
+    return `${fee.toLocaleString()}원`;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">전문가 정보를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h3 className="text-2xl font-semibold text-gray-900 mb-2">오류가 발생했습니다</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     // 추천 키워드 및 정렬 ---------------------------------------------------------------------
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white relative">
+      {/* 전문가 등록 버튼 - ADVISOR 역할인 경우에만 표시 */}
+      {userInfo?.role === 'ADVISOR' && (
+        <button
+          onClick={() => navigate('/expert-registration')}
+          className="fixed bottom-8 right-28 bg-blue-500 px-3 py-2hover:bg-blue-600 text-white rounded-full shadow-lg transition-all duration-600 group z-50"
+          style={{ width: 'fit-content' }}
+        >
+          <div className="flex items-center pb-1">
+            <span className="text-2xl font-bold">+</span>
+            <span className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap overflow-hidden max-w-0 group-hover:max-w-xs">
+              전문가 등록
+            </span>
+          </div>
+        </button>
+      )}
+      
       {/* 카테고리 */}
       <div className="max-w-7xl mt-16 mx-auto px-6 py-8">
         {/* Filter/Keywords Section */}
@@ -215,14 +303,17 @@ const ExpertsPage = () => {
             >
               <div className="flex h-50 items-start items-end justify-between">
                 <div className="flex-1 py-10">
-                  {/* Tags */}
+                  {/* Preferred Style */}
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {expert.tags.map((tag, tagIndex) => (
+                    <span className="text-blue-500 py-1 text-xs font-semibold">
+                      #{getPreferredStyleText(expert.preferredStyle)}
+                    </span>
+                    {expert.certificates.map((cert, index) => (
                       <span
-                        key={tagIndex}
+                        key={index}
                         className="text-blue-500 py-1 text-xs font-semibold"
                       >
-                        {tag}
+                        #{cert.certificateName}
                       </span>
                     ))}
                   </div>
@@ -230,37 +321,26 @@ const ExpertsPage = () => {
                   {/* Name and Title & Rating and Reviews */}
                   <div className="mb-3 flex flex-row items-end gap-2">
                     <h3 className="text-left text-2xl font-extrabold text-gray-900">{expert.name} </h3>
-                    <p className="text-left text-blue-600">{expert.title}</p>
+                    <p className="text-left text-blue-600">컨설턴트</p>
                     <div className="flex items-center ml-4">
                       <div className="flex text-yellow-400">
                         ⭐
                       </div>
-                      <span className="ml-2 font-semibold text-gray-900">{expert.rating}</span>
-                      <span className="ml-4 text-gray-600">리뷰 {expert.reviews}개</span>
+                      <span className="ml-2 font-semibold text-gray-900">{expert.averageRating.toFixed(1)}</span>
+                      <span className="ml-4 text-gray-600">리뷰 {expert.reviewCount}개</span>
                     </div>
                   </div>
 
-
-
                   {/* Description */}
-                  <p className="text-lg font- text-left text-gray-700 mb-4">{expert.description}</p>
+                  <p className="text-lg font- text-left text-gray-700 mb-4">{expert.shortIntro}</p>
 
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {expert.features.map((feature, featureIndex) => {
-                      let baseClass = "px-4 py-2 rounded-2xl text-xs font-medium";
-                      let colorClass =
-                        featureIndex === 0
-                          ? "bg-blue-100 text-blue-700"
-                          : featureIndex === 1
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-700"; // 기본색
-
-                      return (
-                        <span key={featureIndex} className={`${baseClass} ${colorClass}`}>
-                          {feature}
-                        </span>
-                      );
-                    })}
+                    <span className="px-4 py-2 rounded-2xl text-xs font-medium bg-blue-100 text-blue-700">
+                      {formatConsultationFee(expert.consultationFee)}
+                    </span>
+                    <span className="px-4 py-2 rounded-2xl text-xs font-medium bg-green-100 text-green-700">
+                      번개 답변
+                    </span>
                   </div>
 
                   
@@ -270,7 +350,7 @@ const ExpertsPage = () => {
                 <div className="w-48 h-60
                  ml-6 flex items-end">
                   <img
-                    src={expert.image}
+                    src={expert.profileImageUrl}
                     alt={expert.name}
                     className="w-full h-full rounded-lg object-cover object-top"
                   />
