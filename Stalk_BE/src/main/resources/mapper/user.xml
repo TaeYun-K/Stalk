@@ -1,36 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.Stalk.project.api.user.dao.UserProfileMapper">
 
-  <!-- 사용자 프로필 조회 -->
-  <select id="findUserProfileById"
-    resultType="com.Stalk.project.user.dto.out.UserProfileResponseDto">
-    SELECT user_id as userId,
-           name,
-           contact,
-           email,
-           image   as profileImage,
-           role
-    FROM users
-    WHERE id = #{userId}
-      AND is_active = 1
-      AND deleted_at IS NULL
-  </select>
+    <!-- 사용자 프로필 조회 -->
+    <select id="findUserProfileById"
+            resultType="com.Stalk.project.api.user.dto.out.UserProfileResponseDto">
+        SELECT user_id as userId,
+               name,
+               contact,
+               email,
+               image   as profileImage,
+               role
+        FROM users
+        WHERE id = #{userId}
+          AND is_active = 1
+          AND deleted_at IS NULL
+    </select>
 
-  <!-- 사용자 정보 업데이트 쿼리 -->
-  <update id="updateUserProfile">
-    UPDATE users
-    <set>
-      <if test="updateDto.name != null and updateDto.name != ''">
-        name = #{updateDto.name},
-      </if>
-      <if test="updateDto.contact != null and updateDto.contact != ''">
-        contact = #{updateDto.contact},
-      </if>
-    </set>
-    WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
-  </update>
+    <!-- 사용자 정보 업데이트 쿼리 -->
+    <update id="updateUserProfile">
+        UPDATE users
+        <set>
+            <if test="updateDto.name != null and updateDto.name != ''">
+                name = #{updateDto.name},
+            </if>
+            <if test="updateDto.contact != null and updateDto.contact != ''">
+                contact = #{updateDto.contact},
+            </if>
+        </set>
+        WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
+    </update>
 
 </mapper>
