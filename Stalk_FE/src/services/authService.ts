@@ -1,4 +1,4 @@
-import { SignupFormData, User, LoginRequest, LoginResponse } from '@/types';
+import { User, LoginRequest, LoginResponse, SignupRequest, AdvisorSignupRequest } from '@/types';
 
 // localStorage에서 토큰 관리
 const ACCESS_TOKEN_KEY = 'accessToken';
@@ -44,9 +44,7 @@ class AuthService {
         password: data.password.trim()
       };
       
-      console.log('로그인 요청 데이터:', cleanData);
-      console.log('로그인 요청 URL:', `/api/auth/login`);
-      console.log('요청 본문:', JSON.stringify(cleanData));
+
       
       const response = await fetch(`/api/auth/login`, {
         method: 'POST',
@@ -121,17 +119,73 @@ class AuthService {
     }
   }
 
-  // 회원가입
-  static async signup(_data: SignupFormData): Promise<{ success: boolean; message: string }> {
-    // TODO: 실제 API 호출로 대체
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: '회원가입이 완료되었습니다.'
-        });
-      }, 1000);
-    });
+  // 일반 회원가입
+  static async signup(data: SignupRequest): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `회원가입 실패: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('회원가입 API 호출 실패:', error);
+      throw error;
+    }
+  }
+
+  // 전문가 회원가입
+  static async advisorSignup(data: AdvisorSignupRequest): Promise<{ success: boolean; message: string }> {
+    try {
+      const formData = new FormData();
+      
+      // 기본 정보
+      formData.append('userId', data.userId);
+      formData.append('name', data.name);
+      formData.append('nickname', data.nickname);
+      formData.append('password', data.password);
+      formData.append('passwordConfirm', data.passwordConfirm);
+      formData.append('contact', data.contact);
+      formData.append('email', data.email);
+      
+      // 자격증 정보
+      formData.append('certificateName', data.certificateName);
+      formData.append('certificateFileSn', data.certificateFileSn);
+      formData.append('birth', data.birth);
+      formData.append('certificateFileNumber', data.certificateFileNumber);
+      
+      // 프로필 이미지
+      formData.append('profileImage', data.profileImage);
+      
+      // 약관 동의
+      formData.append('agreedTerms', data.agreedTerms.toString());
+      formData.append('agreedPrivacy', data.agreedPrivacy.toString());
+
+      const response = await fetch('/api/auth/advisor/signup', {
+        method: 'POST',
+        body: formData, // Content-Type은 브라우저가 자동으로 설정
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `전문가 회원가입 실패: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('전문가 회원가입 API 호출 실패:', error);
+      throw error;
+    }
   }
 
   // 이메일 인증 코드 발송
@@ -294,13 +348,16 @@ class AuthService {
     }
 
     const result = await response.json();
+    console.log('getUserProfile 응답:', result);
     
     // BaseResponse 구조로 응답이 올 경우
     if (result.isSuccess) {
+      console.log('BaseResponse 구조 응답:', result.result);
       return result.result;
     }
     
     // 직접 데이터가 올 경우
+    console.log('직접 데이터 응답:', result);
     return result;
   }
 

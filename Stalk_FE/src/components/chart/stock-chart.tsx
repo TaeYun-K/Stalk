@@ -1,4 +1,4 @@
-console.log('StockChart module loading...');
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Chart as ChartJS,
@@ -16,7 +16,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { Canvas, Line as FabricLine, Rect, Circle, IText } from 'fabric';
 import axios from 'axios';
-console.log('StockChart imports completed');
+
 
 ChartJS.register(
   CategoryScale,
@@ -65,7 +65,7 @@ const StockChart: React.FC<StockChartProps> = ({
   period: propPeriod = 30,
   drawingMode: propDrawingMode = false
 }) => {
-  console.log("StockChart - Component rendered with selectedStock:", selectedStock);
+  
 
   const [chartData, setChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>(propChartType);
@@ -97,9 +97,9 @@ const StockChart: React.FC<StockChartProps> = ({
   const chartRef = useRef<any>(null);
 
   useEffect(() => {
-    console.log("StockChart - selectedStock changed:", selectedStock);
+
     if (selectedStock?.ticker) {
-      console.log("StockChart - Fetching data for ticker:", selectedStock.ticker);
+      
       fetchChartData();
     }
   }, [selectedStock?.ticker, period]); // Only re-fetch when ticker or period changes, not the entire selectedStock object
@@ -154,7 +154,7 @@ const StockChart: React.FC<StockChartProps> = ({
             fabricCanvasRef.current.freeDrawingBrush.width = strokeWidth;
           }
 
-          console.log('Fabric canvas initialized successfully');
+    
         } catch (error) {
           console.error('Error initializing Fabric.js canvas:', error);
         }
@@ -183,7 +183,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const canvasElement = canvas.getElement();
 
         if (isDrawingMode) {
-          console.log('Enabling drawing mode with tool:', drawingTool);
+  
           canvasElement.style.pointerEvents = 'auto';
           canvasElement.style.zIndex = '10';
 
@@ -195,7 +195,7 @@ const StockChart: React.FC<StockChartProps> = ({
             canvas.freeDrawingBrush.width = strokeWidth;
           }
         } else {
-          console.log('Disabling drawing mode');
+  
           canvasElement.style.pointerEvents = 'none';
           canvasElement.style.zIndex = '1';
           canvas.isDrawingMode = false;
@@ -223,7 +223,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const fetchChartData = async (isUpdate = false) => {
     // Prevent duplicate requests
     if (isLoading) {
-      console.log('Already loading data, skipping duplicate request');
+      
       return;
     }
 
@@ -234,18 +234,17 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
-      console.log("StockChart - Making request to:", `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`);
-      const response = await axios.get(
-        `https://i13e205.p.ssafy.io:8443/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
-      );
+      
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/api/stalk/daily/${selectedStock?.ticker}?period=${period}`
+        );
 
-      console.log("StockChart - Response received:", response.data);
+      
 
       if (response.data.success) {
         const data: ChartDataPoint[] = response.data.data;
         const aggregationType = response.data.aggregationType || 'daily';
-        console.log("StockChart - Raw data points:", data);
-        console.log("StockChart - Aggregation type:", aggregationType);
+        
 
         if (!data || data.length === 0) {
           console.error("StockChart - No data points in response");
@@ -255,7 +254,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
         // Sort by date in ascending order (oldest first)
         const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
-        console.log("StockChart - Sorted data:", sortedData);
+        
 
         const labels = sortedData.map(item => {
           const date = item.date;
@@ -277,9 +276,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const prices = sortedData.map(item => item.close);
         const volumes = sortedData.map(item => item.volume);
 
-        console.log("StockChart - Labels:", labels);
-        console.log("StockChart - Prices:", prices);
-        console.log("StockChart - Volumes:", volumes);
+        
 
         // If we're updating and have an existing chart, update it smoothly
         if (isUpdate && chartRef.current && chartData) {
@@ -324,10 +321,10 @@ const StockChart: React.FC<StockChartProps> = ({
             ],
           };
 
-          console.log("StockChart - Setting chart data:", newChartData);
+
           setChartData(newChartData);
         }
-        console.log("StockChart - Chart data state updated, loading:", isLoading);
+        
       } else {
         console.error("StockChart - Response not successful:", response.data);
         setError(response.data.error || '차트 데이터를 불러오는데 실패했습니다.');
@@ -347,10 +344,10 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const toggleDrawingMode = () => {
     if (!fabricCanvasRef.current) {
-      console.log('Canvas not initialized yet, please wait...');
+      
       return;
     }
-    console.log('Toggling drawing mode:', !isDrawingMode);
+    
     setIsDrawingMode(!isDrawingMode);
   };
 
@@ -567,7 +564,7 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   if (!selectedStock) {
-    console.log("StockChart - No selectedStock, showing placeholder");
+    
     return (
       <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg`}>
         <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} text-base py-16`}>
@@ -577,7 +574,7 @@ const StockChart: React.FC<StockChartProps> = ({
     );
   }
 
-  console.log("StockChart - Rendering chart for stock:", selectedStock.ticker);
+  
 
   return (
     <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} flex flex-col overflow-hidden`}>
