@@ -226,6 +226,16 @@ const MyPage = () => {
         expert: '김범주',
         videoConsultation: '상담 입장',
         action: '취소 요청'
+      },
+
+      {
+        id: '2',   
+        date: '2025. 08. 04.',
+        time: '17:00',
+        content: 'AMD 30만원 가자',
+        expert: '김태윤',
+        videoConsultation: '상담 입장',
+        action: '취소 요청'
       }
     ],
     '상담 완료': [
