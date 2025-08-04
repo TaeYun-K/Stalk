@@ -108,6 +108,7 @@ const AppContent: React.FC = () => {
               <Route path="/experts" element={<ExpertsPage />} />
               <Route path="/community" element={<CommunityPage />} />
               <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
+              <Route path="/knowledge-board/:postId" element={<KnowledgeBoardPage />} />
 
               <Route path="/products" element={<div className="p-4"><h1>상품 조회</h1></div>} />
               <Route path="/mypage" element={<MyPage />} />

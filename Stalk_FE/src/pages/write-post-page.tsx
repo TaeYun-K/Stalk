@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import CommunityService from '@/services/communityService';
+import { PostCategory, CommunityPostCreateRequestDto, CommunityPostUpdateRequestDto } from '@/types';
 
 const WritePostPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedTab, setSelectedTab] = useState('knowledge');
+  const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editPostId, setEditPostId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    category: '질문'
+    category: PostCategory.QUESTION
   });
 
   useEffect(() => {
@@ -16,12 +21,20 @@ const WritePostPage: React.FC = () => {
     if (tabParam === 'knowledge' || tabParam === 'news') {
         setSelectedTab(tabParam);
     }
+
+    // 수정 모드 확인
+    const editParam = searchParams.get('edit');
+    if (editParam) {
+      setIsEditMode(true);
+      setEditPostId(parseInt(editParam));
+      fetchPostForEdit(parseInt(editParam));
+    }
   }, [searchParams]);
 
   const fetchPostForEdit = async (postId: number) => {
     setLoading(true);
     try {
-      const post: CommunityPostDetailDto = await CommunityService.getPostDetail(postId);
+      const post = await CommunityService.getPostDetail(postId);
       setFormData({
         title: post.title,
         content: post.content,
@@ -36,10 +49,61 @@ const WritePostPage: React.FC = () => {
     }
   };
 
+  const getCategoryFromDisplayName = (displayName: string): PostCategory => {
+    switch (displayName) {
+      case '질문':
+        return PostCategory.QUESTION;
+      case '매매기록':
+        return PostCategory.TRADE_RECORD;
+      case '종목토론':
+        return PostCategory.STOCK_DISCUSSION;
+      case '시황분석':
+        return PostCategory.MARKET_ANALYSIS;
+      default:
+        return PostCategory.QUESTION;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
-    // 글쓰기 로직 구현
-    navigate('/community?tab=knowledge');
+    
+    if (!formData.title.trim() || !formData.content.trim()) {
+      alert('제목과 내용을 모두 입력해주세요.');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      if (isEditMode && editPostId) {
+        // 수정 모드
+        const updateData: CommunityPostUpdateRequestDto = {
+          category: formData.category,
+          title: formData.title.trim(),
+          content: formData.content.trim()
+        };
+        
+        await CommunityService.updatePost(editPostId, updateData);
+        alert('게시글이 수정되었습니다.');
+      } else {
+        // 새 글 작성 모드
+        const createData: CommunityPostCreateRequestDto = {
+          category: formData.category,
+          title: formData.title.trim(),
+          content: formData.content.trim()
+        };
+        
+        await CommunityService.createPost(createData);
+        alert('게시글이 작성되었습니다.');
+      }
+      
+      navigate('/community?tab=knowledge');
+    } catch (error) {
+      console.error('Error saving post:', error);
+      alert('게시글 저장 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -116,8 +180,8 @@ const WritePostPage: React.FC = () => {
                         type="radio"
                         name="category"
                         value="질문"
-                        checked={formData.category === '질문'}
-                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        checked={formData.category === PostCategory.QUESTION}
+                        onChange={(e) => setFormData({...formData, category: getCategoryFromDisplayName(e.target.value)})}
                         className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-md">질문</span>
@@ -127,8 +191,8 @@ const WritePostPage: React.FC = () => {
                         type="radio"
                         name="category"
                         value="매매기록"
-                        checked={formData.category === '매매기록'}
-                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        checked={formData.category === PostCategory.TRADE_RECORD}
+                        onChange={(e) => setFormData({...formData, category: getCategoryFromDisplayName(e.target.value)})}
                         className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-md">매매기록</span>
@@ -138,11 +202,22 @@ const WritePostPage: React.FC = () => {
                         type="radio"
                         name="category"
                         value="종목토론"
-                        checked={formData.category === '종목토론'}
-                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        checked={formData.category === PostCategory.STOCK_DISCUSSION}
+                        onChange={(e) => setFormData({...formData, category: getCategoryFromDisplayName(e.target.value)})}
                         className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-md">종목토론</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="category"
+                        value="시황분석"
+                        checked={formData.category === PostCategory.MARKET_ANALYSIS}
+                        onChange={(e) => setFormData({...formData, category: getCategoryFromDisplayName(e.target.value)})}
+                        className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-md">시황분석</span>
                     </label>
                   </div>
                 </div>
@@ -159,6 +234,7 @@ const WritePostPage: React.FC = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="제목을 입력하세요"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -174,6 +250,7 @@ const WritePostPage: React.FC = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="내용을 입력하세요"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -183,14 +260,16 @@ const WritePostPage: React.FC = () => {
                     type="button"
                     onClick={() => navigate('/community?tab=knowledge')}
                     className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-2xl hover:bg-gray-50 transition-colors"
+                    disabled={loading}
                   >
                     취소
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-2xl transition-colors"
+                    className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-2xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading}
                   >
-                    등록
+                    {loading ? '처리 중...' : (isEditMode ? '수정' : '등록')}
                   </button>
                 </div>
               </form>
