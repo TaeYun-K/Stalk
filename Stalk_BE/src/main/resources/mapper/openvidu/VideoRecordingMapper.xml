@@ -3,7 +3,7 @@
   PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.project.api.openvidu.mapper.VideoRecordingMapper">
+<mapper namespace="com.Stalk.project.api.openvidu.mapper.VideoRecordingMapper"> 
 
   <!-- 녹화 시작 시 INSERT -->
   <insert id="insertRecording" parameterType="com.project.openvidu.model.VideoRecording">
