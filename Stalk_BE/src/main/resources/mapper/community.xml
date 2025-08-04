@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.api.community.dao.CommunityMapper">
+<mapper namespace="com.Stalk.project.community.dao.CommunityMapper">
 
   <!-- 1. 커뮤니티 글 목록 조회 -->
   <delete id="deleteAllCommentsOfPost">
@@ -46,7 +46,7 @@
 
   <!-- 5. 커뮤니티 글 상세 조회 -->
   <select id="findCommunityPosts"
-    resultType="com.Stalk.project.api.community.dto.out.CommunityPostSummaryDto">
+    resultType="com.Stalk.project.community.dto.out.CommunityPostSummaryDto">
     SELECT
     cp.id as postId,
     cp.title,
@@ -88,7 +88,7 @@
 
   <!-- 8. 커뮤니티 글 수정 -->
   <select id="findCommunityPostDetail"
-    resultType="com.Stalk.project.api.community.dto.out.CommunityPostDetailDto">
+    resultType="com.Stalk.project.community.dto.out.CommunityPostDetailDto">
     SELECT cp.id                                                 as postId,
            cp.title,
            cp.content,
@@ -120,7 +120,7 @@
 
   <!-- 9. 커뮤니티 글 논리적 삭제 -->
   <select id="findCommunityPostComments"
-    resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
+    resultType="com.Stalk.project.community.dto.out.CommunityCommentDto">
     SELECT cc.id                                                 as commentId,
            cc.content,
            CASE
@@ -144,7 +144,7 @@
 
   <!-- 10. 글에 달린 모든 댓글 물리적 삭제 -->
   <select id="findPostPermission"
-    resultType="com.Stalk.project.api.community.dto.out.CommunityPostPermissionDto">
+    resultType="com.Stalk.project.community.dto.out.CommunityPostPermissionDto">
     SELECT cp.id         as postId,
            cp.user_id    as authorId,
            u.role        as authorRole,
@@ -169,7 +169,7 @@
 
   <!-- 마지막 생성된 댓글 ID 조회 -->
   <select id="findCommentsByPostId"
-    resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
+    resultType="com.Stalk.project.community.dto.out.CommunityCommentDto">
     SELECT cc.id                                                 as commentId,
            cc.content,
            CASE
@@ -193,7 +193,7 @@
 
   <!-- 댓글 목록 조회 (페이징) -->
   <select id="findCommentPermission"
-    resultType="com.Stalk.project.api.community.dto.out.CommunityCommentPermissionDto">
+    resultType="com.Stalk.project.community.dto.out.CommunityCommentPermissionDto">
     SELECT id,
            user_id as userId,
            post_id as postId,

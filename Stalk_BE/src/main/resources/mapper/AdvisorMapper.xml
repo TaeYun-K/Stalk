@@ -3,9 +3,9 @@
   PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.api.signup.dao.AdvisorSignupMapper">
+<mapper namespace="com.Stalk.project.signup.dao.AdvisorSignupMapper">
 
-  <insert id="insertAdvisor" parameterType="com.Stalk.project.api.signup.entity.Advisor">
+  <insert id="insertAdvisor" parameterType="com.Stalk.project.signup.entity.Advisor">
     INSERT INTO advisor (
       advisor_id,
       profile_image_url,
