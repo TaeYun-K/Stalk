@@ -4,7 +4,6 @@ import com.Stalk.project.api.advisor.dao.AdvisorMapper;
 import com.Stalk.project.api.advisor.dto.in.AdvisorBlockedTimesRequestDto;
 import com.Stalk.project.api.advisor.dto.in.AdvisorListRequestDto;
 import com.Stalk.project.api.advisor.dto.in.AvailableTimeSlotsRequestDto;
-import com.Stalk.project.advisor.dto.out.*;
 import com.Stalk.project.api.advisor.dto.out.AdvisorBlockedTimesResponseDto;
 import com.Stalk.project.api.advisor.dto.out.AdvisorBlockedTimesUpdateResponseDto;
 import com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto;

@@ -1,11 +1,18 @@
 package com.Stalk.project.api.admin.service;
 
+import static com.Stalk.project.global.response.BaseResponseStatus.ADMIN_ACCESS_DENIED;
+import static com.Stalk.project.global.response.BaseResponseStatus.ALREADY_PROCESSED_REQUEST;
+import static com.Stalk.project.global.response.BaseResponseStatus.APPROVAL_PROCESSING_FAILED;
+import static com.Stalk.project.global.response.BaseResponseStatus.APPROVAL_REQUEST_NOT_FOUND;
+import static com.Stalk.project.global.response.BaseResponseStatus.REJECTION_PROCESSING_FAILED;
+
 import com.Stalk.project.api.admin.dao.AdminApprovalMapper;
 import com.Stalk.project.api.admin.dto.in.ApprovalActionRequestDto;
 import com.Stalk.project.api.admin.dto.in.ApprovalRequestListDto;
 import com.Stalk.project.api.admin.dto.in.AdvisorApprovalRequestDto;
 import com.Stalk.project.api.admin.dto.out.ApprovalActionResponseDto;
 import com.Stalk.project.global.exception.BaseException;
+import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
