@@ -3,13 +3,17 @@ package com.Stalk.project.community.controller;
 import com.Stalk.project.community.dto.in.CommunityPostCreateRequestDto;
 import com.Stalk.project.community.dto.in.CommunityPostListRequestDto;
 import com.Stalk.project.community.dto.out.CommunityPostCreateResponseDto;
+import com.Stalk.project.community.dto.out.CommunityPostDetailDto;
 import com.Stalk.project.community.dto.out.CommunityPostSummaryDto;
 import com.Stalk.project.community.dto.out.WritePermissionResponseDto;
 import com.Stalk.project.community.service.CommunityService;
 import com.Stalk.project.login.util.SecurityUtil;
 import com.Stalk.project.response.BaseResponse;
 import com.Stalk.project.util.CursorPage;
+import com.Stalk.project.util.PageRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -57,5 +61,19 @@ public class CommunityController {
         CommunityPostCreateResponseDto result = communityService.createCommunityPost(
             currentUserId, currentUserRole, requestDto);
         return new BaseResponse<>(result);
+    }
+
+    // CommunityController.java에 추가할 메서드
+
+    @GetMapping("/posts/{postId}")
+    @Operation(summary = "커뮤니티 글 상세 조회", description = "특정 커뮤니티 글의 상세 정보와 댓글을 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "글 상세 조회 성공")
+    @ApiResponse(responseCode = "404", description = "존재하지 않거나 삭제된 글")
+    public BaseResponse<CommunityPostDetailDto> getCommunityPostDetail(
+        @PathVariable @Schema(description = "글 ID") Long postId,
+        @ModelAttribute @Schema(description = "페이징 정보") PageRequestDto pageRequest) {
+
+        CommunityPostDetailDto postDetail = communityService.getCommunityPostDetail(postId, pageRequest);
+        return new BaseResponse<>(postDetail);
     }
 }
