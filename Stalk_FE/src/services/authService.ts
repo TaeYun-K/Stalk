@@ -1,386 +1,257 @@
-import { User, LoginRequest, LoginResponse, SignupRequest, AdvisorSignupRequest } from '@/types';
+import { User, LoginRequest, LoginResponse } from '@/types';
 
-// localStorage에서 토큰 관리
-const ACCESS_TOKEN_KEY = 'accessToken';
-const USER_INFO_KEY = 'userInfo';
-
-// 사용자 정보는 메모리에 저장 (새로고침 시 localStorage에서 복원)
+// 메모리에 저장되는 토큰과 사용자 정보
+let accessToken: string | null = null;
 let userInfo: any = null;
+let refreshPromise: Promise<string | null> | null = null;
 
-interface EmailVerificationRequest {
-  email: string;
-}
+// JWT 디코딩 함수
+const decodeJwt = (token: string): any => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(window.atob(base64));
+  } catch (error) {
+    console.error('JWT 디코딩 실패:', error);
+    return null;
+  }
+};
 
-interface EmailVerificationResponse {
-  success: boolean;
-  message: string;
-}
+// 토큰 만료 시간 확인 함수
+const isTokenExpired = (token: string): boolean => {
+  const decoded = decodeJwt(token);
+  if (!decoded || !decoded.exp) return true;
+  
+  // 현재 시간과 만료 시간 비교 (exp는 초 단위)
+  return decoded.exp * 1000 <= Date.now();
+};
+
+// 토큰 만료 임박 확인 함수 (3분 이내)
+const isTokenExpiringSoon = (token: string): boolean => {
+  const decoded = decodeJwt(token);
+  if (!decoded || !decoded.exp) return true;
+  
+  // 현재 시간과 만료 시간 비교 (3분 = 180초)
+  return (decoded.exp * 1000) - Date.now() <= 180000;
+};
 
 class AuthService {
-  // Access Token 관리 메서드들
+  // Access Token 관리
   static getAccessToken(): string | null {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
+    return accessToken;
   }
 
-  static setAccessToken(token: string): void {
-    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  private static setAccessToken(token: string): void {
+    accessToken = token;
   }
 
-  static removeAccessToken(): void {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  private static removeAccessToken(): void {
+    accessToken = null;
   }
 
   // 로그인
   static async login(data: LoginRequest): Promise<LoginResponse> {
     try {
-      // 입력 데이터 검증
       if (!data.userId || !data.password) {
         throw new Error('아이디와 비밀번호를 모두 입력해주세요.');
       }
       
-      // 공백 제거
       const cleanData = {
         userId: data.userId.trim(),
         password: data.password.trim()
       };
       
-
-      
-      const response = await fetch(`/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache',
-        },
-        body: JSON.stringify(cleanData),
-      });
-
-      if (!response.ok) {
-        console.error('API 응답 오류:', {
-          status: response.status,
-          statusText: response.statusText,
-          url: response.url
-        });
-        
-        const errorData = await response.json().catch(() => ({}));
-        console.error('에러 응답 데이터:', errorData);
-        
-        // Spring Boot 기본 에러 응답 처리
-        if (errorData.error === 'Bad Request' && errorData.status === 400) {
-          console.error('Spring Boot 검증 실패 - 요청 데이터:', cleanData);
-          throw new Error('입력 데이터가 올바르지 않습니다. 아이디와 비밀번호를 확인해주세요.');
-        }
-        
-        // 백엔드 커스텀 에러 메시지가 있는 경우
-        if (errorData.message) {
-          throw new Error(errorData.message);
-        }
-        
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // 백엔드에서 직접 LoginResponse를 반환 (BaseApiResponse 래퍼 없음)
-      const result: LoginResponse = await response.json();
-
-      // Access Token을 localStorage에 저장
-      this.setAccessToken(result.accessToken);
-      
-      // 사용자 정보는 JWT 토큰에서 추출하거나 별도 API로 조회해야 함
-      // 임시로 토큰에서 기본 정보만 설정
-      userInfo = {
-        userId: 0, // JWT에서 추출하거나 별도 API 호출 필요
-        userName: '', // JWT에서 추출하거나 별도 API 호출 필요
-        role: 'USER' // JWT에서 추출하거나 별도 API 호출 필요
-      };
-      
-      // 로그인 성공 후 사용자 정보를 별도로 조회
-      try {
-        const userProfile = await this.getUserProfile();
-        userInfo = {
-          userId: 0, // UserProfileResponseDto에는 Long id가 없어서 0으로 설정
-          userName: userProfile.name,
-          role: userProfile.role as 'USER' | 'ADVISOR' | 'ADMIN'
-        };
-        
-        // 사용자 정보를 localStorage에도 저장
-        localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
-      } catch (error) {
-        console.warn('사용자 정보 조회 실패, 기본값 사용:', error);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('로그인 API 호출 실패:', error);
-      
-      // Mock 데이터는 더 이상 사용하지 않음 (실제 백엔드 API 사용)
-      
-      throw error;
-    }
-  }
-
-  // 일반 회원가입
-  static async signup(data: SignupRequest): Promise<{ success: boolean; message: string }> {
-    try {
-      const response = await fetch('/api/auth/signup', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanData),
+        credentials: 'include', // 쿠키를 받기 위해 추가
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `회원가입 실패: ${response.status}`);
+        throw new Error(errorData.message || `로그인 실패: ${response.status}`);
       }
 
       const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('회원가입 API 호출 실패:', error);
-      throw error;
-    }
-  }
-
-  // 전문가 회원가입
-  static async advisorSignup(data: AdvisorSignupRequest): Promise<{ success: boolean; message: string }> {
-    try {
-      const formData = new FormData();
       
-      // 기본 정보
-      formData.append('userId', data.userId);
-      formData.append('name', data.name);
-      formData.append('nickname', data.nickname);
-      formData.append('password', data.password);
-      formData.append('passwordConfirm', data.passwordConfirm);
-      formData.append('contact', data.contact);
-      formData.append('email', data.email);
+      // Access Token을 메모리에 저장
+      this.setAccessToken(result.accessToken);
       
-      // 자격증 정보
-      formData.append('certificateName', data.certificateName);
-      formData.append('certificateFileSn', data.certificateFileSn);
-      formData.append('birth', data.birth);
-      formData.append('certificateFileNumber', data.certificateFileNumber);
-      
-      // 프로필 이미지
-      formData.append('profileImage', data.profileImage);
-      
-      // 약관 동의
-      formData.append('agreedTerms', data.agreedTerms.toString());
-      formData.append('agreedPrivacy', data.agreedPrivacy.toString());
-
-      const response = await fetch('/api/auth/advisor/signup', {
-        method: 'POST',
-        body: formData, // Content-Type은 브라우저가 자동으로 설정
+      // 사용자 정보 조회 (여기서는 직접 fetch 사용)
+      const userResponse = await fetch('/api/users/me', {
+        headers: {
+          'Authorization': `Bearer ${result.accessToken}`,
+          'Content-Type': 'application/json',
+        }
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `전문가 회원가입 실패: ${response.status}`);
+      
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        userInfo = userData.result || userData;
       }
-
-      const result = await response.json();
+      
       return result;
     } catch (error) {
-      console.error('전문가 회원가입 API 호출 실패:', error);
+      console.error('로그인 실패:', error);
       throw error;
     }
-  }
-
-  // 이메일 인증 코드 발송
-  static async sendEmailVerification(_data: EmailVerificationRequest): Promise<EmailVerificationResponse> {
-    // TODO: 실제 API 호출로 대체
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: '인증 코드가 발송되었습니다.'
-        });
-      }, 1000);
-    });
-  }
-
-  // 이메일 인증 코드 확인
-  static async verifyEmailCode(_email: string, code: string): Promise<{ success: boolean; message: string }> {
-    // TODO: 실제 API 호출로 대체
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: code === '123456', // 임시 검증 로직
-          message: code === '123456' ? '인증이 완료되었습니다.' : '인증 코드가 올바르지 않습니다.'
-        });
-      }, 1000);
-    });
   }
 
   // 로그아웃
   static async logout(): Promise<void> {
-    const token = this.getAccessToken();
-    if (token) {
-      try {
-        await fetch(`/api/auth/logout`, {
+    try {
+      if (accessToken) {
+        await fetch('/api/auth/logout', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
           },
-
         });
-      } catch (error) {
-        console.error('로그아웃 API 호출 실패:', error);
-        // 개발 환경에서 CORS 에러나 네트워크 에러인 경우 Mock 처리
-        if (import.meta.env.DEV && (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch')))) {
-          console.warn('개발 환경: 백엔드 서버 연결 실패, 로컬 로그아웃만 진행합니다.');
-        }
-        // CORS 에러나 네트워크 에러가 발생해도 로컬 정리는 계속 진행
       }
+    } catch (error) {
+      console.error('로그아웃 API 호출 실패:', error);
+    } finally {
+      this.removeAccessToken();
+      userInfo = null;
     }
-    
-    // localStorage와 메모리에서 모든 인증 정보 제거
-    this.removeAccessToken();
-    localStorage.removeItem(USER_INFO_KEY);
-    userInfo = null;
   }
 
-
-
-  // 토큰 갱신 (refresh token은 서버에서 관리하므로 제거)
+  // 토큰 갱신 (중복 요청 방지)
   static async refreshToken(): Promise<string | null> {
-    // refresh token은 서버에서 관리하므로 이 메서드는 더 이상 사용하지 않음
-    console.warn('토큰 갱신은 서버에서 관리합니다.');
-    return null;
+    // 이미 진행 중인 refresh 요청이 있다면 그 결과를 기다림
+    if (refreshPromise) {
+      return refreshPromise;
+    }
+
+    refreshPromise = (async () => {
+      try {
+        const response = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'include', // refresh token 쿠키 전송
+        });
+
+        if (!response.ok) {
+          throw new Error('토큰 갱신 실패');
+        }
+
+        const data = await response.json();
+        this.setAccessToken(data.accessToken);
+        return data.accessToken;
+      } catch (error) {
+        console.error('토큰 갱신 실패:', error);
+        this.removeAccessToken();
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+
+    return refreshPromise;
   }
 
   // 인증된 API 요청 헬퍼
-  static async authenticatedRequest(url: string, options: any = {}) {
-    const token = this.getAccessToken();
-    
-    const config = {
+  static async authenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    if (!accessToken) {
+      throw new Error('인증이 필요합니다.');
+    }
+
+    // 토큰이 만료되었거나 곧 만료될 예정인 경우에만 refresh
+    if (isTokenExpired(accessToken) || isTokenExpiringSoon(accessToken)) {
+      const newToken = await this.refreshToken();
+      if (!newToken) {
+        throw new Error('인증이 만료되었습니다.');
+      }
+    }
+
+    const config: RequestInit = {
       ...options,
       headers: {
         ...options.headers,
-        'Authorization': token ? `Bearer ${token}` : '',
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
+      credentials: 'include', // 쿠키 포함
     };
-    
-    return fetch(url, config);
-  }
 
-  // 자동 로그인 체크
-  static checkAutoLogin(): boolean {
-    const token = this.getAccessToken();
-    const storedUserInfo = localStorage.getItem(USER_INFO_KEY);
-    
-    if (token && storedUserInfo && !userInfo) {
-      // localStorage에서 사용자 정보 복원
-      try {
-        userInfo = JSON.parse(storedUserInfo);
-      } catch (error) {
-        console.error('사용자 정보 파싱 실패:', error);
-        localStorage.removeItem(USER_INFO_KEY);
-        return false;
+    const response = await fetch(url, config);
+
+    // 401 에러 시 토큰 갱신 후 재시도
+    if (response.status === 401) {
+      const newToken = await this.refreshToken();
+      if (!newToken) {
+        throw new Error('인증이 만료되었습니다.');
       }
+
+      config.headers = {
+        ...config.headers,
+        'Authorization': `Bearer ${newToken}`,
+      };
+
+      return fetch(url, config);
     }
-    
-    return !!(token && userInfo);
+
+    return response;
   }
 
-  // 토큰 만료 확인 (간단한 버전)
-  static async checkTokenExpiry(): Promise<boolean> {
-    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    if (!accessToken) {
-      return false;
-    }
-    
-    // 토큰이 있으면 유효한 것으로 간주 (서버에서 토큰 만료 관리)
-    return true;
-  }
-
-  // 토큰 상태 초기화 (앱 시작 시 호출)
-  static initialize(): void {
-    // localStorage에서 사용자 정보 복원
-    const storedUserInfo = localStorage.getItem(USER_INFO_KEY);
-    if (storedUserInfo) {
-      try {
-        userInfo = JSON.parse(storedUserInfo);
-      } catch (error) {
-        console.error('사용자 정보 파싱 실패:', error);
-        localStorage.removeItem(USER_INFO_KEY);
+  // 앱 초기화 (새로고침/새 탭)
+  static async initialize(): Promise<void> {
+    try {
+      // 페이지 진입 시 무조건 refresh 요청
+      const token = await this.refreshToken();
+      if (token) {
+        await this.fetchUserProfile();
       }
+    } catch (error) {
+      console.error('초기화 실패:', error);
+      this.removeAccessToken();
+      userInfo = null;
     }
   }
 
-  // 사용자 정보 가져오기
+  // 사용자 프로필 조회
+  private static async fetchUserProfile(): Promise<void> {
+    try {
+      const response = await this.authenticatedRequest('/api/users/me');
+      if (!response.ok) {
+        throw new Error('사용자 정보 조회 실패');
+      }
+
+      const data = await response.json();
+      userInfo = data.result || data;
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
+      throw error;
+    }
+  }
+
+  // 사용자 정보 조회
   static getUserInfo(): any {
-    if (!userInfo) {
-      const storedUserInfo = localStorage.getItem(USER_INFO_KEY);
-      if (storedUserInfo) {
-        try {
-          userInfo = JSON.parse(storedUserInfo);
-        } catch (error) {
-          console.error('사용자 정보 파싱 실패:', error);
-          localStorage.removeItem(USER_INFO_KEY);
-        }
-      }
-    }
     return userInfo;
   }
 
-  // 사용자 프로필 조회 (백엔드 API 호출)
-  static async getUserProfile(): Promise<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string }> {
-    const token = this.getAccessToken();
-    if (!token) {
-      throw new Error('로그인이 필요합니다.');
+  // 사용자 프로필 조회 (외부 호출용)
+  static async getUserProfile(): Promise<any> {
+    try {
+      const response = await this.authenticatedRequest('/api/users/me');
+      if (!response.ok) {
+        throw new Error('사용자 정보 조회 실패');
+      }
+      const data = await response.json();
+      return data.result || data;
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
+      throw error;
     }
-
-    const response = await fetch('/api/users/me', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`사용자 정보 조회 실패: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('getUserProfile 응답:', result);
-    
-    // BaseResponse 구조로 응답이 올 경우
-    if (result.isSuccess) {
-      console.log('BaseResponse 구조 응답:', result.result);
-      return result.result;
-    }
-    
-    // 직접 데이터가 올 경우
-    console.log('직접 데이터 응답:', result);
-    return result;
   }
 
-  // 토큰 검증
-  static async validateToken(_token: string): Promise<{ valid: boolean; user?: User }> {
-    // TODO: 실제 토큰 검증 로직
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          valid: true,
-          user: {
-            id: 1,
-            userId: 'ssafy_kim',
-            name: '김싸피',
-            contact: '010-0000-0000',
-            email: 'ssafy@samsung.com',
-            nickname: '김싸피',
-            role: 'USER'
-          }
-        });
-      }, 500);
-    });
+  // 로그인 상태 확인
+  static isLoggedIn(): boolean {
+    return !!accessToken && !!userInfo;
   }
 }
 
-export default AuthService; 
+export default AuthService;

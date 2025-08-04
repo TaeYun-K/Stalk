@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import CommunityService, { CommunityPostSummaryDto, PostCategory } from '@/services/communityService';
+import CommunityService from '@/services/communityService';
+import { PostCategory, CommunityPostSummaryDto } from '@/types';
 
 const CommunityPage = () => {
   const navigate = useNavigate();
@@ -30,8 +31,11 @@ const CommunityPage = () => {
     setError(null);
     
     try {
-      const data = await CommunityService.getPosts(PostCategory.INVESTMENT_KNOWLEDGE);
-      setKnowledgePosts(data.items || []);
+      console.log('Fetching posts with category:', PostCategory.ALL);
+      const data = await CommunityService.getPosts(PostCategory.ALL);
+      console.log('API Response:', data);
+      setKnowledgePosts(data.content || []); // items -> content로 수정
+      console.log('Set knowledge posts:', data.content || []); // items -> content로 수정
     } catch (error) {
       console.error('Error fetching knowledge posts:', error);
       setError('게시글을 불러오는 중 오류가 발생했습니다.');
@@ -41,7 +45,7 @@ const CommunityPage = () => {
   };
 
   const handlePostClick = (postId: number) => {
-    navigate(`/community/post/${postId}`);
+    navigate(`/knowledge-board/${postId}`);
   };
 
   const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
@@ -98,14 +102,14 @@ const CommunityPage = () => {
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case PostCategory.INVESTMENT_KNOWLEDGE:
-        return '투자지식in';
+      case PostCategory.QUESTION:
+        return '질문';
+      case PostCategory.TRADE_RECORD:
+        return '매매기록';
+      case PostCategory.STOCK_DISCUSSION:
+        return '종목토론';
       case PostCategory.MARKET_ANALYSIS:
-        return '시장분석';
-      case PostCategory.PORTFOLIO:
-        return '포트폴리오';
-      case PostCategory.NEWS:
-        return '뉴스';
+        return '시황분석';
       default:
         return category;
     }
@@ -120,18 +124,32 @@ const CommunityPage = () => {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-lg">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-lg text-red-500">{error}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex gap-8">
           {/* Left Sidebar */}
           <div className="pt-16 w-64">
-            <div className="mb-6">
-              <h2 className="ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
-            </div>
+            <h2 className="mb-6 ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
             <nav className="space-y-2">
               <button
-                onClick={() => setSelectedTab('news')}
+                onClick={() => navigate('/community?tab=news')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
                   selectedTab === 'news'
                     ? 'bg-blue-50 text-blue-600 font-medium'
@@ -146,7 +164,7 @@ const CommunityPage = () => {
                 </svg>
               </button>
               <button
-                onClick={() => setSelectedTab('knowledge')}
+                onClick={() => navigate('/community?tab=knowledge')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
                   selectedTab === 'knowledge'
                     ? 'bg-blue-50 text-blue-600 font-medium'
@@ -163,170 +181,92 @@ const CommunityPage = () => {
             </nav>
           </div>
 
-          {/* Main Content Area */}
-          <div className="flex-1 pt-16">
-            {selectedTab === 'news' && (
+          {/* Right Content */}
+          <div className="pt-16 flex-1">
+            {selectedTab === 'news' ? (
               <div className="space-y-6">
-                {/* Search and Sort */}
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex-1 max-w-md">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="뉴스 검색"
-                        className="w-full pl-6 pr-10 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div>
-                    <select className="px-4 py-3 focus:outline-none">
-                      <option>최신순</option>
-                      <option>인기순</option>
-                      <option>조회순</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* News Feed */}
-                <div className="space-y-6">
+                <h1 className="text-2xl font-bold text-gray-900">뉴스</h1>
+                <div className="grid gap-6">
                   {newsPosts.map((post) => (
-                    <div key={post.id} className="bg-white border-b border-gray-200 p-6 hover:shadow-lg transition-shadow cursor-pointer">
-                      <div className="flex gap-6">
+                    <div key={post.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-start space-x-4">
+                        <img src={post.image} alt={post.title} className="w-24 h-24 object-cover rounded-lg" />
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-md">{post.category}</span>
-                            <span className="text-sm text-gray-500"></span>
+                            <span className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                              {post.category}
+                            </span>
+                            <span className="text-sm text-gray-500">{post.date}</span>
                           </div>
-                          <h3 className="text-left text-lg font-semibold text-gray-900 my-3">{post.title}</h3>
-                          <p className="text-left text-gray-600 mb-3 leading-loose">{post.content}</p>
-                          <div className="flex items-center justify-end">
-                            <span className="text-sm text-gray-500">{post.date} / {post.author}</span>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
+                          <p className="text-gray-600 text-sm line-clamp-3">{post.content}</p>
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-sm text-gray-500">작성자: {post.author}</span>
                           </div>
-                        </div>
-                        <div className="w-48 h-32 bg-gray-200 rounded-lg overflow-hidden">
-                          <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-
-            {selectedTab === 'knowledge' && (
+            ) : (
               <div className="space-y-6">
-                {/* Search and Sort */}
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex-1 max-w-md">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="투자 질문 검색"
-                        className="w-full pl-6 pr-10 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <select className="px-4 py-3 focus:outline-none">
-                      <option>최신순</option>
-                      <option>인기순</option>
-                      <option>조회순</option>
-                    </select>
-                    <button
-                      onClick={() => navigate('/write-post')}
-                      className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span>글쓰기</span>
-                    </button>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-2xl font-bold text-gray-900">투자 지식iN</h1>
+                  <button
+                    onClick={() => navigate('/write-post')}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    글쓰기
+                  </button>
                 </div>
-
-                {/* Error Message */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                    {error}
+                
+                {knowledgePosts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">아직 게시글이 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {knowledgePosts.map((post) => (
+                      <div
+                        key={post.postId}
+                        onClick={() => handlePostClick(post.postId)}
+                        className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                              {getCategoryLabel(post.category)}
+                            </span>
+                            <span className="text-sm text-gray-500">{formatDate(post.createdAt)}</span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span className="text-sm text-gray-500">조회 {post.viewCount}</span>
+                            <span className="text-sm text-gray-500">댓글 {post.commentCount}</span>
+                          </div>
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-500">작성자: {post.authorName}</span>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={(e) => handleEditPost(post.postId, e)}
+                              className="text-sm text-blue-600 hover:text-blue-800"
+                            >
+                              수정
+                            </button>
+                            <button
+                              onClick={(e) => handleDeletePost(post.postId, e)}
+                              className="text-sm text-red-600 hover:text-red-800"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
-
-                {/* Posts Table */}
-                <div className="bg-white rounded-lg overflow-hidden">
-                  {loading ? (
-                    <div className="flex justify-center items-center py-8">
-                      <div className="text-gray-500">로딩 중...</div>
-                    </div>
-                  ) : (
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-blue-100">
-                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">카테고리</th>
-                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">제목</th>
-                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">작성자</th>
-                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">작성일</th>
-                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">관리</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {knowledgePosts.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                              게시글이 없습니다.
-                            </td>
-                          </tr>
-                        ) : (
-                          knowledgePosts.map((post) => (
-                            <tr key={post.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => handlePostClick(post.id)}>
-                              <td className="px-4 py-3 text-sm text-gray-900">{getCategoryLabel(post.category)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900 text-left">{post.title}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{post.authorName}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{formatDate(post.createdAt)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={(e) => handleEditPost(post.id, e)}
-                                    className="text-blue-600 hover:text-blue-800 text-xs"
-                                  >
-                                    수정
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleDeletePost(post.id, e)}
-                                    className="text-red-600 hover:text-red-800 text-xs"
-                                  >
-                                    삭제
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-end">         
-                  <div className="flex items-center space-x-2">
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">{"<<"}</button>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">{"<"}</button>
-                    <button className="px-3 py-1 bg-blue-600 text-white rounded">1</button>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">2</button>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">3</button>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">4</button>
-                    <span className="px-2 text-gray-500">...</span>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">40</button>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">{">"}</button>
-                    <button className="px-3 py-1 text-gray-500 hover:text-gray-700">{">>"}</button>
-                  </div>
-                </div>
               </div>
             )}
           </div>

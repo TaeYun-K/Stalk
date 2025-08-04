@@ -11,6 +11,7 @@ import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
 import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
 import ConsultationService from '@/services/consultationService';
 import AuthService from '@/services/authService';
+import ScheduleService from '@/services/scheduleService';
 
 interface ConsultationItem {
   id: string;
@@ -59,23 +60,42 @@ const MyPage = () => {
         setIsLoading(true);
         setError(null);
         
+        // 로그인 상태가 아니면 로드하지 않음
+        if (!AuthService.isLoggedIn()) {
+          setError('로그인이 필요합니다.');
+          return;
+        }
+        
         const userProfileData = await AuthService.getUserProfile();
         
-        // 백엔드 응답 구조에 맞게 데이터 설정 (타입 캐스팅)
-        setUserProfile(userProfileData as UserProfileResponse);
+        if (!userProfileData) {
+          throw new Error('사용자 정보를 불러올 수 없습니다.');
+        }
         
-        // API 응답을 editInfoForm에 설정
+        // 백엔드 응답 구조에 맞게 데이터 설정
+        const profileData: UserProfileResponse = {
+          userId: userProfileData.userId || '',
+          name: userProfileData.name || '',
+          contact: userProfileData.contact || '',
+          email: userProfileData.email || '',
+          profileImage: userProfileData.profileImage || 'default',
+          role: userProfileData.role || 'USER'
+        };
+        
+        setUserProfile(profileData);
+        
+        // 폼 데이터 업데이트
         setEditInfoForm({
-          name: userProfileData?.name || '',
-          contact: userProfileData?.contact || '',
-          email: userProfileData?.email || ''
+          name: profileData.name,
+          contact: profileData.contact,
+          email: profileData.email
         });
         
-        // 프로필 폼도 업데이트
+        // 프로필 폼 업데이트
         setProfileForm(prev => ({
           ...prev,
-          nickname: userProfileData?.name || '',
-          selectedAvatar: userProfileData?.profileImage || 'fox' // 백엔드에서 받은 프로필 이미지
+          nickname: profileData.name,
+          selectedAvatar: profileData.profileImage || 'fox'
         }));
         
       } catch (err) {
@@ -83,12 +103,12 @@ const MyPage = () => {
         const errorMessage = err instanceof Error ? err.message : '사용자 정보를 불러올 수 없습니다.';
         setError(errorMessage);
         
-        // 네트워크 에러인 경우 기본값 설정
-        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network Error')) {
+        // 네트워크 에러인 경우에만 기본값 설정
+        if (err instanceof Error && err.message.includes('network')) {
           setEditInfoForm({
             name: userInfo?.userName || '',
-            contact: '010-0000-0000',
-            email: 'ssafy@samsung.com'
+            contact: '',
+            email: ''
           });
         }
       } finally {
@@ -96,13 +116,7 @@ const MyPage = () => {
       }
     };
 
-    // 로그인 상태 확인 후 API 호출
-    if (userInfo) {
-      loadUserInfo();
-    } else {
-      setIsLoading(false);
-      setError('로그인이 필요합니다.');
-    }
+    loadUserInfo();
   }, [userInfo]);
   
   // 스케줄 관리 상태들
@@ -115,6 +129,44 @@ const MyPage = () => {
   
   // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
   const isExpert = userProfile?.role === 'ADVISOR';
+  
+  // 날짜 선택 시 기존 스케줄 데이터 로드
+  useEffect(() => {
+    if (selectedScheduleDate && isExpert) {
+      const loadExistingSchedule = async () => {
+        try {
+          const dateStr = selectedScheduleDate.toISOString().split('T')[0];
+          const blockedTimes = await ScheduleService.getBlockedTimes(dateStr);
+          
+          // 차단된 시간을 운영 시간으로 변환 (차단되지 않은 시간 = 운영 시간)
+          const allHours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+          const operatingHours = allHours.filter(hour => !blockedTimes.includes(hour));
+          
+          const dateKey = formatDateKey(selectedScheduleDate);
+          setScheduleData(prev => ({
+            ...prev,
+            [dateKey]: {
+              operating: operatingHours,
+              isRestDay: false // 휴무일은 별도 처리 필요
+            }
+          }));
+        } catch (error) {
+          console.error('기존 스케줄 로드 실패:', error);
+          // 에러 시 기본 운영 시간으로 초기화 (9시~20시)
+          const dateKey = formatDateKey(selectedScheduleDate);
+          setScheduleData(prev => ({
+            ...prev,
+            [dateKey]: {
+              operating: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'],
+              isRestDay: false
+            }
+          }));
+        }
+      };
+      
+      loadExistingSchedule();
+    }
+  }, [selectedScheduleDate, isExpert]);
   
   // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -320,9 +372,33 @@ const MyPage = () => {
     });
   };
 
-  const saveSchedule = () => {
-    // 여기서 실제 API 호출하여 스케줄 저장
-    alert('스케줄이 저장되었습니다.');
+  const saveSchedule = async () => {
+    if (!selectedScheduleDate) {
+      alert('날짜를 선택해주세요.');
+      return;
+    }
+    
+    try {
+      const dateKey = formatDateKey(selectedScheduleDate);
+      const schedule = scheduleData[dateKey];
+      
+      if (!schedule) {
+        alert('저장할 스케줄이 없습니다.');
+        return;
+      }
+      
+      // 운영 시간을 차단 시간으로 변환 (운영하지 않는 시간 = 차단 시간)
+      const allHours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+      const blockedTimes = allHours.filter(hour => !schedule.operating.includes(hour));
+      
+      const dateStr = selectedScheduleDate.toISOString().split('T')[0];
+      await ScheduleService.updateBlockedTimes(dateStr, blockedTimes);
+      
+      alert('스케줄이 저장되었습니다.');
+    } catch (error) {
+      console.error('스케줄 저장 실패:', error);
+      alert('스케줄 저장에 실패했습니다.');
+    }
   };
 
   // 상담일지 관련 함수들
