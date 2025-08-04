@@ -4,7 +4,7 @@ import '@/App.css';
 
 // Context
 import { WatchlistProvider } from '@/context/WatchlistContext';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AuthProvider } from '@/context/AuthContext';
 
 // Components
 import Navbar from '@/components/navbar';
@@ -12,7 +12,6 @@ import HomePageNavbar from '@/components/homepage-navbar';
 import Sidebar from '@/components/sidebar';
 import Footer from '@/components/footer';
 import ScrollToTop from '@/components/ScrollToTop';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import AdminProtectedRoute from '@/components/AdminProtectedRoute';
 
 
@@ -39,17 +38,10 @@ import ProductsPage from '@/pages/products-page';
 import CommunityPage from '@/pages/community-page';
 import WritePostPage from '@/pages/write-post-page';
 import KnowledgeBoardPage from '@/pages/knowledge-board-page';
-
-
-// MyPage =================================================================================================
 import MyPage from '@/pages/my-page';
-
-
 import FavoritesPage from '@/pages/favorites-page';
 import SearchPage from '@/pages/search-page';
 import VideoConsultationPage from '@/pages/video-consultation-page';
-
-// Admin =================================================================================================
 import AdminPage from '@/pages/admin-page';
 
 
@@ -84,9 +76,8 @@ const hideFooterRoutes: string[] = ['/SignupChoicePage', '/login'];
 
 const AppContent: React.FC = () => {
   const location = useLocation();
-  const { isLoggedIn, isLoading, userInfo } = useAuth();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
-  const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/');
+  const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/') || location.pathname.startsWith('/community/post/');
   const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
   const isVideoPage = location.pathname.startsWith('/video-consultation');
   
@@ -101,7 +92,11 @@ const AppContent: React.FC = () => {
             <Routes>
               {/* Public Routes */}
               <Route path="/products" element={<ProductsPage />} />
-              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin" element={
+                <AdminProtectedRoute>
+                  <AdminPage />
+                </AdminProtectedRoute>
+              } />
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
@@ -118,6 +113,7 @@ const AppContent: React.FC = () => {
               <Route path="/mypage" element={<MyPage />} />
               
               <Route path="/write-post" element={<WritePostPage />} />
+
               <Route path="/consultations" element={<div className="p-4"><h1>상담 내역</h1></div>} />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />

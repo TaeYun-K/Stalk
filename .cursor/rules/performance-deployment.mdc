@@ -1,0 +1,405 @@
+---
+globs: "Stalk_FE/**/*"
+description: "성능 최적화 및 배포 관련 규칙"
+---
+
+# ⚡ 성능 최적화 및 배포 규칙
+
+## 🚀 성능 최적화 필수 사항
+
+### 이미지 최적화
+```typescript
+// ✅ 이미지 최적화 패턴
+const ProfileImage: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"                    // 지연 로딩
+      decoding="async"                  // 비동기 디코딩
+      className="w-20 h-20 object-cover rounded-full"
+      onError={(e) => {                 // 에러 처리
+        e.currentTarget.src = '/images/default-profile.svg';
+      }}
+    />
+  );
+};
+
+// ✅ 이미지 사전 로딩
+const preloadImage = (src: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = src;
+  });
+};
+```
+
+### 컴포넌트 메모이제이션
+```typescript
+// ✅ React.memo 적절한 사용
+interface UserCardProps {
+  user: User;
+  onEdit: (id: string) => void;
+}
+
+const UserCard = React.memo<UserCardProps>(({ user, onEdit }) => {
+  const handleEdit = useCallback(() => {
+    onEdit(user.id);
+  }, [user.id, onEdit]);
+
+  return (
+    <div className="p-4 border rounded">
+      <h3>{user.name}</h3>
+      <button onClick={handleEdit}>편집</button>
+    </div>
+  );
+});
+
+// ✅ 비교 함수 사용 (필요한 경우에만)
+const ExpensiveComponent = React.memo(
+  ({ data, config }: Props) => {
+    // 복잡한 렌더링 로직
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.data.id === nextProps.data.id &&
+      prevProps.config.mode === nextProps.config.mode
+    );
+  }
+);
+```
+
+### 상태 최적화
+```typescript
+// ✅ 상태 분리로 불필요한 리렌더링 방지
+const UserDashboard: React.FC = () => {
+  // 서로 독립적인 상태들은 분리
+  const [userInfo, setUserInfo] = useState<User | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ❌ 피해야 할 패턴: 모든 상태를 하나의 객체로
+  // const [state, setState] = useState({
+  //   userInfo: null,
+  //   notifications: [],
+  //   sidebarOpen: false
+  // });
+};
+
+// ✅ useMemo 적절한 사용
+const ExpensiveCalculation: React.FC<{ data: number[] }> = ({ data }) => {
+  const sortedData = useMemo(() => {
+    console.log('Sorting data...'); // 실제로는 복잡한 계산
+    return [...data].sort((a, b) => b - a);
+  }, [data]);
+
+  return (
+    <ul>
+      {sortedData.map((item, index) => (
+        <li key={index}>{item}</li>
+      ))}
+    </ul>
+  );
+};
+```
+
+## 📦 번들 최적화
+
+### 코드 스플리팅
+```typescript
+// ✅ 라우트 기반 코드 스플리팅
+import { lazy, Suspense } from 'react';
+import { Routes, Route } from 'react-router-dom';
+
+// 지연 로딩되는 페이지들
+const HomePage = lazy(() => import('@/pages/home-page'));
+const ExpertDetailPage = lazy(() => import('@/pages/expert-detail-page'));
+const CommunityPage = lazy(() => import('@/pages/community-page'));
+
+const App: React.FC = () => {
+  return (
+    <Suspense fallback={<div>로딩 중...</div>}>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/expert/:id" element={<ExpertDetailPage />} />
+        <Route path="/community" element={<CommunityPage />} />
+      </Routes>
+    </Suspense>
+  );
+};
+
+// ✅ 컴포넌트 기반 코드 스플리팅
+const HeavyChart = lazy(() => 
+  import('@/components/chart/stock-chart').then(module => ({
+    default: module.StockChart
+  }))
+);
+```
+
+### 라이브러리 최적화
+```typescript
+// ✅ 필요한 부분만 import
+import { format, parseISO } from 'date-fns';  // ✅ 특정 함수만
+// import * as dateFns from 'date-fns';       // ❌ 전체 라이브러리
+
+// ✅ Tree shaking 지원 라이브러리 사용
+import { Button } from '@/components/ui';      // ✅ 
+// import * as UI from '@/components/ui';      // ❌ 전체 import
+```
+
+## 🔄 데이터 로딩 최적화
+
+### 무한 스크롤
+```typescript
+const useInfiniteScroll = <T>(
+  fetchFn: (page: number) => Promise<T[]>,
+  pageSize = 10
+) => {
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return;
+
+    setLoading(true);
+    try {
+      const newData = await fetchFn(page);
+      if (newData.length < pageSize) {
+        setHasMore(false);
+      }
+      setData(prev => [...prev, ...newData]);
+      setPage(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to load more data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFn, page, loading, hasMore, pageSize]);
+
+  return { data, loading, hasMore, loadMore };
+};
+```
+
+### 캐싱 전략
+```typescript
+// ✅ 간단한 메모리 캐시
+class ApiCache {
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private readonly TTL = 5 * 60 * 1000; // 5분
+
+  set(key: string, data: any): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  get(key: string): any | null {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+
+    if (Date.now() - cached.timestamp > this.TTL) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return cached.data;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+export const apiCache = new ApiCache();
+```
+
+## 🛠️ 빌드 및 배포 설정
+
+### Vite 설정 최적화
+```typescript
+// vite.config.ts 최적화 예시
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  
+  // 경로 별칭
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+
+  // 빌드 최적화
+  build: {
+    // 청크 크기 경고 임계값
+    chunkSizeWarningLimit: 1000,
+    
+    // 롤업 옵션
+    rollupOptions: {
+      output: {
+        // 청크 분할 전략
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'router-vendor': ['react-router-dom'],
+          'chart-vendor': ['chart.js', 'react-chartjs-2'],
+        },
+      },
+    },
+  },
+
+  // 서버 설정
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+      },
+    },
+  },
+});
+```
+
+### 환경 변수 관리
+```typescript
+// ✅ 환경 변수 타입 정의
+interface ImportMetaEnv {
+  readonly VITE_API_URL: string;
+  readonly VITE_OPENVIDU_URL: string;
+  readonly VITE_ENV: 'development' | 'production';
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
+// ✅ 환경별 설정
+const config = {
+  apiUrl: import.meta.env.VITE_API_URL,
+  openViduUrl: import.meta.env.VITE_OPENVIDU_URL,
+  isDevelopment: import.meta.env.VITE_ENV === 'development',
+  isProduction: import.meta.env.VITE_ENV === 'production',
+};
+
+// ✅ 환경 변수 검증
+const validateEnv = () => {
+  const required = ['VITE_API_URL', 'VITE_OPENVIDU_URL'];
+  const missing = required.filter(key => !import.meta.env[key]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+};
+```
+
+## 🐛 디버깅 및 개발 도구
+
+### 개발 환경 디버깅
+```typescript
+// ✅ 개발 환경에서만 로깅
+const logger = {
+  debug: (message: string, data?: any) => {
+    if (import.meta.env.DEV) {
+      console.log(`[DEBUG] ${message}`, data);
+    }
+  },
+  
+  error: (message: string, error?: Error) => {
+    if (import.meta.env.DEV) {
+      console.error(`[ERROR] ${message}`, error);
+    }
+  },
+};
+
+// ✅ React DevTools 최적화
+const ComponentWithDisplayName: React.FC = () => {
+  return <div>컴포넌트</div>;
+};
+ComponentWithDisplayName.displayName = 'ComponentWithDisplayName';
+```
+
+### 성능 모니터링
+```typescript
+// ✅ 성능 측정 유틸리티
+const performanceMonitor = {
+  startTiming: (label: string) => {
+    if (import.meta.env.DEV) {
+      performance.mark(`${label}-start`);
+    }
+  },
+
+  endTiming: (label: string) => {
+    if (import.meta.env.DEV) {
+      performance.mark(`${label}-end`);
+      performance.measure(label, `${label}-start`, `${label}-end`);
+      
+      const measurement = performance.getEntriesByName(label)[0];
+      console.log(`${label}: ${measurement.duration.toFixed(2)}ms`);
+    }
+  },
+};
+```
+
+## 📋 배포 전 체크리스트
+
+### 빌드 전 확인사항
+```bash
+# 1. 린팅 검사
+npm run lint
+
+# 2. 타입 체크
+npx tsc --noEmit
+
+# 3. 테스트 실행
+npm run test
+
+# 4. 빌드 테스트
+npm run build
+
+# 5. 빌드 결과 미리보기
+npm run preview
+```
+
+### 성능 확인
+- **번들 크기 분석**: `npm run build`로 생성된 파일 크기 확인
+- **라이트하우스 스코어**: 90점 이상 목표
+- **Core Web Vitals**: LCP, FID, CLS 지표 확인
+
+### 보안 확인
+- **의존성 취약점**: `npm audit` 실행
+- **환경 변수**: 민감한 정보 노출 확인
+- **HTTPS**: 프로덕션에서 HTTPS 사용 확인
+
+## 🚫 배포 시 금지사항
+
+### 절대 하지 말 것
+- **console.log 제거 안 함**: 프로덕션에서 불필요한 로그 출력
+- **개발용 API 키 사용**: 프로덕션용 키로 교체 필수
+- **Source Map 노출**: 프로덕션에서 소스 맵 비활성화
+- **에러 스택 노출**: 사용자에게 상세 에러 정보 노출 금지
+
+### Docker 빌드 시 주의사항
+```dockerfile
+# ✅ Multi-stage 빌드 사용
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:18-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+# ✅ 정적 파일만 제공
+FROM nginx:alpine
+COPY --from=runner /app/dist /usr/share/nginx/html
+```
+
+이 규칙들을 준수하여 안정적이고 성능이 우수한 프론트엔드 애플리케이션을 개발하세요!

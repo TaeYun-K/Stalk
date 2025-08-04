@@ -36,21 +36,34 @@ const LoginPage = () => {
     }
 
     try {
-      const response = await AuthService.login(formData);
-      console.log('로그인 성공:', response);
+      await AuthService.login(formData);
+      
+      // 사용자 프로필 정보 가져오기
+      const userProfile = await AuthService.getUserProfile();
+      console.log('로그인 후 userProfile:', userProfile);
       
       // AuthContext에 로그인 상태 업데이트
-      login({
-        userId: response.userId,
-        userName: response.userName,
-        role: response.role
-      });
+      const userInfoToSet = {
+        userId: 0,
+        userName: userProfile.name,
+        role: userProfile.role as 'USER' | 'ADVISOR' | 'ADMIN'
+      };
+      console.log('AuthContext에 설정할 userInfo:', userInfoToSet);
+      
+      // AuthContext 상태 설정
+      login(userInfoToSet);
+      
+      // 상태 설정 후 잠시 대기 (AuthContext 업데이트 완료 대기)
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // 로그인 성공 시 역할에 따라 다른 페이지로 이동
-      if (response.role === 'ADMIN') {
-        navigate('/admin');
+      console.log('Role 체크:', userProfile.role);
+      if (userProfile.role === 'ADMIN') {
+        console.log('관리자로 확인됨, /admin으로 이동');
+        navigate('/admin', { replace: true });
       } else {
-        navigate('/');
+        console.log('일반 사용자로 확인됨, /로 이동');
+        navigate('/', { replace: true });
       }
     } catch (error) {
       // 보안을 위해 구체적인 에러 메시지 대신 일반적인 메시지 표시

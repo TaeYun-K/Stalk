@@ -86,8 +86,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // 로그인 처리
   const login = useCallback((userInfo: UserInfo) => {
+    console.log('AuthContext login 호출됨:', userInfo);
     setIsLoggedIn(true);
     setUserInfo(userInfo);
+    console.log('AuthContext 상태 업데이트 완료');
   }, []);
 
   // 컴포넌트 마운트 시 자동 로그인 체크

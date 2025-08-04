@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Footer from '@/components/footer';
+import CommunityService, { CommunityPostSummaryDto, PostCategory } from '@/services/communityService';
 
 const CommunityPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedTab, setSelectedTab] = useState('news');
+  const [knowledgePosts, setKnowledgePosts] = useState<CommunityPostSummaryDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // URL 파라미터에서 탭 정보 읽기
   useEffect(() => {
@@ -14,6 +17,54 @@ const CommunityPage = () => {
       setSelectedTab(tabParam);
     }
   }, [searchParams]);
+
+  // Fetch knowledge posts when tab is selected
+  useEffect(() => {
+    if (selectedTab === 'knowledge') {
+      fetchKnowledgePosts();
+    }
+  }, [selectedTab]);
+
+  const fetchKnowledgePosts = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const data = await CommunityService.getPosts(PostCategory.INVESTMENT_KNOWLEDGE);
+      setKnowledgePosts(data.items || []);
+    } catch (error) {
+      console.error('Error fetching knowledge posts:', error);
+      setError('게시글을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePostClick = (postId: number) => {
+    navigate(`/community/post/${postId}`);
+  };
+
+  const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!window.confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      await CommunityService.deletePost(postId);
+      alert('게시글이 삭제되었습니다.');
+      fetchKnowledgePosts(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('게시글 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleEditPost = (postId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/write-post?edit=${postId}`);
+  };
 
   const newsPosts = [
     {
@@ -45,66 +96,29 @@ const CommunityPage = () => {
     }
   ];
 
-  const knowledgePosts = [
-    {
-      id: 1,
-      nickname: 'Jane Cooper',
-      category: '질문',
-      title: '주식 투자의 지혜와 유사한 기술적 분석 책이 있을까요?',
-      date: '2025.07.16'
-    },
-    {
-      id: 2,
-      nickname: 'Ronald Richards',
-      category: '매매기록',
-      title: '비트코인을 구매하였습니다',
-      date: '2025.07.16'
-    },
-    {
-      id: 3,
-      nickname: 'Kathryn Murphy',
-      category: '종목토론',
-      title: '중국 관세 발표 후 국내 배터리 주식 상승 추세는 어떻게 될까요',
-      date: '2025.05.01'
-    },
-    {
-      id: 4,
-      nickname: 'Jacob Jones',
-      category: '질문',
-      title: '상법 개정 후 국장 상승률',
-      date: '2025.04.18'
-    },
-    {
-      id: 5,
-      nickname: 'Kristin Watson',
-      category: '매매기록',
-      title: '국장 정리 하지만 미장은 keep',
-      date: '2025.04.15'
-    },
-    {
-      id: 6,
-      nickname: 'Albert Flores',
-      category: '종목토론',
-      title: '테슬라 주가 전망 분석',
-      date: '2025.04.10'
-    },
-    {
-      id: 7,
-      nickname: 'Cameron Williamson',
-      category: '질문',
-      title: 'ETF 투자 전략에 대한 조언 부탁드립니다',
-      date: '2025.04.05'
-    },
-    {
-      id: 8,
-      nickname: 'Leslie Alexander',
-      category: '매매기록',
-      title: '금리 인하 기대감으로 채권 투자 확대',
-      date: '2025.04.01'
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case PostCategory.INVESTMENT_KNOWLEDGE:
+        return '투자지식in';
+      case PostCategory.MARKET_ANALYSIS:
+        return '시장분석';
+      case PostCategory.PORTFOLIO:
+        return '포트폴리오';
+      case PostCategory.NEWS:
+        return '뉴스';
+      default:
+        return category;
     }
-  ];
+  };
 
-  // Posts are filtered by selectedTab in the conditional rendering below
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -140,7 +154,6 @@ const CommunityPage = () => {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                 
                   <span>투자 지식iN</span>
                 </div>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,28 +250,66 @@ const CommunityPage = () => {
                   </div>
                 </div>
 
+                {/* Error Message */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                    {error}
+                  </div>
+                )}
+
                 {/* Posts Table */}
                 <div className="bg-white rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-blue-100">
-                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">카테고리</th>
-                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">제목</th>
-                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">닉네임</th>
-                        <th className="px-4 py-3 text-sm font-semibold text-gray-700">작성일</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {knowledgePosts.map((post) => (
-                        <tr key={post.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer">
-                          <td className="px-4 py-3 text-sm text-gray-900">{post.category}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-left">{post.title}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{post.nickname}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{post.date}</td>
+                  {loading ? (
+                    <div className="flex justify-center items-center py-8">
+                      <div className="text-gray-500">로딩 중...</div>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-blue-100">
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">카테고리</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">제목</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">작성자</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">작성일</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-700">관리</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {knowledgePosts.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                              게시글이 없습니다.
+                            </td>
+                          </tr>
+                        ) : (
+                          knowledgePosts.map((post) => (
+                            <tr key={post.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => handlePostClick(post.id)}>
+                              <td className="px-4 py-3 text-sm text-gray-900">{getCategoryLabel(post.category)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900 text-left">{post.title}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900">{post.authorName}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900">{formatDate(post.createdAt)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={(e) => handleEditPost(post.id, e)}
+                                    className="text-blue-600 hover:text-blue-800 text-xs"
+                                  >
+                                    수정
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleDeletePost(post.id, e)}
+                                    className="text-red-600 hover:text-red-800 text-xs"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
 
                 {/* Pagination */}
