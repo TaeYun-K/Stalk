@@ -13,15 +13,15 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AdvisorSignupController {
 
-    private final AdvisorSignupService signupService;
+  private final AdvisorSignupService advisorSignupService;
 
-    @PostMapping(value = "/signup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<AdvisorSignupResponse> signup(
-            @Validated @ModelAttribute AdvisorSignupRequest request
-    ) {
-        AdvisorSignupResponse response = signupService.signup(request);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(response);
-    }
+  @PostMapping(value = "/signup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<AdvisorSignupResponse> signup(
+      @Validated @ModelAttribute AdvisorSignupRequest request
+  ) {
+    AdvisorSignupResponse response = advisorSignupService.signup(request);
+    return ResponseEntity
+        .status(HttpStatus.CREATED)
+        .body(response);
+  }
 }
