@@ -19,9 +19,13 @@ interface AuthContextType {
   isLoggingIn: boolean;
   isLoggingOut: boolean;
   userInfo: UserInfo | null;
+  accessToken: string | null;
   login: (userInfo: UserInfo) => void;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
+  getAccessToken: () => string | null;
+  setAccessToken: (token: string) => void;
+  removeAccessToken: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,6 +50,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  const getAccessToken = useCallback(() => {
+    // AuthService에서 토큰을 가져옴
+    const token = AuthService.getAccessToken();
+    if (token && token !== accessToken) {
+      setAccessToken(token); // AuthContext 상태 동기화
+    }
+    return token;
+  }, [accessToken]);
+  
+  const setToken = useCallback((token: string) => {
+    AuthService.setAccessToken(token);
+    setAccessToken(token);
+  }, []);
+  
+  const removeAccessToken = useCallback(() => {
+    AuthService.removeAccessToken();
+    setAccessToken(null);
+  }, []);
 
   // 현재 경로가 public 라우트인지 확인
   const isPublicRoute = useCallback((path: string) => {
@@ -61,8 +85,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('로그아웃 중 에러 발생:', error);
     } finally {
+      AuthService.removeAccessToken(); // AuthService에서도 토큰 제거
       setIsLoggedIn(false);
       setUserInfo(null);
+      setAccessToken(null); // 토큰 제거
       setIsLoggingOut(false);
     }
   }, [navigate]);
@@ -76,18 +102,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // 로그인 상태 확인
       if (AuthService.isLoggedIn()) {
         const currentUserInfo = AuthService.getUserInfo();
+        const token = AuthService.getAccessToken();
+        
         setIsLoggedIn(true);
         setUserInfo(currentUserInfo);
+        if (token) {
+          setAccessToken(token); // 토큰 동기화
+        }
         return true;
       }
       
+      AuthService.removeAccessToken(); // AuthService에서도 토큰 제거
       setIsLoggedIn(false);
       setUserInfo(null);
+      setAccessToken(null); // 토큰 제거
       return false;
     } catch (error) {
       console.error('인증 체크 실패:', error);
+      AuthService.removeAccessToken(); // AuthService에서도 토큰 제거
       setIsLoggedIn(false);
       setUserInfo(null);
+      setAccessToken(null); // 토큰 제거
       return false;
     }
   }, []);
@@ -147,9 +182,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoggingIn,
     isLoggingOut,
     userInfo,
+    accessToken,
     login,
     logout,
     checkAuth,
+    getAccessToken,
+    setAccessToken: setToken,
+    removeAccessToken,
   };
 
   return (

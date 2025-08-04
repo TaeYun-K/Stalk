@@ -41,11 +41,11 @@ class AuthService {
     return accessToken;
   }
 
-  private static setAccessToken(token: string): void {
+  static setAccessToken(token: string): void {
     accessToken = token;
   }
 
-  private static removeAccessToken(): void {
+  static removeAccessToken(): void {
     accessToken = null;
   }
 
