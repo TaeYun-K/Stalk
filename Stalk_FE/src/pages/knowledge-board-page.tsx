@@ -70,7 +70,7 @@ const KnowledgeBoardPage = () => {
             <h2 className="mb-6 ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
             <nav className="space-y-2">
             <button
-                onClick={() => setSelectedTab('news')}
+                onClick={() => navigate('/community?tab=news')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
                   selectedTab === 'news'
                     ? 'bg-blue-50 text-blue-600 font-medium'
@@ -85,7 +85,7 @@ const KnowledgeBoardPage = () => {
                 </svg>
               </button>
               <button
-                onClick={() => setSelectedTab('knowledge')}
+                onClick={() => navigate('/community?tab=knowledge')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
                   selectedTab === 'knowledge'
                     ? 'bg-blue-50 text-blue-600 font-medium'
