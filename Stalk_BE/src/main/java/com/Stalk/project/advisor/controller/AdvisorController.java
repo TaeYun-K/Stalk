@@ -72,6 +72,7 @@ public class AdvisorController {
   @ApiResponses(value = {
       @ApiResponse(responseCode = "200", description = "예약 가능 시간 조회 성공"),
       @ApiResponse(responseCode = "400", description = "잘못된 요청 (날짜 형식 오류 등)"),
+      @ApiResponse(responseCode = "401", description = "인증 필요"),
       @ApiResponse(responseCode = "403", description = "일반 사용자만 접근 가능"),
       @ApiResponse(responseCode = "404", description = "존재하지 않는 전문가 ID"),
   })
@@ -79,8 +80,18 @@ public class AdvisorController {
       @PathVariable("advisor_id") @Parameter(description = "전문가 ID") Long advisorId,
       @ModelAttribute AvailableTimeSlotsRequestDto requestDto) {
 
-    // JWT에서 현재 사용자 역할 추출
-    String currentUserRole = SecurityUtil.getCurrentUserRole();
+    // 인증 확인
+    if (!SecurityUtil.isAuthenticated()) {
+      throw new BaseException(BaseResponseStatus.INVALID_USER_JWT);
+    }
+
+    // 일반 사용자만 접근 가능
+    if (!SecurityUtil.isCurrentUserRegularUser()) {
+      throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ROLE);
+    }
+
+    // JWT에서 현재 사용자 역할 추출 (인증된 상태이므로 Required 버전 사용)
+    String currentUserRole = SecurityUtil.getCurrentUserRoleRequired();
 
     AvailableTimeSlotsResponseDto result = advisorService.getAvailableTimeSlots(
         advisorId, currentUserRole, requestDto);
@@ -98,17 +109,26 @@ public class AdvisorController {
       description = "전문가만 자신의 특정 날짜 차단 시간 목록을 조회할 수 있습니다.",
       security = @SecurityRequirement(name = "Bearer Authentication")
   )
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "차단 시간 조회 성공"),
+      @ApiResponse(responseCode = "401", description = "인증 필요"),
+      @ApiResponse(responseCode = "403", description = "전문가만 접근 가능")
+  })
   public BaseResponse<AdvisorBlockedTimesResponseDto> getAdvisorBlockedTimes(
       @RequestParam @Parameter(description = "조회할 날짜 (YYYY-MM-DD)", example = "2025-07-30") String date) {
 
-    // JWT에서 현재 사용자 정보 추출
-    Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-    String currentUserRole = SecurityUtil.getCurrentUserRole();
+    // 인증 확인
+    if (!SecurityUtil.isAuthenticated()) {
+      throw new BaseException(BaseResponseStatus.INVALID_USER_JWT);
+    }
 
     // 전문가만 접근 가능
-    if (!"ADVISOR".equals(currentUserRole)) {
+    if (!SecurityUtil.isCurrentUserAdvisor()) {
       throw new BaseException(BaseResponseStatus.ADVISOR_ONLY_ACCESS);
     }
+
+    // JWT에서 현재 사용자 정보 추출 (인증된 상태이므로 Required 버전 사용)
+    Long currentUserId = SecurityUtil.getCurrentUserPrimaryIdRequired();
 
     AdvisorBlockedTimesResponseDto result = advisorService.getAdvisorBlockedTimes(currentUserId, date);
     return new BaseResponse<>(result);
@@ -123,18 +143,27 @@ public class AdvisorController {
       description = "전문가만 자신의 특정 날짜 차단 시간을 업데이트할 수 있습니다.",
       security = @SecurityRequirement(name = "Bearer Authentication")
   )
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "차단 시간 업데이트 성공"),
+      @ApiResponse(responseCode = "401", description = "인증 필요"),
+      @ApiResponse(responseCode = "403", description = "전문가만 접근 가능")
+  })
   public BaseResponse<AdvisorBlockedTimesUpdateResponseDto> updateAdvisorBlockedTimes(
       @RequestParam @Parameter(description = "업데이트할 날짜 (YYYY-MM-DD)", example = "2025-07-30") String date,
       @Valid @RequestBody AdvisorBlockedTimesRequestDto requestDto) {
 
-    // JWT에서 현재 사용자 정보 추출
-    Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-    String currentUserRole = SecurityUtil.getCurrentUserRole();
+    // 인증 확인
+    if (!SecurityUtil.isAuthenticated()) {
+      throw new BaseException(BaseResponseStatus.INVALID_USER_JWT);
+    }
 
     // 전문가만 접근 가능
-    if (!"ADVISOR".equals(currentUserRole)) {
+    if (!SecurityUtil.isCurrentUserAdvisor()) {
       throw new BaseException(BaseResponseStatus.ADVISOR_ONLY_ACCESS);
     }
+
+    // JWT에서 현재 사용자 정보 추출 (인증된 상태이므로 Required 버전 사용)
+    Long currentUserId = SecurityUtil.getCurrentUserPrimaryIdRequired();
 
     AdvisorBlockedTimesUpdateResponseDto result = advisorService.updateAdvisorBlockedTimes(
         currentUserId, date, requestDto);
