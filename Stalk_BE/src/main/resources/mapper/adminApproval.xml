@@ -2,10 +2,10 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.admin.dao.AdminApprovalMapper">
+<mapper namespace="com.Stalk.project.api.admin.dao.AdminApprovalMapper">
 
     <!-- AdvisorApprovalRequestDto ResultMap 정의 -->
-    <resultMap id="AdvisorApprovalRequestResultMap" type="com.Stalk.project.admin.dto.in.AdvisorApprovalRequestDto">
+    <resultMap id="AdvisorApprovalRequestResultMap" type="com.Stalk.project.api.admin.dto.in.AdvisorApprovalRequestDto">
         <!-- 기본 필드들 -->
         <result property="requestId" column="requestId"/>
         <result property="advisorId" column="advisorId"/>
@@ -18,14 +18,14 @@
         <result property="rejectionReason" column="rejectionReason"/>
 
         <!-- 중첩 객체: 자격증 정보 -->
-        <association property="certificateInfo" javaType="com.Stalk.project.admin.dto.in.AdvisorApprovalRequestDto$CertificateInfoDto">
+        <association property="certificateInfo" javaType="com.Stalk.project.api.admin.dto.in.AdvisorApprovalRequestDto$CertificateInfoDto">
             <result property="certificateName" column="certificate_name"/>
             <result property="certificateNumber" column="certificate_number"/>
             <result property="serialNumber" column="certificate_serial"/>
         </association>
 
         <!-- 중첩 객체: 관리자 정보 -->
-        <association property="processedBy" javaType="com.Stalk.project.admin.dto.in.AdvisorApprovalRequestDto$AdminInfoDto">
+        <association property="processedBy" javaType="com.Stalk.project.api.admin.dto.in.AdvisorApprovalRequestDto$AdminInfoDto">
             <result property="adminId" column="admin_id"/>
             <result property="adminName" column="admin_name"/>
         </association>

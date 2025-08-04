@@ -15,28 +15,43 @@ import ScrollToTop from '@/components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AdminProtectedRoute from '@/components/AdminProtectedRoute';
 
-// Pages
+
+// Pages =================================================================================================
 import HomePage from '@/pages/home-page';
 
-import AdminPage from '@/pages/admin-page';
 
+// Login & Signup =================================================================================================
 import LoginPage from '@/pages/login-page';
+import SignupChoicePage from '@/pages/signup-choice-page';
 import SignupPage from '@/pages/signup-page';
 import SignupComplete from '@/pages/signup-complete';
 
+// Experts =================================================================================================
 import ExpertsPage from '@/pages/experts-page';
+import ExpertsIntroductionRegistrationPage from '@/pages/experts-introduction-registration-page';
+import ExpertDetailPage from '@/pages/expert-detail-page';
+
+// Products =================================================================================================
 import ProductsPage from '@/pages/products-page';
+
+
+// Community =================================================================================================
 import CommunityPage from '@/pages/community-page';
+import WritePostPage from '@/pages/write-post-page';
+import KnowledgeBoardPage from '@/pages/knowledge-board-page';
+
+
+// MyPage =================================================================================================
 import MyPage from '@/pages/my-page';
 
-import WritePostPage from '@/pages/write-post-page';
 
-import ExpertDetailPage from '@/pages/expert-detail-page';
 import FavoritesPage from '@/pages/favorites-page';
-import SignupChoicePage from '@/pages/signup-choice-page';
 import SearchPage from '@/pages/search-page';
-import ExpertsIntroductionRegistrationPage from '@/pages/experts-introduction-registration-page';
 import VideoConsultationPage from '@/pages/video-consultation-page';
+
+// Admin =================================================================================================
+import AdminPage from '@/pages/admin-page';
+
 
 // Navbar를 숨길 페이지 목록
 const hideNavbarRoutes: string[] = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete'];
@@ -60,7 +75,8 @@ const showSidebarRoutes: string[] = [
   '/holdings',
   '/reservations',
   '/expert-detail',
-  '/expert-registration'
+  '/expert-registration',
+  '/knowledge-board'
 ];
 
 // Footer를 숨길 페이지 목록
@@ -92,11 +108,12 @@ const AppContent: React.FC = () => {
               <Route path="/signup-complete" element={<SignupComplete />} />
 
               <Route path="/SignupChoicePage" element={<SignupChoicePage />} />
-              <Route path="/search" element={<SearchPage />} />
-              
+              <Route path="/search" element={<SearchPage />} />              
               {/* Protected Routes */}
               <Route path="/experts" element={<ExpertsPage />} />
               <Route path="/community" element={<CommunityPage />} />
+              <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
+
               <Route path="/products" element={<div className="p-4"><h1>상품 조회</h1></div>} />
               <Route path="/mypage" element={<MyPage />} />
               
