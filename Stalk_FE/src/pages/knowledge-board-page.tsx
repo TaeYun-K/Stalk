@@ -21,7 +21,7 @@ const KnowledgeBoardPage = () => {
       nickname: 'John Doe',
       createdAt: '2025-01-01',
       image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
-      content: '주식 시장 분석 내용',
+      content: '주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용',
       viewCount: 100,
     },
   ];
@@ -70,8 +70,63 @@ const KnowledgeBoardPage = () => {
 
           {/* Right Content */}
           <div className="pt-16 flex-1">
-            <div className="mb-6">
-              <h2 className="ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
+            <div className="mb-6 flex flex-col justify-start gap-3">
+              <span className="text-left w-fit text-sm text-blue-500 rounded-full px-4 py-1 bg-blue-50">#{knowledgePosts[0].category}</span>
+              <h2 className="text-left text-2xl font-semibold text-gray-900">{knowledgePosts[0].title}</h2>
+              {/* 작성자 프로필 및 조회수 */}
+              <div className='flex items-end justify-between border-b border-gray-200 pb-4'>
+                {/* 작성자 프로필 */}
+                <div className='flex items-center gap-2'>
+                  {/* 작성자 프로필 이미지 */}
+                  <img src={knowledgePosts[0].image} alt="작성자 프로필 이미지" className='w-10 h-10 rounded-full' />
+                  {/* 작성자 닉네임 및 작성일자 */}
+                  <div className='flex flex-col items-start ml-2'>
+                    <span className='text-sm font-semibold'>{knowledgePosts[0].nickname}</span>
+                    <span className='text-sm text-gray-500'>{knowledgePosts[0].createdAt}</span>
+                  </div>
+                </div>
+                <span className='text-sm text-gray-500'>조회수 {knowledgePosts[0].viewCount}</span>
+              </div>
+              <span className='pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200'>{knowledgePosts[0].content}</span>
+
+            </div>
+            {/* 댓글 */}
+            <div className='flex flex-col gap-4'>
+              {/* 댓글 Title */}
+              <div className='flex flex-row gap-3 items-end'>
+                <h2 className='flex items-center justify-between text-xl font-semibold text-gray-900'>댓글</h2>
+                <h3 className='text-sm text-gray-500'>Comment</h3>
+              </div>
+              {/* 댓글 작성 */}
+              <div className='flex flex-row gap-3 items-center justify-between'>
+                <input type="text" placeholder='댓글을 입력해주세요.' className='pl-5 py-2 w-full border border-blue-500 rounded-full focus:outline-none focus:ring-1 focus:ring-blue-500' />
+                <button className='inline-flex items-center justify-center whitespace-nowrap px-3 py-2 bg-blue-500 text-white text-sm rounded-full'>작성</button>
+              </div>
+              {/* 댓글 목록 */}
+              <div className='flex flex-col gap-5'>
+                {/* 댓글 1개 */}
+                <div className='pt-2 flex flex-col gap-3 items-start justify-between'>
+                  {/* 댓글 작성자 이미지 & 프로필 + 수정 & 삭제 버튼 */}
+                  <div className='flex flex-row items-center justify-between w-full'>
+                    {/* 댓글 작성자 이미지 & 프로필 */}
+                    <div className='flex flex-row gap-3 items-center'>
+                      <img src={knowledgePosts[0].image} alt="작성자 프로필 이미지" className='w-10 h-10 rounded-full' />
+                      <div className='flex flex-col items-start ml-2'>
+                        <span className='text-sm font-semibold'>{knowledgePosts[0].nickname}</span>
+                        <span className='text-sm text-gray-500'>{knowledgePosts[0].createdAt}</span>
+                      </div>
+                    </div>
+                    {/* 수정 & 삭제 버튼 */}
+                    <div className='flex flex-row gap-2'>
+                      <button className='text-sm text-gray-500 hover:text-blue-500 hover:font-semibold'>수정</button>
+                      <p className='text-sm text-gray-500'>|</p>
+                      <button className='text-sm text-gray-500 hover:text-red-500 hover:font-semibold'>삭제</button>
+                    </div>
+                  </div>
+                  {/* 댓글 내용 */}
+                  <span className='pl-[60px] text-sm text-gray-500 leading-loose text-justify'>{knowledgePosts[0].content}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
