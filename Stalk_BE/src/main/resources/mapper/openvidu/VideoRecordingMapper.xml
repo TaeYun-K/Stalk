@@ -6,7 +6,7 @@
 <mapper namespace="com.Stalk.project.api.openvidu.mapper.VideoRecordingMapper"> 
 
   <!-- 녹화 시작 시 INSERT -->
-  <insert id="insertRecording" parameterType="com.project.openvidu.model.VideoRecording">
+  <insert id="insertRecording" parameterType="com.Stalk.project.api.openvidu.dto.out.VideoRecording">
     INSERT INTO video_recordings (
       consultation_id, recording_id, session_id,
       start_time, status, created_at
