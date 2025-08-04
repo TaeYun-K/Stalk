@@ -1,4 +1,5 @@
 import { ConsultationItem } from '@/types';
+import AuthService from './authService';
 
 interface ConsultationRequest {
   expertId: string;
@@ -177,6 +178,7 @@ class ConsultationService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
         },
       });
 
@@ -198,6 +200,7 @@ class ConsultationService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
         },
       });
 
