@@ -73,6 +73,18 @@ const WritePostPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900">투자지식iN 글쓰기</h1>
               </div>
 
+              {/* 유의사항 */}
+              <div className="flex flex-col items-start gap-4 mb-8 border-b border-gray-200 pb-8">
+                <h2 className="text-lg font-semibold text-blue-700">작성 유의사항</h2>
+                <ul className="list-inside space-y-2 w-full text-left text-sm text-gray-500 bg-blue-50 p-4 rounded-lg list-disc pl-7 py-6">
+                  <li>본 게시판은 무료로 제공되는 서비스입니다. 무단 수집 및 활용을 금지합니다.</li>
+                  <li>실명, 주민등록번호, 계좌번호 등 개인정보를 노출하지 마세요.</li>
+                  <li>비방·욕성·스팸·상업적 광고 목적의 게시글은 사전 경고 없이 삭제될 수 있습니다.</li>
+                  <li>전문가의 답변까지 다소 시간이 걸릴 수 있습니다. 급한 문의나 더욱 자세한 상담은 유료 상담을 이용해주세요.</li>
+                  <li className='text-blue-500'>전문가의 답변은 참고용이며, 최종 투자 결정 및 손익에 대한 책임은 본인에게 있습니다.</li>
+                </ul>
+              </div>
+
               {/* Write Form */}
               <form onSubmit={handleSubmit} className="space-y-10">
                 {/* Category Selection */}
@@ -148,19 +160,19 @@ const WritePostPage: React.FC = () => {
                 </div>
 
                 {/* Submit Buttons */}
-                <div className="flex justify-end space-x-4">
+                <div className="flex justify-end space-x-2">
                   <button
                     type="button"
                     onClick={() => navigate('/community?tab=knowledge')}
-                    className="px-8 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                    className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-2xl hover:bg-gray-50 transition-colors"
                   >
                     취소
                   </button>
                   <button
                     type="submit"
-                    className="px-8 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors"
+                    className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-2xl transition-colors"
                   >
-                    등록하기
+                    등록
                   </button>
                 </div>
               </form>
