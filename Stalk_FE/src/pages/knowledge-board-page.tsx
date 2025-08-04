@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import CommunityService from '@/services/communityService';
+import { PostCategory, CommunityPostDetailDto, CommunityCommentDto } from '@/types';
 
 const KnowledgeBoardPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { postId } = useParams<{ postId: string }>();
   const [selectedTab, setSelectedTab] = useState('knowledge');
   const [commentInput, setCommentInput] = useState('');
-  const [comments, setComments] = useState([
-    {
-      id: 1,
-      nickname: 'John Doe',
-      createdAt: '2025-01-01',
-      content: '주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용',
-      image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
-    }
-  ]);
+  const [postDetail, setPostDetail] = useState<CommunityPostDetailDto | null>(null);
+  const [comments, setComments] = useState<CommunityCommentDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -23,23 +21,67 @@ const KnowledgeBoardPage = () => {
     }
   }, [searchParams]);
 
-  const handleCommentSubmit = () => {
-    if (commentInput.trim() === '') return;
+  // 게시글 상세 정보 로드
+  useEffect(() => {
+    if (postId) {
+      loadPostDetail();
+      loadComments();
+    }
+  }, [postId]);
+
+  const loadPostDetail = async () => {
+    if (!postId) return;
     
-    const newComment = {
-      id: comments.length + 1,
-      nickname: '사용자',
-      createdAt: new Date().toISOString().split('T')[0],
-      content: commentInput,
-      image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
-    };
+    setLoading(true);
+    setError(null);
     
-    setComments([...comments, newComment]);
-    setCommentInput('');
+    try {
+      const data = await CommunityService.getPostDetail(parseInt(postId));
+      setPostDetail(data);
+    } catch (error) {
+      console.error('Error fetching post detail:', error);
+      setError('게시글을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCommentDelete = (commentId: number) => {
-    setComments(comments.filter(comment => comment.id !== commentId));
+  const loadComments = async () => {
+    if (!postId) return;
+    
+    try {
+      const data = await CommunityService.getComments(parseInt(postId));
+      setComments(data.content || []); // items -> content로 수정
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    }
+  };
+
+  const handleCommentSubmit = async () => {
+    if (commentInput.trim() === '' || !postId) return;
+    
+    try {
+      await CommunityService.createComment(parseInt(postId), { content: commentInput });
+      setCommentInput('');
+      loadComments(); // 댓글 목록 새로고침
+    } catch (error) {
+      console.error('Error creating comment:', error);
+      alert('댓글 작성 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleCommentDelete = async (commentId: number) => {
+    if (!window.confirm('정말로 이 댓글을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      await CommunityService.deleteComment(commentId);
+      loadComments(); // 댓글 목록 새로고침
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      alert('댓글 삭제 중 오류가 발생했습니다.');
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -48,18 +90,53 @@ const KnowledgeBoardPage = () => {
     }
   };
 
-  const knowledgePosts = [
-    {
-      id: 1,
-      category: '주식',
-      title: '주식 시장 분석',
-      nickname: 'John Doe',
-      createdAt: '2025-01-01',
-      image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
-      content: '주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용주식 시장 분석 내용',
-      viewCount: 100,
-    },
-  ];
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case PostCategory.QUESTION:
+        return '질문';
+      case PostCategory.TRADE_RECORD:
+        return '매매기록';
+      case PostCategory.STOCK_DISCUSSION:
+        return '종목토론';
+      case PostCategory.MARKET_ANALYSIS:
+        return '시황분석';
+      default:
+        return category;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-lg">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-lg text-red-500">{error}</div>
+      </div>
+    );
+  }
+
+  if (!postDetail) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-lg">게시글을 찾을 수 없습니다.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -69,7 +146,7 @@ const KnowledgeBoardPage = () => {
           <div className="pt-16 w-64">
             <h2 className="mb-6 ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
             <nav className="space-y-2">
-            <button
+              <button
                 onClick={() => navigate('/community?tab=news')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
                   selectedTab === 'news'
@@ -93,7 +170,6 @@ const KnowledgeBoardPage = () => {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                 
                   <span>투자 지식iN</span>
                 </div>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,25 +182,33 @@ const KnowledgeBoardPage = () => {
           {/* Right Content */}
           <div className="pt-16 flex-1">
             <div className="mb-6 flex flex-col justify-start gap-3">
-              <span className="text-left w-fit text-sm text-blue-500 rounded-full px-4 py-1 bg-blue-50">#{knowledgePosts[0].category}</span>
-              <h2 className="text-left text-2xl font-semibold text-gray-900">{knowledgePosts[0].title}</h2>
+              <span className="text-left w-fit text-sm text-blue-500 rounded-full px-4 py-1 bg-blue-50">
+                #{getCategoryLabel(postDetail.category)}
+              </span>
+              <h2 className="text-left text-2xl font-semibold text-gray-900">{postDetail.title}</h2>
               {/* 작성자 프로필 및 조회수 */}
               <div className='flex items-end justify-between border-b border-gray-200 pb-4'>
                 {/* 작성자 프로필 */}
                 <div className='flex items-center gap-2'>
                   {/* 작성자 프로필 이미지 */}
-                  <img src={knowledgePosts[0].image} alt="작성자 프로필 이미지" className='w-10 h-10 rounded-full' />
+                  <div className='w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center'>
+                    <span className='text-sm font-semibold text-gray-600'>
+                      {postDetail.authorName.charAt(0)}
+                    </span>
+                  </div>
                   {/* 작성자 닉네임 및 작성일자 */}
                   <div className='flex flex-col items-start ml-2'>
-                    <span className='text-sm font-semibold'>{knowledgePosts[0].nickname}</span>
-                    <span className='text-sm text-gray-500'>{knowledgePosts[0].createdAt}</span>
+                    <span className='text-sm font-semibold'>{postDetail.authorName}</span>
+                    <span className='text-sm text-gray-500'>{formatDate(postDetail.createdAt)}</span>
                   </div>
                 </div>
-                <span className='text-sm text-gray-500'>조회수 {knowledgePosts[0].viewCount}</span>
+                <span className='text-sm text-gray-500'>조회수 {postDetail.viewCount}</span>
               </div>
-              <span className='pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200'>{knowledgePosts[0].content}</span>
-
+              <span className='pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200'>
+                {postDetail.content}
+              </span>
             </div>
+            
             {/* 댓글 */}
             <div className='flex flex-col gap-4'>
               {/* 댓글 Title */}
@@ -132,6 +216,7 @@ const KnowledgeBoardPage = () => {
                 <h2 className='flex items-center justify-between text-xl font-semibold text-gray-900'>댓글</h2>
                 <h3 className='text-sm text-gray-500'>Comment</h3>
               </div>
+              
               {/* 댓글 작성 */}
               <div className='flex flex-row gap-3 items-center justify-between'>
                 <input 
@@ -149,18 +234,23 @@ const KnowledgeBoardPage = () => {
                   작성
                 </button>
               </div>
+              
               {/* 댓글 목록 */}
               <div className='flex flex-col gap-5'>
                 {comments.map((comment) => (
-                  <div key={comment.id} className='pt-2 flex flex-col gap-3 items-start justify-between'>
+                  <div key={comment.commentId} className='pt-2 flex flex-col gap-3 items-start justify-between'>
                     {/* 댓글 작성자 이미지 & 프로필 + 수정 & 삭제 버튼 */}
                     <div className='flex flex-row items-center justify-between w-full'>
                       {/* 댓글 작성자 이미지 & 프로필 */}
                       <div className='flex flex-row gap-3 items-center'>
-                        <img src={comment.image} alt="작성자 프로필 이미지" className='w-10 h-10 rounded-full' />
+                        <div className='w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center'>
+                          <span className='text-sm font-semibold text-gray-600'>
+                            {comment.authorName.charAt(0)}
+                          </span>
+                        </div>
                         <div className='flex flex-col items-start ml-2'>
-                          <span className='text-sm font-semibold'>{comment.nickname}</span>
-                          <span className='text-sm text-gray-500'>{comment.createdAt}</span>
+                          <span className='text-sm font-semibold'>{comment.authorName}</span>
+                          <span className='text-sm text-gray-500'>{formatDate(comment.createdAt)}</span>
                         </div>
                       </div>
                       {/* 수정 & 삭제 버튼 */}
@@ -169,7 +259,7 @@ const KnowledgeBoardPage = () => {
                         <p className='text-sm text-gray-500'>|</p>
                         <button 
                           className='text-sm text-gray-500 hover:text-red-500 hover:font-semibold'
-                          onClick={() => handleCommentDelete(comment.id)}
+                          onClick={() => handleCommentDelete(comment.commentId)}
                         >
                           삭제
                         </button>
@@ -189,3 +279,4 @@ const KnowledgeBoardPage = () => {
 };
 
 export default KnowledgeBoardPage;
+

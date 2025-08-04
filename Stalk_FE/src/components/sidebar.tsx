@@ -65,6 +65,12 @@ const Sidebar: React.FC = () => {
       label: '예약내역',
       path: '/reservations',
       icon: '📅'
+    },
+    {
+      id: 'knowledge-board',
+      label: '투자 지식iN',
+      path: '/knowledge-board',
+      icon: '📚'
     }
   ];
 
@@ -110,7 +116,6 @@ const Sidebar: React.FC = () => {
               {notifications.map((notification, index) => (
                 <div key={notification.id}>
                   <div className="flex items-start space-x-4">
-
                     <img src={checkIcon} alt="check" className="w-6 h-6" />
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center text-left text-sm text-gray-500 mb-2">
@@ -356,7 +361,8 @@ const Sidebar: React.FC = () => {
       {/* Expanded Content Panel */}
       {!isCollapsed && (
         <div className="sidebar-container fixed right-20 top-0 h-full bg-white shadow-xl border-l border-gray-200 w-80 z-40">
-          <div className="flex items-center justify-between p-4 border-b border-gray-100">            <h2 className="text-lg font-semibold text-gray-900">{getCurrentMenuLabel()}</h2>
+          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">{getCurrentMenuLabel()}</h2>
             {selectedMenu === 'notifications' && (
               <button className="text-sm text-gray-500 hover:text-gray-700" onClick={() => setNotifications([])}>
                 모두 비우기
@@ -380,4 +386,4 @@ const Sidebar: React.FC = () => {
   );
 };
 
-export default Sidebar;
+export default Sidebar; 
