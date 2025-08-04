@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.user.dao.UserProfileMapper">
+<mapper namespace="com.Stalk.project.api.user.dao.UserProfileMapper">
 
   <!-- 사용자 프로필 조회 -->
   <select id="findUserProfileById"
