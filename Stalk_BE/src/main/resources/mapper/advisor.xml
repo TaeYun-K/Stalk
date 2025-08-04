@@ -2,10 +2,10 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.advisor.dao.AdvisorMapper">
+<mapper namespace="com.Stalk.project.api.advisor.dao.AdvisorMapper">
 
   <!-- ReviewDto를 위한 ResultMap 정의 -->
-  <resultMap id="ReviewResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
+  <resultMap id="ReviewResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
     <result property="review_id" column="review_id" jdbcType="BIGINT"/>
     <result property="nickname" column="nickname" jdbcType="VARCHAR"/>
     <result property="rating" column="rating" jdbcType="INTEGER"/>
@@ -32,7 +32,7 @@
   </insert>
 
   <!-- 어드바이저 목록 조회 -->
-  <select id="findAllAdvisorsSummary" resultType="com.Stalk.project.advisor.dto.out.AdvisorResponseDto">
+  <select id="findAllAdvisorsSummary" resultType="com.Stalk.project.api.advisor.dto.out.AdvisorResponseDto">
     SELECT
     a.advisor_id as id,
     u.name,
@@ -70,7 +70,7 @@
   </select>
 
   <!-- ResultMap 정의 - snake_case 필드명에 맞게 수정 -->
-  <resultMap id="AdvisorDetailResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto">
+  <resultMap id="AdvisorDetailResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto">
     <result property="user_id" column="user_id" jdbcType="BIGINT"/>
     <result property="name" column="name" jdbcType="VARCHAR"/>
     <result property="profile_image_url" column="profile_image_url" jdbcType="VARCHAR"/>
@@ -84,7 +84,7 @@
 
   <!-- 어드바이저의 최신 리뷰 조회 -->
   <select id="findLatestReviewsByAdvisorId"
-    resultType="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
+    resultType="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
     SELECT ar.id                                           as reviewId,
            u.nickname                                      as nickname,
            ar.rating                                       as rating,
@@ -107,7 +107,7 @@
   </select>
 
   <!-- 특정 날짜의 전문가 차단 시간 조회 (예약 가능 시간 API용) -->
-  <select id="getBlockedTimes" resultType="com.Stalk.project.advisor.dto.out.BlockedTimeDto">
+  <select id="getBlockedTimes" resultType="com.Stalk.project.api.advisor.dto.out.BlockedTimeDto">
     SELECT start_time as startTime,
            end_time   as endTime
     FROM advisor_blocked_times
@@ -117,7 +117,7 @@
   </select>
 
   <!-- 특정 날짜의 전문가 예약 시간 조회 (예약 가능 시간 API용) -->
-  <select id="getReservedTimes" resultType="com.Stalk.project.advisor.dto.out.ReservedTimeDto">
+  <select id="getReservedTimes" resultType="com.Stalk.project.api.advisor.dto.out.ReservedTimeDto">
     SELECT start_time as startTime,
            end_time   as endTime
     FROM consultation_sessions
@@ -156,7 +156,7 @@
   </select>
 
   <!-- CareerDto를 위한 ResultMap 정의 -->
-  <resultMap id="CareerResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto$CareerDto">
+  <resultMap id="CareerResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$CareerDto">
     <result property="id" column="id" jdbcType="BIGINT"/>
     <result property="title" column="title" jdbcType="VARCHAR"/>
     <result property="description" column="description" jdbcType="VARCHAR"/>
@@ -180,7 +180,7 @@
   </select>
 
   <!-- CertificationDto를 위한 ResultMap 정의 -->
-  <resultMap id="CertificationResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorDetailResponseDto$CertificationDto">
+  <resultMap id="CertificationResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$CertificationDto">
     <result property="id" column="id" jdbcType="BIGINT"/>
     <result property="certificate_file_sn" column="certificate_file_sn" jdbcType="VARCHAR"/>
     <result property="birth" column="birth" jdbcType="VARCHAR"/>
@@ -212,7 +212,7 @@
   </select>
 
   <!-- CertificateDto를 위한 ResultMap 정의 -->
-  <resultMap id="CertificateResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorResponseDto$CertificateDto">
+  <resultMap id="CertificateResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorResponseDto$CertificateDto">
     <result property="certificateName" column="certificate_name" jdbcType="VARCHAR"/>
     <result property="issuedBy" column="issued_by" jdbcType="VARCHAR"/>
   </resultMap>
@@ -228,7 +228,7 @@
   </select>
 
   <!-- 자격증 정보 + advisor_id를 위한 ResultMap 정의 -->
-  <resultMap id="CertificateWithAdvisorIdResultMap" type="com.Stalk.project.advisor.dto.out.AdvisorResponseDto$CertificateDto">
+  <resultMap id="CertificateWithAdvisorIdResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorResponseDto$CertificateDto">
     <result property="advisorId" column="advisor_id" jdbcType="BIGINT"/>
     <result property="certificateName" column="certificate_name" jdbcType="VARCHAR"/>
     <result property="issuedBy" column="issued_by" jdbcType="VARCHAR"/>
