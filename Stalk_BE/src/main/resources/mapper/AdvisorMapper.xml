@@ -5,7 +5,7 @@
 
 <mapper namespace="com.Stalk.project.api.signup.dao.AdvisorSignupMapper">
 
-  <insert id="insertAdvisor" parameterType="com.Stalk.api.project.signup.entity.Advisor">
+  <insert id="insertAdvisor" parameterType="com.Stalk.project.api.signup.entity.Advisor">
     INSERT INTO advisor (
       advisor_id,
       profile_image_url,
