@@ -2,11 +2,14 @@ package com.Stalk.project.api.user.controller;
 
 import com.Stalk.project.global.util.SecurityUtil;
 import com.Stalk.project.global.response.BaseResponse;
+import com.Stalk.project.api.user.dto.in.UserUpdateRequestDto;
 import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
+import com.Stalk.project.api.user.dto.out.UserUpdateResponseDto;
 import com.Stalk.project.api.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,16 +23,33 @@ public class UserController {
 
     @GetMapping("/me")
     @Operation(
-        summary = "내 프로필 정보 조회", 
+        summary = "내 프로필 정보 조회",
         description = "현재 로그인한 사용자의 프로필 정보를 조회합니다.",
         security = @SecurityRequirement(name = "Bearer Authentication")
     )
     public BaseResponse<UserProfileResponseDto> getMyProfile() {
-        
+
         // JWT에서 현재 사용자 ID 추출 (users.id)
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-        
+
         UserProfileResponseDto userProfile = userService.getUserProfile(currentUserId);
         return new BaseResponse<>(userProfile);
+    }
+
+    @PutMapping("/me")
+    @Operation(
+        summary = "내 정보 수정",
+        description = "현재 로그인한 사용자의 이름과 전화번호를 수정합니다. " +
+            "전화번호는 010으로 시작하는 11자리 숫자로 입력해주세요 (하이픈 없이).",
+        security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    public BaseResponse<UserUpdateResponseDto> updateMyProfile(
+        @Valid @RequestBody UserUpdateRequestDto requestDto) {
+
+        // JWT에서 현재 사용자 ID 추출 (users.id)
+        Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
+
+        UserUpdateResponseDto result = userService.updateUserProfile(currentUserId, requestDto);
+        return new BaseResponse<>(result);
     }
 }
