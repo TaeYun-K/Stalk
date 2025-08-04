@@ -1,7 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 import ExpertProfileImage from '@/assets/expert_profile_image.png';
+import AuthService from '@/services/authService';
+
+// API Response Interfaces
+interface ApiCareer {
+  id: number;
+  title: string;
+  description: string;
+  started_at: string;
+  ended_at: string;
+  created_at: string;
+}
+
+interface ApiCertificate {
+  id: number;
+  certificate_file_sn: string;
+  birth: string;
+  certificate_file_number: string;
+  certificate_name: string;
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  certificate_url: string;
+  created_at: string;
+}
+
+interface ApiReview {
+  review_id: number;
+  nickname: string;
+  rating: number;
+  content: string;
+  profile_image: string;
+  created_at: string;
+}
+
+interface ApiAdvisorDetail {
+  user_id: number;
+  name: string;
+  profile_image_url: string;
+  short_intro: string;
+  long_intro: string;
+  preferred_trade_style: string;
+  contact: string;
+  avg_rating: number;
+  review_count: number;
+  careers: ApiCareer[];
+  certificates: ApiCertificate[];
+  reviews: ApiReview[];
+  has_more_reviews: boolean;
+}
+
+interface ApiResponse {
+  httpStatus: string;
+  isSuccess: boolean;
+  message: string;
+  code: number;
+  result: ApiAdvisorDetail;
+}
 
 interface Review {
   id: number;
@@ -11,22 +68,7 @@ interface Review {
   content: string;
 }
 
-interface Expert {
-  id: string;
-  name: string;
-  title: string;
-  tagline: string;
-  image: string;
-  introduction: string;
-  qualifications: string[];
-  experience: Array<{
-    period: string;
-    position: string;
-  }>;
-  rating: number;
-  reviewCount: number;
-  consultationFee: string;
-}
+
 
 const ExpertDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,11 +76,65 @@ const ExpertDetailPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showReservationModal, setShowReservationModal] = useState<boolean>(false);
+  
+  // API 상태 관리
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expertData, setExpertData] = useState<ApiAdvisorDetail | null>(null);
+  
   // 사용자 정보 (실제로는 API에서 가져올 데이터)
   const userInfo = {
     name: '김싸피',
     contact: '010-0000-0000'
   };
+
+  // API 호출
+  useEffect(() => {
+    const fetchExpertDetails = async () => {
+      if (!id) {
+        setError('전문가 ID가 없습니다.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        
+        // 토큰 확인
+        const token = AuthService.getAccessToken();
+        if (!token) {
+          throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.');
+        }
+        
+        const response = await AuthService.authenticatedRequest(`/api/advisors/${id}`);
+        
+        if (response.status === 401) {
+          // 401 에러 시 토큰 제거하고 로그인 페이지로 리다이렉트
+          AuthService.removeAccessToken();
+          navigate('/login');
+          return;
+        }
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch expert details');
+        }
+        
+        const data: ApiResponse = await response.json();
+        if (data.isSuccess) {
+          setExpertData(data.result);
+        } else {
+          throw new Error(data.message || 'Failed to fetch expert details');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Error fetching expert details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExpertDetails();
+  }, [id, navigate]);
 
   const [reservationForm, setReservationForm] = useState({
     name: userInfo.name,
@@ -48,77 +144,7 @@ const ExpertDetailPage: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
 
-  // 전문가 정보 데이터 (실제로는 API에서 가져올 데이터)
-  const expertsData: Record<string, Expert> = {
-    '1': {
-      id: '1',
-      name: '제임스',
-      title: '컨설턴트',
-      tagline: '주식 투자, 어디서부터 시작해야 할지 막막하신가요?',
-      image: ExpertProfileImage,
-      introduction: '중급자도 쉽게 이해할 수 있는 명확한 솔루션을 제공합니다. 8년간의 경험을 바탕으로 기술적 분석을 통한 객관적인 매수/매도 타이밍을 제시하며, 데이터 기반 전략으로 자산을 보호하고 성장시켜 드립니다. 저와 함께라면 투자가 더 이상 어렵지 않습니다.',
-      qualifications: [
-        'CFA (Chartered Financial Analyst)',
-        '투자자산운용사',
-        '금융투자분석사'
-      ],
-      experience: [
-        {
-          period: '2020년 현재',
-          position: '스톡 소속 재무 컨설턴트'
-        },
-        {
-          period: '2018년 - 2020년',
-          position: '골드만삭스 투자분석팀'
-        },
-        {
-          period: '2015년 - 2018년',
-          position: 'JP모건 체이스 자산관리팀'
-        },
-        {
-          period: '2012년 6월',
-          position: '경영학과 졸업'
-        }
-      ],
-      rating: 4.8,
-      reviewCount: 127,
-      consultationFee: '80,000원'
-    },
-    '2': {
-      id: '2',
-      name: '박주현',
-      title: '컨설턴트',
-      tagline: '주식 투자, 어디서부터 시작해야 할지 막막하신가요?',
-      image: ExpertProfileImage,
-      introduction: '초보자도 쉽게 이해할 수 있는 명확한 솔루션을 제공합니다. 5년간의 경험을 바탕으로 기술적 분석을 통한 객관적인 매수/매도 타이밍을 제시하며, 데이터 기반 전략으로 자산을 보호하고 성장시켜 드립니다. 저와 함께라면 투자가 더 이상 어렵지 않습니다.',
-      qualifications: [
-        '투자자산운용사',
-        '금융투자분석사',
-        '투자권유대행인'
-      ],
-      experience: [
-        {
-          period: '2019년 현재',
-          position: '스톡 소속 재무 컨설턴트'
-        },
-        {
-          period: '2020년 - 2024년',
-          position: '미래에셋증권 조사분석팀'
-        },
-        {
-          period: '2016년 3월 - 2019년',
-          position: 'KB증권 주식브로커리지팀'
-        },
-        {
-          period: '2013년 2월',
-          position: '경제학과 졸업'
-        }
-      ],
-      rating: 4.6,
-      reviewCount: 89,
-      consultationFee: '50,000원'
-    }
-  };
+
 
   // 연도만 추출하는 함수
   const formatPeriod = (period: string): string => {
@@ -147,32 +173,36 @@ const ExpertDetailPage: React.FC = () => {
     return period;
   };
 
-  // 현재 전문가 정보 가져오기
-  const expert = expertsData[id || '1'] || expertsData['1'];
+  // API 데이터를 기반으로 전문가 정보 생성
+  const expert = expertData ? {
+    id: expertData.user_id.toString(),
+    name: expertData.name,
+    title: '컨설턴트',
+    tagline: expertData.short_intro,
+    image: expertData.profile_image_url || ExpertProfileImage,
+    introduction: expertData.long_intro,
+    qualifications: expertData.certificates.map(cert => cert.certificate_name),
+    experience: expertData.careers.map(career => ({
+      period: `${new Date(career.started_at).getFullYear()} - ${career.ended_at ? new Date(career.ended_at).getFullYear() : '현재'}`,
+      position: career.title
+    })),
+    rating: expertData.avg_rating,
+    reviewCount: expertData.review_count,
+    consultationFee: '상담료 정보 없음' // API에 consultationFee가 없으므로 기본값 사용
+  } : null;
 
-  const reviews: Review[] = [
-    {
-      id: 1,
-      avatar: '🦊',
-      username: '왕초보투자자',
-      date: '2025.07.17',
-      content: '아무것도 모르는 상태에서 상담받았는데 정말 친절하고 제 수준에 맞춰서 쉽게 설명해주셨어요. 특히 차트 보는 법을 배우고 나서는 주식 앱을 열어보는 게 두렵지 않아졌어요. 전문가님이 투자의 새로운 세계를 열어주신 분이에요. 강력 추천!'
-    },
-    {
-      id: 2,
-      avatar: '🐼',
-      username: '왕초보투자자',
-      date: '2025.07.15',
-      content: '아무것도 모르는 상태에서 상담받았는데 정말 친절하고 제 수준에 맞춰서 쉽게 설명해주셨어요. 특히 차트 보는 법을 배우고 나서는 주식 앱을 열어보는 게 두렵지 않아졌어요. 전문가님이 투자의 새로운 세계를 열어주신 분이에요. 강력 추천!'
-    },
-    {
-      id: 3,
-      avatar: '🐱',
-      username: '왕초보투자자',
-      date: '2025.07.12',
-      content: '아무것도 모르는 상태에서 상담받았는데 정말 친절하고 제 수준에 맞춰서 쉽게 설명해주셨어요. 특히 차트 보는 법을 배우고 나서는 주식 앱을 열어보는 게 두렵지 않아졌어요. 전문가님이 투자의 새로운 세계를 열어주신 분이에요. 강력 추천!'
-    }
-  ];
+  // API 리뷰 데이터를 기반으로 리뷰 생성
+  const reviews: Review[] = expertData ? expertData.reviews.map((review) => ({
+    id: review.review_id,
+    avatar: review.profile_image || '👤',
+    username: review.nickname,
+    date: new Date(review.created_at).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\./g, '.'),
+    content: review.content
+  })) : [];
 
   const timeSlots = [
     '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00', '18:00'
@@ -288,6 +318,65 @@ const ExpertDetailPage: React.FC = () => {
     return days;
   };
 
+  // Loading 상태
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <NewNavbar userType="general" onUserTypeChange={() => {}} />
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="mt-4 text-gray-600">전문가 정보를 불러오는 중...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error 상태
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white">
+        <NewNavbar userType="general" onUserTypeChange={() => {}} />
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">오류가 발생했습니다</h3>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+              >
+                다시 시도
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 데이터가 없는 경우
+  if (!expert) {
+    return (
+      <div className="min-h-screen bg-white">
+        <NewNavbar userType="general" onUserTypeChange={() => {}} />
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🔍</div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">전문가 정보를 찾을 수 없습니다</h3>
+              <p className="text-gray-600 mb-4">요청하신 전문가 정보가 존재하지 않습니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <NewNavbar userType="general" onUserTypeChange={() => {}} />
@@ -305,7 +394,7 @@ const ExpertDetailPage: React.FC = () => {
                     {expert.name}
                   </h1>
                   <h3 className='text-left text-l font-semibold text-blue-500 mb-2'>{expert.title}</h3>
-                  <h3 className='text-left text-l font-medium text-gray-400 mb-2'>/  010-0000-0000</h3>
+                  <h3 className='text-left text-l font-medium text-gray-400 mb-2'>/  {expertData?.contact || '010-0000-0000'}</h3>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center mb-2 ml-4">
                       <div className="flex text-yellow-400">
