@@ -49,13 +49,13 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<AdvisorProfileResponseDto> createAdvisorProfile(
-            @Valid @RequestBody AdvisorProfileCreateRequestDto request) {
-        
+        @Valid @RequestBody AdvisorProfileCreateRequestDto request) {
+
         log.info("POST /api/advisors/profile - Creating advisor profile");
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-        
+
         // 2. 전문가 권한 확인
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
@@ -83,13 +83,13 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<AdvisorProfileResponseDto> updateAdvisorProfile(
-            @Valid @RequestBody AdvisorProfileUpdateRequestDto request) {
-        
+        @Valid @RequestBody AdvisorProfileUpdateRequestDto request) {
+
         log.info("PUT /api/advisors/profile - Updating advisor profile");
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-        
+
         // 2. 전문가 권한 확인
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
@@ -117,14 +117,14 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<CertificateApprovalResponseDto> requestCertificateApproval(
-            @Valid @RequestBody AdvisorCertificateApprovalRequestDto request) {
-        
-        log.info("POST /api/advisors/certificate-approval - Processing certificate approval request, isReRequest: {}", 
-                request.isReRequest());
+        @Valid @RequestBody AdvisorCertificateApprovalRequestDto request) {
+
+        log.info("POST /api/advisors/certificate-approval - Processing certificate approval request, isReRequest: {}",
+            request.isReRequest());
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-        
+
         // 2. 전문가 권한 확인 (모든 전문가 요청 가능)
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
@@ -139,14 +139,14 @@ public class AdvisorProfileController {
 
     // ===== 승인 요청 이력 조회 =====
 
-    @GetMapping("/approval-history")
+    @GetMapping("/certificate-approval")
     @Operation(
         summary = "승인 요청 이력 조회",
         description = "현재 전문가의 자격증 승인 요청 이력을 페이지별로 조회합니다."
     )
     @ApiResponses({
         @ApiResponse(
-            responseCode = "200", 
+            responseCode = "200",
             description = "승인 이력 조회 성공",
             content = @Content(schema = @Schema(implementation = CursorPage.class))
         ),
@@ -154,18 +154,18 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<CursorPage<ApprovalHistoryResponseDto>> getApprovalHistory(
-            @Parameter(description = "페이지 번호", example = "1")
-            @RequestParam(defaultValue = "1") int pageNo,
-            
-            @Parameter(description = "페이지 크기", example = "10")
-            @RequestParam(defaultValue = "10") int pageSize) {
-        
-        log.info("GET /api/advisors/approval-history - Getting approval history, pageNo: {}, pageSize: {}", 
-                pageNo, pageSize);
+        @Parameter(description = "페이지 번호", example = "1")
+        @RequestParam(defaultValue = "1") int pageNo,
+
+        @Parameter(description = "페이지 크기", example = "10")
+        @RequestParam(defaultValue = "10") int pageSize) {
+
+        log.info("GET /api/advisors/certificate-approval - Getting approval history, pageNo: {}, pageSize: {}",
+            pageNo, pageSize);
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-        
+
         // 2. 전문가 권한 확인
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
@@ -193,12 +193,12 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "403", description = "권한 없음")
     })
     public BaseResponse<ProfileStatusResponseDto> getProfileStatus() {
-        
+
         log.info("GET /api/advisors/profile/status - Checking profile status");
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-        
+
         // 2. 전문가 권한 확인
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
@@ -214,13 +214,13 @@ public class AdvisorProfileController {
     }
 
     // ===== 내부 응답 DTO =====
-    
+
     @Schema(description = "프로필 상태 응답 DTO")
     public static class ProfileStatusResponseDto {
-        
+
         @Schema(description = "전문가 ID", example = "1")
         private Long advisorId;
-        
+
         @Schema(description = "상태 메시지", example = "프로필 상태 조회 성공")
         private String message;
 
