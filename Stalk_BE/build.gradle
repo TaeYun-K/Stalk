@@ -29,6 +29,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+
 
     // MyBatis
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.4'
@@ -61,7 +63,7 @@ dependencies {
 
     // Validation
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    
+
     // WebFlux for WebClient
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
@@ -72,6 +74,10 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation 'commons-fileupload:commons-fileupload:1.4'
+
+    implementation 'software.amazon.awssdk:s3:2.26.0' // AWS SDK v2
+    implementation 'software.amazon.awssdk:auth:2.26.0'
+    implementation 'org.springframework:spring-webflux'
 }
 
 tasks.named('test') {

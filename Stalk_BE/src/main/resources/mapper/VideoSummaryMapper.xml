@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stalk.project.api.ai.dao.VideoSummaryMapper">
+  <insert id="insertSummary" parameterType="com.stalk.project.api.ai.model.VideoSummary">
+    INSERT INTO video_summary (video_url, transcript, summary, created_at)
+    VALUES (#{videoUrl}, #{transcript}, #{summary}, #{createdAt})
+    <selectKey keyProperty="id" order="AFTER" resultType="long">
+      SELECT LAST_INSERT_ID()
+    </selectKey>
+  </insert>
+
+  <select id="findById" parameterType="long"
+    resultType="com.stalk.project.api.ai.model.VideoSummary">
+    SELECT id, video_url, transcript, summary, created_at
+    FROM video_summary
+    WHERE id = #{id}
+  </select>
+</mapper>
