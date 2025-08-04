@@ -171,9 +171,31 @@ public enum BaseResponseStatus {
   APPROVAL_PROCESSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1604, "승인 처리에 실패했습니다."),
   REJECTION_PROCESSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1605, "거절 처리에 실패했습니다."),
 
+  // ===== Advisor Profile 관련 에러 (1700번대) =====
 
-  // 로그아웃
-  LOGOUT_SUCCESS(HttpStatus.OK, true, 200, "로그아웃이 완료되었습니다.");
+  // 권한 관련
+  UNAUTHORIZED_ADVISOR_ACCESS(HttpStatus.FORBIDDEN, false, 1701, "전문가만 접근할 수 있는 기능입니다."),
+
+  // 프로필 관련
+  ADVISOR_PROFILE_ALREADY_EXISTS(HttpStatus.CONFLICT, false, 1702, "이미 등록된 프로필이 있습니다."),
+  ADVISOR_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1703, "등록된 프로필을 찾을 수 없습니다."),
+  ADVISOR_PROFILE_CREATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1704, "프로필 등록에 실패했습니다."),
+  ADVISOR_PROFILE_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1705, "프로필 수정에 실패했습니다."),
+
+  // 경력 정보 관련
+  CAREER_ENTRIES_REQUIRED(HttpStatus.BAD_REQUEST, false, 1705, "경력 정보는 최소 1개 이상 등록해야 합니다."),
+  MINIMUM_CAREER_ENTRIES_REQUIRED(HttpStatus.BAD_REQUEST, false, 1706, "경력 정보는 최소 1개 이상 유지되어야 합니다."),
+  CAREER_ENTRY_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1707, "해당 경력 정보를 찾을 수 없습니다."),
+  CAREER_ENTRY_CREATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1708, "경력 정보 등록에 실패했습니다."),
+  CAREER_ENTRY_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1709, "경력 정보 수정에 실패했습니다."),
+  CAREER_ENTRY_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1710, "경력 정보 삭제에 실패했습니다."),
+  INVALID_CAREER_ACTION_FOR_CREATE(HttpStatus.BAD_REQUEST, false, 1711, "프로필 등록 시에는 CREATE 액션만 허용됩니다."),
+
+  // 자격증 승인 요청 관련
+  APPROVAL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1712, "자격 승인 요청에 실패했습니다."),
+  PREVIOUS_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1713, "이전 요청을 찾을 수 없습니다."),
+  APPROVAL_HISTORY_FETCH_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1714, "승인 이력 조회에 실패했습니다.");
+
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;

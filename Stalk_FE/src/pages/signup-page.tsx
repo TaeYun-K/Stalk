@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 import certificationExample from '@/assets/images/dummy/certification_example.svg';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
-import AuthService from '@/services/authService';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -22,10 +21,10 @@ const SignupPage = () => {
   const [nicknameVerified, setNicknameVerified] = useState(false);
   // 자격증 정보를 위한 인터페이스
   interface QualificationData {
-    qualification: string;
-    certificateNumber: string;
-    birthDate: string;
-    verificationNumber: string;
+    certificateName: string;
+    certificateFileSn: string;
+    birth: string;
+    certificateFileNumber: string;
   }
 
   const [formData, setFormData] = useState({
@@ -40,14 +39,12 @@ const SignupPage = () => {
     verificationCode: '',
     userType: 'general',
     profilePhoto: null as File | null,
-    qualifications: [
-      {
-        qualification: '',
-        certificateNumber: '',
-        birthDate: '',
-        verificationNumber: ''
-      }
-    ] as QualificationData[],
+    qualification: {
+      certificateName: '',
+      certificateFileSn: '',
+      birth: '',
+      certificateFileNumber: ''
+    } as QualificationData,
     termsAgreement: false,
     privacyAgreement: false,
     thirdPartyAgreement: false
@@ -108,7 +105,8 @@ const SignupPage = () => {
         setUserIdVerified(false);
         setErrorMessage('이미 사용 중인 아이디입니다.');
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('아이디 중복확인 중 오류:', error);
       setErrorMessage('아이디 중복확인 중 오류가 발생했습니다.');
     }
   };
@@ -132,7 +130,8 @@ const SignupPage = () => {
         setNicknameVerified(false);
         setErrorMessage('이미 사용 중인 닉네임입니다.');
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('닉네임 중복확인 중 오류:', error);
       setErrorMessage('닉네임 중복확인 중 오류가 발생했습니다.');
     }
   };
@@ -182,36 +181,105 @@ const SignupPage = () => {
       return;
     }
 
+    // 전문가 회원가입 시 추가 검증
+    if (userType === 'expert') {
+      if (!formData.qualification.certificateName || !formData.qualification.certificateFileSn || 
+          !formData.qualification.birth || !formData.qualification.certificateFileNumber) {
+        setErrorMessage('모든 자격증 정보를 입력해주세요.');
+        return;
+      }
+
+      // 자격증 번호 형식 검증 (8자리)
+      if (formData.qualification.certificateFileSn.length !== 8) {
+        setErrorMessage('합격증 번호는 정확히 8자리여야 합니다.');
+        return;
+      }
+
+      // 생년월일 형식 검증 (8자리)
+      if (formData.qualification.birth.length !== 8) {
+        setErrorMessage('생년월일은 YYYYMMDD 형식의 8자리여야 합니다.');
+        return;
+      }
+
+      // 발급번호 형식 검증 (6자리)
+      if (formData.qualification.certificateFileNumber.length !== 6) {
+        setErrorMessage('발급번호는 정확히 6자리여야 합니다.');
+        return;
+      }
+
+      // 프로필 이미지 검증
+      if (!formData.profilePhoto) {
+        setErrorMessage('프로필 이미지를 업로드해주세요.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setErrorMessage('');
 
     try {
-      // 백엔드 요청 형식에 맞춘 데이터 구조
-      const requestData = {
-        name: formData.name,
-        userId: formData.userId,
-        nickname: formData.nickname,
-        password: formData.password,
-        passwordConfirm: formData.confirmPassword,
-        contact: formData.contact.replace(/[^0-9]/g, ''), // 숫자만 추출
-        email: `${formData.email}@${formData.emailDomain}`,
-        agreedTerms: true, // 백엔드에서 @AssertTrue로 검증하므로 true로 고정
-        agreedPrivacy: true // 백엔드에서 @AssertTrue로 검증하므로 true로 고정
-      };
+      let response; // response 변수를 try 블록 시작에서 선언
 
-      // 디버깅을 위한 로그 출력
-      console.log('전송할 데이터:', requestData);
+      if (userType === 'expert') {
+        // 전문가 회원가입 - FormData 사용
+        const formDataToSend = new FormData();
+        
+        // 기본 정보
+        formDataToSend.append('userId', formData.userId);
+        formDataToSend.append('name', formData.name);
+        formDataToSend.append('nickname', formData.nickname);
+        formDataToSend.append('password', formData.password);
+        formDataToSend.append('passwordConfirm', formData.confirmPassword);
+        formDataToSend.append('contact', formData.contact.replace(/[^0-9]/g, ''));
+        formDataToSend.append('email', `${formData.email}@${formData.emailDomain}`);
+        
+        // 자격증 정보
+        formDataToSend.append('certificateName', formData.qualification.certificateName);
+        formDataToSend.append('certificateFileSn', formData.qualification.certificateFileSn);
+        formDataToSend.append('birth', formData.qualification.birth);
+        formDataToSend.append('certificateFileNumber', formData.qualification.certificateFileNumber);
+        
+        // 프로필 이미지
+        if (formData.profilePhoto) {
+          formDataToSend.append('profileImage', formData.profilePhoto);
+        }
+        
+        // 약관 동의
+        formDataToSend.append('agreedTerms', 'true');
+        formDataToSend.append('agreedPrivacy', 'true');
 
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
 
-      console.log('응답 상태:', response.status);
-      console.log('응답 헤더:', Object.fromEntries(response.headers.entries()));
+
+        response = await fetch('/api/auth/advisor/signup', {
+          method: 'POST',
+          body: formDataToSend, // Content-Type은 브라우저가 자동으로 설정
+        });
+      } else {
+        // 일반 회원가입 - JSON 사용
+        const requestData = {
+          name: formData.name,
+          userId: formData.userId,
+          nickname: formData.nickname,
+          password: formData.password,
+          passwordConfirm: formData.confirmPassword,
+          contact: formData.contact.replace(/[^0-9]/g, ''),
+          email: `${formData.email}@${formData.emailDomain}`,
+          agreedTerms: true,
+          agreedPrivacy: true
+        };
+
+
+
+        response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData),
+        });
+      }
+
+
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -222,15 +290,15 @@ const SignupPage = () => {
       }
 
       const result = await response.json();
-      console.log('응답 데이터:', result);
 
-      if (result.success) {
+      if (result.userId || result.success) {
         alert('회원가입이 완료되었습니다!');
-        navigate('/login');
+        navigate('/signup-complete');
       } else {
         setErrorMessage(result.message || '회원가입에 실패했습니다.');
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('회원가입 중 오류:', error);
       setErrorMessage('회원가입 중 오류가 발생했습니다.');
     } finally {
       setIsSubmitting(false);
@@ -267,67 +335,38 @@ const SignupPage = () => {
 
 
 
-  const handleQualificationChange = (e: React.ChangeEvent<HTMLInputElement>, index: number, field: keyof QualificationData) => {
+  const handleQualificationChange = (e: React.ChangeEvent<HTMLInputElement>, field: keyof QualificationData) => {
     const { value } = e.target;
-    const newQualifications = [...formData.qualifications];
-    newQualifications[index][field] = value;
-    
-    // 마지막 폼에서 입력이 시작되면 새로운 빈 폼 추가
-    if (index === formData.qualifications.length - 1 && value.trim() !== '') {
-      newQualifications.push({
-        qualification: '',
-        certificateNumber: '',
-        birthDate: '',
-        verificationNumber: ''
-      });
-    }
-    
-    setFormData({
-      ...formData,
-      qualifications: newQualifications
-    });
+    setFormData(prev => ({
+      ...prev,
+      qualification: {
+        ...prev.qualification,
+        [field]: value
+      }
+    }));
   };
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     
     // 자격증 관련 필드인지 확인
-    if (name.startsWith('qualification_')) {
-      const index = parseInt(name.split('_')[1]);
-      const newQualifications = [...formData.qualifications];
-      newQualifications[index].qualification = value;
-      
-      // 마지막 폼에서 선택이 시작되면 새로운 빈 폼 추가
-      if (index === formData.qualifications.length - 1 && value !== '') {
-        newQualifications.push({
-          qualification: '',
-          certificateNumber: '',
-          birthDate: '',
-          verificationNumber: ''
-        });
-      }
-      
-      setFormData({
-        ...formData,
-        qualifications: newQualifications
-      });
+    if (name === 'certificateName') {
+      setFormData(prev => ({
+        ...prev,
+        qualification: {
+          ...prev.qualification,
+          certificateName: value
+        }
+      }));
     } else {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [name]: value
-      });
+      }));
     }
   };
 
-  const removeQualification = (index: number) => {
-    if (formData.qualifications.length > 1) {
-      const newQualifications = formData.qualifications.filter((_, i) => i !== index);
-      setFormData({
-        ...formData,
-        qualifications: newQualifications
-      });
-    }
-  };
+  // 자격증 정보 초기화 함수는 현재 사용되지 않으므로 제거
 
   const handleSendVerification = async () => {
     if (!formData.email || !formData.emailDomain) {
@@ -356,7 +395,8 @@ const SignupPage = () => {
         } else {
           setErrorMessage('인증 코드 발송에 실패했습니다.');
         }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('인증 코드 발송 중 오류:', error);
       setErrorMessage('인증 코드 발송 중 오류가 발생했습니다.');
     }
   };
@@ -387,7 +427,8 @@ const SignupPage = () => {
       } else {
         setErrorMessage(result.message || '인증 코드가 올바르지 않습니다.');
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('인증 코드 확인 중 오류:', error);
       setErrorMessage('인증 코드 확인 중 오류가 발생했습니다.');
     }
   };
@@ -800,72 +841,73 @@ const SignupPage = () => {
                 {/* Form 제목 라벨 */}
                 
 
-                {/* 자격증 폼들 */}
-                {formData.qualifications.map((qualification, index) => (
-                  <div key={index} className="w-full flex flex-row gap-4 mb-4">
-                    {/* Select */}
-                    <div className='w-1/4 flex flex-col gap-3'>
-                      <h3 className="text-left pl-5">전문 자격명</h3>
-                    
-                      <div className='w-full'>
-                        <select
-                          name={`qualification_${index}`}
-                          value={qualification.qualification}
-                          onChange={handleSelectChange}
-                          className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                        >
-                          <option value="">전문 자격을 선택하세요</option>
-                          <option value="financial_advisor">금융투자상담사</option>
-                          <option value="securities_analyst">증권분석사</option>
-                          <option value="cfa">CFA</option>
-                          <option value="cpa">CPA</option>
-                        </select>
-                      </div>
+                {/* 자격증 폼 */}
+                <div className="w-full flex flex-row gap-4 mb-4">
+                  {/* Select */}
+                  <div className='w-1/4 flex flex-col gap-3'>
+                    <h3 className="text-left pl-5">전문 자격명</h3>
+                  
+                    <div className='w-full'>
+                      <select
+                        name="certificateName"
+                        value={formData.qualification.certificateName}
+                        onChange={handleSelectChange}
+                        className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="">전문 자격을 선택하세요</option>
+                        <option value="financial_advisor">금융투자상담사</option>
+                        <option value="securities_analyst">증권분석사</option>
+                        <option value="cfa">CFA</option>
+                        <option value="cpa">CPA</option>
+                      </select>
                     </div>
+                  </div>
 
+                  {/* Input 1 */}
+                  <div className='w-3/4 flex flex-col gap-3'>
+                    <h3 className='text-left pl-5'>인증번호 입력</h3>
+                    <div className='grid grid-cols-3 gap-4'>
                     {/* Input 1 */}
-                    <div className='w-3/4 flex flex-col gap-3'>
-                      <h3 className='text-left pl-5'>인증번호 입력</h3>
-                      <div className='grid grid-cols-3 gap-4'>
-                      {/* Input 1 */}
-                        <div className="flex flex-col">
-                          <input
-                            type="text"
-                            value={qualification.certificateNumber}
-                            onChange={(e) => handleQualificationChange(e, index, 'certificateNumber')}
-                            placeholder="('-') 없이 숫자만 입력"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">중앙에 위치한 합격증 번호</p>
-                        </div>
+                      <div className="flex flex-col">
+                        <input
+                          type="text"
+                          value={formData.qualification.certificateFileSn}
+                          onChange={(e) => handleQualificationChange(e, 'certificateFileSn')}
+                          placeholder="('-') 없이 숫자만 입력"
+                          maxLength={8}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">중앙에 위치한 합격증 번호 (8자리)</p>
+                      </div>
 
-                        {/* Input 2 */}
-                        <div className="flex flex-col">
-                          <input
-                            type="text"
-                            value={qualification.birthDate}
-                            onChange={(e) => handleQualificationChange(e, index, 'birthDate')}
-                            placeholder="('-') 없이 숫자만 입력"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">합격증에 표기된 생년월일</p>
-                        </div>
+                      {/* Input 2 */}
+                      <div className="flex flex-col">
+                        <input
+                          type="text"
+                          value={formData.qualification.birth}
+                          onChange={(e) => handleQualificationChange(e, 'birth')}
+                          placeholder="YYYYMMDD"
+                          maxLength={8}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">생년월일 (YYYYMMDD)</p>
+                      </div>
 
-                        {/* Input 3 */}
-                        <div className="flex flex-col">
-                          <input
-                            type="text"
-                            value={qualification.verificationNumber}
-                            onChange={(e) => handleQualificationChange(e, index, 'verificationNumber')}
-                            placeholder="('-') 없이 숫자만 입력"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">하단 발급번호의 마지막 6자리</p>
-                        </div>
+                      {/* Input 3 */}
+                      <div className="flex flex-col">
+                        <input
+                          type="text"
+                          value={formData.qualification.certificateFileNumber}
+                          onChange={(e) => handleQualificationChange(e, 'certificateFileNumber')}
+                          placeholder="6자리 입력"
+                          maxLength={6}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">발급번호 마지막 6자리</p>
                       </div>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
             )}
 

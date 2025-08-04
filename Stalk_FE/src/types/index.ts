@@ -61,6 +61,24 @@ export interface SignupRequest {
   agreedPrivacy: boolean;
 }
 
+// 전문가 회원가입 요청 타입
+export interface AdvisorSignupRequest {
+  userId: string;
+  name: string;
+  nickname: string;
+  password: string;
+  passwordConfirm: string;
+  contact: string;
+  email: string;
+  certificateName: string;
+  certificateFileSn: string;
+  birth: string;
+  certificateFileNumber: string;
+  profileImage: File;
+  agreedTerms: boolean;
+  agreedPrivacy: boolean;
+}
+
 // 백엔드 SignupResponse와 일치
 export interface SignupResponse {
   success: boolean;
@@ -107,10 +125,10 @@ export interface ConsultationItem {
 
 // 전문가 자격증 정보
 export interface QualificationData {
-  qualification: string;
-  certificateNumber: string;
-  birthDate: string;
-  verificationNumber: string;
+  certificateName: string;
+  certificateFileSn: string;
+  birth: string;
+  certificateFileNumber: string;
 }
 
 // 관심종목 타입 (기존에서 이동)
@@ -151,7 +169,7 @@ export interface SignupFormData {
   verificationCode: string;
   userType: 'general' | 'expert';
   profilePhoto: File | null;
-  qualifications: QualificationData[];
+  qualification: QualificationData;
   termsAgreement: boolean;
   privacyAgreement: boolean;
   thirdPartyAgreement: boolean;

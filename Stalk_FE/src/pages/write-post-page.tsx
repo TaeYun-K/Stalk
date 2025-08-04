@@ -18,7 +18,25 @@ const WritePostPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
+  const fetchPostForEdit = async (postId: number) => {
+    setLoading(true);
+    try {
+      const post: CommunityPostDetailDto = await CommunityService.getPostDetail(postId);
+      setFormData({
+        title: post.title,
+        content: post.content,
+        category: post.category as PostCategory
+      });
+    } catch (error) {
+      console.error('Error fetching post for edit:', error);
+      alert('게시글을 불러오는 중 오류가 발생했습니다.');
+      navigate('/community');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     // 글쓰기 로직 구현
     navigate('/community?tab=knowledge');

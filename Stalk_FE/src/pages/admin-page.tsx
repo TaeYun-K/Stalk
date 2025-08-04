@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const AdminPage = () => {
   const [is_admin] = useState<boolean>(true); // 관리자 권한 변수
@@ -62,6 +62,10 @@ const AdminPage = () => {
       profileImage: '/api/placeholder/80/80'
     }
   ]);
+
+  useEffect(() => {
+    console.log('AdminPage 컴포넌트 렌더링됨');
+  }, []);
 
   const handleApprove = (expertId: number) => {
     setExpertList(prev => 

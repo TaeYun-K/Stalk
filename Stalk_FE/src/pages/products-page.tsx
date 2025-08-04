@@ -131,16 +131,13 @@ const ProductsPage = () => {
 
   // Debug logging
   useEffect(() => {
-    console.log("Ranking data:", rankingData);
-    console.log("Ranking loading:", rankingLoading);
-    console.log("Ranking error:", rankingError);
-    console.log("Ranking stocks length:", rankingStocks.length);
+
   }, [rankingData, rankingLoading, rankingError, rankingStocks]);
 
   // Update selected stock when stock data changes
   useEffect(() => {
     if (stockData && selectedTicker) {
-      console.log("Updating selectedStock with stockData:", stockData);
+  
       setSelectedStock({
         ticker: stockData.ticker,
         name: stockData.name,
@@ -163,7 +160,7 @@ const ProductsPage = () => {
         return;
       }
 
-      console.log("Fetching real-time price for ticker:", selectedTicker);
+  
 
       // Clear previous data first
       setRealtimePriceData(null);
@@ -174,8 +171,8 @@ const ProductsPage = () => {
         const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KSQ' : 'STK';
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const url = `https://i13e205.p.ssafy.io:8443/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
-        console.log("Fetching from URL:", url);
+        const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
+
 
         const response = await axios.get(url, {
           headers: {
@@ -185,7 +182,7 @@ const ProductsPage = () => {
         });
 
         if (response.data) {
-          console.log("Real-time price data:", response.data);
+  
 
           // Check if we got data for the correct ticker
           const returnedTicker = response.data.ISU_SRT_CD || response.data.ticker;
@@ -206,7 +203,7 @@ const ProductsPage = () => {
             marketCap: response.data.MKTCAP || response.data.marketCap,
           };
 
-          console.log("Mapped price data:", mappedData);
+  
 
           // Only set the data if it's for the correct ticker
           if (returnedTicker === selectedTicker) {
@@ -222,9 +219,9 @@ const ProductsPage = () => {
       }
 
       // Fallback: Try to get data from daily endpoint
-      console.log("Trying fallback: fetching daily data for ticker:", selectedTicker);
+      
       try {
-        const dailyResponse = await axios.get(`https://i13e205.p.ssafy.io:8443/api/stock/daily/${selectedTicker}?period=2`);
+        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/stock/daily/${selectedTicker}?period=2`);
         if (dailyResponse.data.success && dailyResponse.data.data.length > 0) {
           const latestData = dailyResponse.data.data[0];
           const prevData = dailyResponse.data.data[1] || latestData;
@@ -235,10 +232,10 @@ const ProductsPage = () => {
           // Try to get name from search
           let stockName = "";
           try {
-            const searchResponse = await axios.get(`https://i13e205.p.ssafy.io:8443/api/stock/search/${selectedTicker}`);
+            const searchResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/stock/search/${selectedTicker}`);
             if (searchResponse.data.success && searchResponse.data.data.length > 0) {
               stockName = searchResponse.data.data[0].name;
-              console.log("Found stock name from search:", stockName);
+  
             }
           } catch (searchErr) {
             console.error("Failed to get stock name:", searchErr);
@@ -249,7 +246,7 @@ const ProductsPage = () => {
             const stockFromRanking = rankingData.find((s: any) => s.ticker === selectedTicker);
             if (stockFromRanking) {
               stockName = stockFromRanking.name;
-              console.log("Found stock name from ranking data:", stockName);
+  
             }
           }
 
@@ -268,7 +265,7 @@ const ProductsPage = () => {
             volume: formatVolume(latestData.volume.toString())
           };
 
-          console.log("Fallback data:", fallbackData);
+
           setRealtimePriceData(fallbackData);
         }
       } catch (fallbackErr) {
@@ -323,7 +320,7 @@ const ProductsPage = () => {
 
     try {
       const response = await axios.get(
-        `https://i13e205.p.ssafy.io:8443/api/stock/search/${query}`
+        `${import.meta.env.VITE_API_URL}/api/stock/search/${query}`
       );
       if (response.data.success && response.data.data.length > 0) {
         const stock = response.data.data[0];
@@ -349,7 +346,7 @@ const ProductsPage = () => {
   };
 
   const selectStock = (stock: RankingStock) => {
-    console.log("ProductsPage - Stock selected:", stock);
+
     // Update URL params to include the ticker
     const newParams = new URLSearchParams(searchParams);
     newParams.set("ticker", stock.ticker);
@@ -370,7 +367,7 @@ const ProductsPage = () => {
       volume: stock.volume || "0"
     });
 
-    console.log("ProductsPage - View mode set to detail, ticker:", stock.ticker);
+
   };
 
   const goBackToRanking = () => {
@@ -418,7 +415,7 @@ const ProductsPage = () => {
     "1m": -12, // Show 12 months of monthly data (negative indicates monthly aggregation)
   };
 
-  console.log("ProductsPage render - viewMode:", viewMode, "selectedStock:", selectedStock, "isLoading:", isLoading, "selectedTicker:", selectedTicker, "realtimePriceData:", realtimePriceData, "timeRange:", timeRange, "periodToDays[timeRange]:", periodToDays[timeRange]);
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -471,12 +468,7 @@ const ProductsPage = () => {
                     name={selectedStock?.name || realtimePriceData?.name || selectedTicker || ""}
                     price={(() => {
                       const price = selectedStock?.price || parseFloat(realtimePriceData?.closePrice?.replace(/,/g, '')) || 0;
-                      console.log("Price calculation:", {
-                        selectedStockPrice: selectedStock?.price,
-                        realtimeClosePrice: realtimePriceData?.closePrice,
-                        parsedPrice: parseFloat(realtimePriceData?.closePrice?.replace(/,/g, '')),
-                        finalPrice: price
-                      });
+
                       return price;
                     })()}
                     change={selectedStock?.change || parseFloat(realtimePriceData?.priceChange?.replace(/,/g, '')) || 0}
