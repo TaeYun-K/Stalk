@@ -36,8 +36,7 @@ public class SecurityConfig {
   private final JwtAccessDeniedHandler jwtAccessDeniedHandler;   // 추가
 
   /**
-   * DAO 기반 인증 Provider
-   * - UserDetailsService + PasswordEncoder
+   * DAO 기반 인증 Provider - UserDetailsService + PasswordEncoder
    */
   @Bean
   public DaoAuthenticationProvider authenticationProvider() {
@@ -48,14 +47,12 @@ public class SecurityConfig {
   }
 
   /**
-   * AuthenticationManager 빈 추가 (로그인 인증 처리용)
-   * 사용자 자격 증명(아이디·비밀번호 등)을 실제로 검증하는 핵심 인터페이스
-   * spring boot가 자동으로 설정해 놓은 AuthenticationProvider들을 모아서 AuthenticationManager 인스턴스를 반환
-   * AuthenticationManager의 역할
-   * 내부적으로 DaoAuthenticationProvider → UserDetailsService + PasswordEncoder 조합으로 구성
-   * authenticate(new UsernamePasswordAuthenticationToken(id, pwd)) 호출 시, AuthService가 DB에서 사용자(UserDetails)를 로드
-   * PasswordEncoder.matches(rawPassword, encodedPasswordFromUserDetails) 로 비밀번호 검증
-   * 성공하면 Authentication 객체를 반환, 실패하면 BadCredentialsException 발생
+   * AuthenticationManager 빈 추가 (로그인 인증 처리용) 사용자 자격 증명(아이디·비밀번호 등)을 실제로 검증하는 핵심 인터페이스 spring boot가
+   * 자동으로 설정해 놓은 AuthenticationProvider들을 모아서 AuthenticationManager 인스턴스를 반환 AuthenticationManager의
+   * 역할 내부적으로 DaoAuthenticationProvider → UserDetailsService + PasswordEncoder 조합으로 구성
+   * authenticate(new UsernamePasswordAuthenticationToken(id, pwd)) 호출 시, AuthService가 DB에서
+   * 사용자(UserDetails)를 로드 PasswordEncoder.matches(rawPassword, encodedPasswordFromUserDetails) 로
+   * 비밀번호 검증 성공하면 Authentication 객체를 반환, 실패하면 BadCredentialsException 발생
    */
   @Bean
   public AuthenticationManager authenticationManager(
@@ -111,7 +108,7 @@ public class SecurityConfig {
                 "/webjars/**"           // Swagger의 JS/CSS 리소스
             ).permitAll()
             // 인증 없이 열어둘 애플리케이션 엔드포인트 -> 추후 /api/auth/** 예정
-            .requestMatchers("/api/**").permitAll()
+            .requestMatchers("/api/auth/**").permitAll()
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated())
         // JWT 필터를 UsernamePasswordAuthenticationFilter 전에 추가
