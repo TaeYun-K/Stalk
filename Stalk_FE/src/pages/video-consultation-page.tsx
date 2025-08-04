@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AuthService from "@/services/authService";
 import axios from "axios";
+import { useAuth } from "@/context/AuthContext";
 
 import cameraOffIcon from "@/assets/images/icons/consultation/camera-off.svg";
 import cameraOnIcon from "@/assets/images/icons/consultation/camera-on.svg";
@@ -30,7 +31,7 @@ interface LocationState {
 interface Participant {
   id: string;
   name: string;
-  role: "expert" | "client";
+  role: "ADVISOR" | "USER"
   videoEnabled: boolean;
   audioEnabled: boolean;
   streamManager?: StreamManager;
@@ -71,6 +72,7 @@ const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
+  const { userInfo } = useAuth();
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
@@ -95,22 +97,49 @@ const VideoConsultationPage: React.FC = () => {
   const [showParticipantFaces, setShowParticipantFaces] =
     useState<boolean>(true);
 
-  const [participants] = useState<Participant[]>([
-    {
-      id: "1",
-      name: "박주현",
-      role: "expert",
-      videoEnabled: true,
-      audioEnabled: true,
-    },
-    {
-      id: "2",
-      name: "김철수",
-      role: "client",
-      videoEnabled: false,
-      audioEnabled: false,
-    },
-  ]);
+  // 현재 사용자가 전문가인지 확인
+  const isCurrentUserAdvisor = userInfo?.role === 'ADVISOR';
+  
+  // 사용자 역할에 따른 참가자 정보 동적 설정
+  const [participants] = useState<Participant[]>(() => {
+    if (isCurrentUserAdvisor) {
+      // 현재 사용자가 전문가인 경우
+      return [
+        {
+          id: "1",
+          name: userInfo?.userName || "전문가",
+          role: "ADVISOR" as const,
+          videoEnabled: true,
+          audioEnabled: true,
+        },
+        {
+          id: "2",
+          name: "의뢰인",
+          role: "USER" as const,
+          videoEnabled: false,
+          audioEnabled: false,
+        },
+      ];
+    } else {
+      // 현재 사용자가 일반 사용자인 경우
+      return [
+        {
+          id: "1",
+          name: "전문가",
+          role: "ADVISOR" as const,
+          videoEnabled: true,
+          audioEnabled: true,
+        },
+        {
+          id: "2",
+          name: userInfo?.userName || "의뢰인",
+          role: "USER" as const,
+          videoEnabled: false,
+          audioEnabled: false,
+        },
+      ];
+    }
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -424,7 +453,7 @@ const VideoConsultationPage: React.FC = () => {
     if (newMessage.trim() && session) {
       const message: ChatMessage = {
         id: Date.now().toString(),
-        sender: "김철수",
+        sender: userInfo?.userName || "사용자",
         message: newMessage.trim(),
         timestamp: new Date(),
       };
@@ -543,7 +572,9 @@ const VideoConsultationPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">박주현 (전문가)</span>
+                   <span className="text-sm font-medium">
+                     {isCurrentUserAdvisor ? `${userInfo?.userName || "전문가"} (전문가)` : "전문가"}
+                   </span>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -612,7 +643,9 @@ const VideoConsultationPage: React.FC = () => {
                   )}
                 </div>
                 <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">김철수 (나)</span>
+                   <span className="text-sm font-medium">
+                     {isCurrentUserAdvisor ? "의뢰인" : `${userInfo?.userName || "의뢰인"} (나)`}
+                   </span>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <div
@@ -728,7 +761,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         </div>
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          박주현 (전문가)
+                           {isCurrentUserAdvisor ? `${userInfo?.userName || "전문가"} (전문가)` : "전문가"}
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
@@ -786,7 +819,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          김철수 (나)
+                           {isCurrentUserAdvisor ? "의뢰인" : `${userInfo?.userName || "의뢰인"} (나)`}
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
@@ -850,7 +883,7 @@ const VideoConsultationPage: React.FC = () => {
                           {participant.name}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {participant.role === "expert" ? "전문가" : "의뢰인"}
+                          {participant.role === "ADVISOR" ? "전문가" : "의뢰인"}
                         </p>
                       </div>
                       <div className="flex space-x-1">
