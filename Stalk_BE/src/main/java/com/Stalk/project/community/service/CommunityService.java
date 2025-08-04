@@ -25,6 +25,7 @@ import com.Stalk.project.exception.BaseException;
 import com.Stalk.project.response.BaseResponseStatus;
 import com.Stalk.project.util.CursorPage;
 
+import com.Stalk.project.util.PageRequestDto;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -83,6 +84,44 @@ public class CommunityService {
         .pageSize(requestDto.getPageSize())
         .pageNo(requestDto.getPageNo())
         .build();
+  }
+
+  // CommunityService.java에 추가할 메서드
+
+  public CommunityPostDetailDto getCommunityPostDetail(Long postId, PageRequestDto pageRequest) {
+    // 1. 글 존재 여부 확인 (삭제되지 않은 글만)
+    if (!communityMapper.existsPostById(postId)) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    // 2. 글 상세 정보 조회
+    CommunityPostDetailDto postDetail = communityMapper.findCommunityPostDetail(postId);
+    if (postDetail == null) {
+      throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
+    }
+
+    // 3. 댓글 목록 조회 (페이징)
+    List<CommunityCommentDto> allComments = communityMapper.findCommentsByPostId(postId, pageRequest);
+
+    // 4. hasNext 판단을 위한 limitPlusOne 처리
+    boolean hasNext = allComments.size() > pageRequest.getPageSize();
+    if (hasNext) {
+      allComments.remove(allComments.size() - 1); // 마지막 요소 제거
+    }
+
+    // 5. CursorPage 생성
+    CursorPage<CommunityCommentDto> comments = CursorPage.<CommunityCommentDto>builder()
+        .content(allComments)
+        .nextCursor(hasNext ? (long) (pageRequest.getPageNo() + 1) : null)
+        .hasNext(hasNext)
+        .pageSize(pageRequest.getPageSize())
+        .pageNo(pageRequest.getPageNo())
+        .build();
+
+    // 6. 댓글 페이지 정보를 글 상세 정보에 설정
+    postDetail.setComments(comments);
+
+    return postDetail;
   }
 
   /**
@@ -212,10 +251,9 @@ public class CommunityService {
     }
 
     // 2. 댓글 목록 조회 (페이징 적용)
-    List<CommunityCommentDto> comments = communityMapper.findCommunityPostComments(
+    List<CommunityCommentDto> comments = communityMapper.findCommentsByPostId(
         postId,
-        requestDto.getCommentOffset(),
-        requestDto.getCommentLimitPlusOne()
+        requestDto
     );
 
     // 3. hasNext 판단 및 마지막 항목 제거
