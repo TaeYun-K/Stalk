@@ -1,5 +1,6 @@
 package com.Stalk.project.api.openvidu.dto.out;
 
+import java.time.LocalDateTime;
 import lombok.Data;
 
 @Data
@@ -9,7 +10,7 @@ public class VideoRecording {
     private String recordingId;
     private String sessionId;
     private String url;
-    private String startTime;
-    private String endTime;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
     private String status;
 }

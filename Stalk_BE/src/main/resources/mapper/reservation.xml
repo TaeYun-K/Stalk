@@ -92,7 +92,7 @@
 
   <!-- 예약 상세 조회 (취소 가능 여부 확인용) -->
   <select id="findReservationForCancel"
-    resultType="com.Stalk.project.api.reservation.dao.ReservationCancelCheckDto">
+    resultType="com.Stalk.project.api.reservation.dto.ReservationCancelCheckDto">
     SELECT cs.id,
            cs.user_id        as userId,
            cs.advisor_id     as advisorId,
@@ -117,11 +117,5 @@
         canceled_at   = #{canceledAt}
     WHERE id = #{reservationId}
   </update>
-
-  <!-- 알림 생성 -->
-  <insert id="createNotification">
-    INSERT INTO notifications (user_id, type, title, message, related_id, is_read, created_at)
-    VALUES (#{userId}, #{type}, #{title}, #{message}, #{relatedId}, 0, NOW())
-  </insert>
 
 </mapper>
