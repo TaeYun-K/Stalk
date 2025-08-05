@@ -1,5 +1,9 @@
 import { ConsultationItem } from '@/types';
 
+interface AuthContextType {
+  getAccessToken: () => string | null;
+}
+
 interface ConsultationRequest {
   expertId: string;
   date: string;
@@ -172,32 +176,116 @@ class ConsultationService {
   }
 
   // OpenVidu 세션 생성 및 토큰 발급
-  static async createSessionToken(consultationId: string): Promise<SessionTokenResponse> {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/consultations/${consultationId}/session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+  static async createSessionToken(consultationId: string | number, auth: AuthContextType): Promise<SessionTokenResponse> {
+      try {
+        console.log('🚀 ConsultationService.createSessionToken 호출됨');
+        console.log('🚀 consultationId:', consultationId);
+        
+        const accessToken = auth.getAccessToken();
+        console.log('🚀 auth.getAccessToken() 결과:', accessToken ? '토큰있음' : '토큰없음');
+        if (accessToken) {
+          console.log('🚀 JWT 토큰 전체:', accessToken);
+        }
+        
+        if (!accessToken) {
+          console.error('❌ JWT 토큰이 없어서 API 호출 중단');
+          throw new Error('인증이 필요합니다.');
+        }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+        if (!consultationId) {
+          console.error('❌ consultationId가 없어서 API 호출 중단');
+          throw new Error('상담 ID가 필요합니다.');
+        }
+        
+        console.log('✅ JWT 토큰과 consultationId 모두 준비완료, API 호출 시작');
+        
+        const apiUrl = `/api/consultations/${consultationId}/session`;
+        console.log('🌐 API 요청 URL:', apiUrl);
+        console.log('🌐 API 요청 헤더 Authorization:', `Bearer ${accessToken}`);
 
-      const data : BaseResponse<SessionTokenResponse> = await response.json();
-      if (!data.isSuccess) {
-        throw new Error(data.message);
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        
+        console.log('📡 API 응답 상태:', response.status, response.statusText);
+        console.log('📡 API 응답 ok:', response.ok);
+
+        let responseData;
+        try {
+          responseData = await response.json();
+        } catch (e) {
+          throw new Error(`서버 응답 처리 실패 (${response.status}): ${response.statusText}`);
+        }
+
+        if (!response.ok) {
+          console.error('서버 에러 응답:', responseData);
+          
+          // 500 에러의 경우 상세 정보 출력
+          if (response.status === 500) {
+            console.error('500 에러 상세:', {
+              status: response.status,
+              statusText: response.statusText,
+              responseData: responseData
+            });
+            
+            // OpenVidu 서버 연결 문제로 인한 임시 처리
+            // TODO: 백엔드에서 OpenVidu 설정을 확인해야 함
+            throw new Error('상담 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');
+          }
+          
+          if (responseData && responseData.message) {
+            throw new Error(responseData.message);
+          }
+          throw new Error(`상담방 생성 실패 (${response.status})`);
+        }
+
+        const data = responseData;
+        
+        if (!data.isSuccess) {
+          throw new Error(data.message || '상담방 생성에 실패했습니다.');
+        }
+
+        if (!data.result || !data.result.sessionId || !data.result.token) {
+          throw new Error('서버 응답 형식이 올바르지 않습니다.');
+        }
+
+        console.log('🎉 상담방 세션 생성 성공!');
+        console.log('🎉 응답 데이터:', {
+          sessionId: data.result.sessionId,
+          token: data.result.token ? '토큰있음' : '토큰없음',
+          createdAt: data.result.createdAt
+        });
+
+        return {
+          sessionId: data.result.sessionId,
+          token: data.result.token,
+          createdAt: data.result.createdAt || new Date().toISOString()
+        };
+      } catch (error) {
+        console.error('💥 ConsultationService.createSessionToken 실패:', error);
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error('상담방 생성 중 오류가 발생했습니다.');
       }
-      return data.result;
   }
 
   // 세션 정보 조회
   static async getSessionInfo(consultationId: string): Promise<SessionInfo> {
     try {
+      const accessToken = AuthService.getAccessToken();
+      if (!accessToken) {
+        throw new Error('인증이 필요합니다.');
+      }
+
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/consultations/${consultationId}/session`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 

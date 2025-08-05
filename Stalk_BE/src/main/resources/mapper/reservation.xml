@@ -6,7 +6,7 @@
 
   <!-- ====== 예약 생성 관련 쿼리 ====== -->
 
-  <!-- 전문가 존재 및 승인 여부 확인 -->
+  <!-- 상담 예약 생성 -->
   <insert id="insertConsultationReservation">
     INSERT INTO consultation_sessions (user_id, advisor_id, date, start_time, end_time,
                                        request_message, status, created_at)
@@ -14,13 +14,12 @@
             #{requestMessage}, 'PENDING', NOW())
   </insert>
 
-  <!-- 전문가 차단 시간 확인 -->
-  <insert id="createNotification">
-    INSERT INTO notifications (user_id, type, title, message, related_id, is_read, created_at)
-    VALUES (#{userId}, #{type}, #{title}, #{message}, #{relatedId}, 0, NOW())
-  </insert>
+  <!-- 마지막 생성된 예약 ID 조회 -->
+  <select id="getLastInsertId" resultType="Long">
+    SELECT LAST_INSERT_ID()
+  </select>
 
-  <!-- 기존 예약 존재 여부 확인 -->
+  <!-- 전문가 존재 및 승인 여부 확인 -->
   <select id="isApprovedAdvisor" resultType="Boolean">
     SELECT COUNT(*) > 0
     FROM advisor a
@@ -30,7 +29,7 @@
       AND u.id IS NOT NULL
   </select>
 
-  <!-- 상담 예약 생성 -->
+  <!-- 전문가 차단 시간 확인 -->
   <select id="isTimeBlocked" resultType="Boolean">
     SELECT COUNT(*) > 0
     FROM advisor_blocked_times abt
@@ -39,31 +38,9 @@
       AND (#{startTime} <![CDATA[>=]]> abt.start_time AND #{startTime} <![CDATA[<]]> abt.end_time)
   </select>
 
-  <!-- 마지막 생성된 예약 ID 조회 -->
-  <select id="isTimeAlreadyReserved" resultType="Boolean">
-    SELECT COUNT(*) > 0
-    FROM consultation_sessions cs
-    WHERE cs.advisor_id = #{advisorUserId}
-      AND cs.date = #{date}
-      AND cs.start_time = #{startTime}
-      AND cs.status != 'CANCELED'
-  </select>
-
   <!-- ====== 예약 조회 관련 쿼리 ====== -->
 
-  <!-- 사용자 role 조회 -->
-  <select id="getLastInsertId" resultType="Long">
-    SELECT LAST_INSERT_ID()
-  </select>
-
   <!-- 사용자 ID로 advisor_id 조회 -->
-  <select id="getUserRole" resultType="String">
-    SELECT role
-    FROM users
-    WHERE id = #{userId}
-  </select>
-
-  <!-- 전문가의 예약 내역 조회 (전문가용) -->
   <select id="getAdvisorIdByUserId" resultType="Long">
     SELECT advisor_id
     FROM advisor
@@ -71,7 +48,7 @@
       AND is_approved = 1
   </select>
 
-  <!-- 일반 사용자의 예약 내역 조회 (일반 사용자용) -->
+  <!-- 전문가의 예약 내역 조회 (전문가용) -->
   <select id="findAdvisorReservations"
     resultType="com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto">
     SELECT cs.id                                                 as reservationId,
@@ -90,9 +67,7 @@
     OFFSET #{pageRequest.offset}
   </select>
 
-  <!-- ====== 예약 취소 관련 쿼리 ====== -->
-
-  <!-- 예약 상세 조회 (취소 가능 여부 확인용) -->
+  <!-- 일반 사용자의 예약 내역 조회 (일반 사용자용) -->
   <select id="findUserReservations"
     resultType="com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto">
     SELECT cs.id                                                 as reservationId,
@@ -113,7 +88,9 @@
     OFFSET #{pageRequest.offset}
   </select>
 
-  <!-- 예약 취소 처리 -->
+  <!-- ====== 예약 취소 관련 쿼리 ====== -->
+
+  <!-- 예약 상세 조회 (취소 가능 여부 확인용) -->
   <select id="findReservationForCancel"
     resultType="com.Stalk.project.api.reservation.dao.ReservationCancelCheckDto">
     SELECT cs.id,
@@ -130,7 +107,7 @@
     WHERE cs.id = #{reservationId}
   </select>
 
-  <!-- 알림 생성 -->
+  <!-- 예약 취소 처리 -->
   <update id="cancelReservation">
     UPDATE consultation_sessions
     SET status        = 'CANCELED',
@@ -140,5 +117,11 @@
         canceled_at   = #{canceledAt}
     WHERE id = #{reservationId}
   </update>
+
+  <!-- 알림 생성 -->
+  <insert id="createNotification">
+    INSERT INTO notifications (user_id, type, title, message, related_id, is_read, created_at)
+    VALUES (#{userId}, #{type}, #{title}, #{message}, #{relatedId}, 0, NOW())
+  </insert>
 
 </mapper>

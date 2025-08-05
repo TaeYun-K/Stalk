@@ -11,6 +11,7 @@ import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.PageRequestDto;
+import com.Stalk.project.global.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,26 +36,22 @@ public class ReservationService {
   private final ReservationMapper reservationMapper;
 
   /**
-   * 상담 예약 생성 (토큰 기반 인증 적용), 동시성 이슈 해결
-   *
-   * @param currentUserId 현재 로그인한 사용자 ID (토큰에서 추출)
-   * @param requestDto    예약 요청 정보
-   * @return 예약 생성 결과
-   */
-  /**
-   * 상담 예약 생성 - 동시성 이슈 완전 해결 버전
+   * 상담 예약 생성 (SecurityUtil 기반 인증)
    */
   public ConsultationReservationResponseDto createConsultationReservation(
-      Long currentUserId, String currentUserRole, ConsultationReservationRequestDto requestDto) {
+      ConsultationReservationRequestDto requestDto) {
 
-    log.info("상담 예약 생성 시작: userId={}, role={}, advisorUserId={}",
-        currentUserId, currentUserRole, requestDto.getAdvisorUserId());
+    // SecurityUtil을 통한 현재 사용자 정보 획득
+    Long currentUserId = getCurrentUserPrimaryId();
+
+    log.info("상담 예약 생성 시작: userId={}, advisorUserId={}",
+        currentUserId, requestDto.getAdvisorUserId());
 
     LocalDate requestDate = LocalDate.parse(requestDto.getDate());
     LocalTime requestTime = LocalTime.parse(requestDto.getTime());
 
     // 1. 기본 검증 (권한 포함)
-    validateBasicReservationRequest(currentUserId, currentUserRole, requestDto.getAdvisorUserId(),
+    validateBasicReservationRequest(currentUserId, requestDto.getAdvisorUserId(),
         requestDate, requestTime);
 
     // 2. 예약 생성 (DB 제약조건이 동시성 보호)
@@ -74,14 +71,14 @@ public class ReservationService {
   }
 
   /**
-   * 예약 요청 검증
+   * 예약 요청 검증 (SecurityUtil 활용)
    */
-  private void validateBasicReservationRequest(Long currentUserId, String currentUserRole,
-      Long advisorUserId, LocalDate requestDate, LocalTime requestTime) {
+  private void validateBasicReservationRequest(Long currentUserId, Long advisorUserId,
+      LocalDate requestDate, LocalTime requestTime) {
     LocalDate today = LocalDate.now();
 
     // 0. 사용자 권한 확인 - 일반 사용자만 예약 가능
-    if (!"USER".equals(currentUserRole)) {
+    if (!SecurityUtil.isCurrentUserRegularUser()) {
       throw new BaseException(BaseResponseStatus.RESERVATION_USER_ONLY);
     }
 
@@ -111,7 +108,7 @@ public class ReservationService {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
-    // 6. 본인 예약 방지 (이제 USER만 예약하므로 실제로는 발생하지 않음)
+    // 6. 본인 예약 방지 (USER가 ADVISOR 예약하는 경우는 없지만 안전장치)
     if (currentUserId.equals(advisorUserId)) {
       throw new BaseException(BaseResponseStatus.SELF_RESERVATION_NOT_ALLOWED);
     }
@@ -167,41 +164,37 @@ public class ReservationService {
   }
 
   /**
-   * 예약 내역 조회 (사용자 타입별 동적 처리)
+   * 예약 내역 조회 (SecurityUtil 기반)
    */
   @Transactional(readOnly = true)
-  public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId,
-      PageRequestDto pageRequest) {
-    log.info("예약 내역 조회 시작: userId={}", userId);
+  public CursorPage<ReservationDetailResponseDto> getReservationList(PageRequestDto pageRequest) {
+    Long currentUserId = getCurrentUserPrimaryId();
+    String currentUserRole = SecurityUtil.getCurrentUserRoleRequired();
 
-    // 1. 사용자 role 조회
-    String userRole = reservationMapper.getUserRole(userId);
-    if (userRole == null) {
-      throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
-    }
+    log.info("예약 내역 조회 시작: userId={}, role={}", currentUserId, currentUserRole);
 
     List<ReservationDetailResponseDto> reservations;
 
-    // 2. 역할별 예약 내역 조회
-    if ("ADVISOR".equals(userRole)) {
+    // 역할별 예약 내역 조회
+    if ("ADVISOR".equals(currentUserRole)) {
       // 전문가: advisor_id 조회 후 해당 전문가의 예약 내역
-      Long advisorId = reservationMapper.getAdvisorIdByUserId(userId);
+      Long advisorId = reservationMapper.getAdvisorIdByUserId(currentUserId);
       if (advisorId == null) {
         throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
       }
       reservations = reservationMapper.findAdvisorReservations(advisorId, pageRequest);
     } else {
       // 일반 사용자: user_id로 직접 예약 내역 조회
-      reservations = reservationMapper.findUserReservations(userId, pageRequest);
+      reservations = reservationMapper.findUserReservations(currentUserId, pageRequest);
     }
 
-    // 3. CursorPage 처리
+    // CursorPage 처리
     boolean hasNext = reservations.size() > pageRequest.getPageSize();
     if (hasNext) {
       reservations.remove(reservations.size() - 1);
     }
 
-    log.info("예약 내역 조회 완료: userId={}, count={}", userId, reservations.size());
+    log.info("예약 내역 조회 완료: userId={}, count={}", currentUserId, reservations.size());
 
     return CursorPage.<ReservationDetailResponseDto>builder()
         .content(reservations)
@@ -213,22 +206,23 @@ public class ReservationService {
   }
 
   /**
-   * 예약 취소 처리
+   * 예약 취소 처리 (SecurityUtil 기반)
    */
-  public ReservationCancelResponseDto cancelReservation(Long reservationId, Long currentUserId,
+  public ReservationCancelResponseDto cancelReservation(Long reservationId,
       ReservationCancelRequestDto requestDto) {
+    Long currentUserId = getCurrentUserPrimaryId();
+
     log.info("예약 취소 시작: reservationId={}, userId={}", reservationId, currentUserId);
 
     // 1. 예약 조회 및 검증
-    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(
-        reservationId);
+    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(reservationId);
     if (reservation == null) {
       throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
     }
 
     // 2. 취소 권한 확인
-    if (!currentUserId.equals(reservation.getUserId()) && !currentUserId.equals(
-        reservation.getAdvisorId())) {
+    if (!currentUserId.equals(reservation.getUserId()) &&
+        !currentUserId.equals(reservation.getAdvisorId())) {
       throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
     }
 
@@ -313,6 +307,18 @@ public class ReservationService {
       log.error("알림 생성 중 오류 (예약 취소는 성공): reservationId={}",
           reservation.getId(), e);
       // 알림 생성 실패해도 예약 취소 자체는 성공으로 처리
+    }
+  }
+
+  /**
+   * SecurityUtil에서 현재 사용자 PK 획득 (BaseException 변환)
+   */
+  private Long getCurrentUserPrimaryId() {
+    try {
+      return SecurityUtil.getCurrentUserPrimaryIdRequired();
+    } catch (RuntimeException e) {
+      log.error("인증된 사용자 정보 획득 실패: {}", e.getMessage());
+      throw new BaseException(BaseResponseStatus.INVALID_USER_JWT);
     }
   }
 }

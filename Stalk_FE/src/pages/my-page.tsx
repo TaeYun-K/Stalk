@@ -226,6 +226,16 @@ const MyPage = () => {
         expert: '김범주',
         videoConsultation: '상담 입장',
         action: '취소 요청'
+      },
+
+      {
+        id: '2',   
+        date: '2025. 08. 04.',
+        time: '17:00',
+        content: 'AMD 30만원 가자',
+        expert: '김태윤',
+        videoConsultation: '상담 입장',
+        action: '취소 요청'
       }
     ],
     '상담 완료': [
@@ -413,11 +423,24 @@ const MyPage = () => {
   };
 
   // 상담 입장 처리
+  const auth = useAuth();
+  
   const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
     try {
       const consultationId = consultationItem.id;
+      
+      // JWT 토큰 확인 로그
+      console.log('🔑 상담방 입장 시도 - consultationId:', consultationId);
+      const currentToken = auth.getAccessToken();
+      console.log('🔑 현재 JWT 토큰 상태:', currentToken ? '있음' : '없음');
+      if (currentToken) {
+        console.log('🔑 JWT 토큰 길이:', currentToken.length);
+        console.log('🔑 JWT 토큰 전체:', currentToken);
+      } else {
+        console.error('❌ JWT 토큰이 없습니다!');
+      }
 
-      const { sessionId, token } = await ConsultationService.createSessionToken(consultationId);
+      const { sessionId, token } = await ConsultationService.createSessionToken(consultationId, auth);
 
       navigate( // parameter 여러개 넘기기
         `/video-consultation/${sessionId}`,

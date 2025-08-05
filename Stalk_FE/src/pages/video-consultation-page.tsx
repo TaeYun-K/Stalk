@@ -20,8 +20,6 @@ import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
-import { url } from "inspector";
-import { error } from "console";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -89,6 +87,7 @@ const VideoConsultationPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
   const [consultationStartTime] = useState<Date>(new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
@@ -305,7 +304,6 @@ const VideoConsultationPage: React.FC = () => {
             .getMediaStream()
             .getTracks()
             .forEach(track => track.stop());
-          publisher.destroy();
         } catch (err) {
           console.error('퍼블리셔 정리 중 오류:', err);
         }
@@ -534,6 +532,57 @@ const VideoConsultationPage: React.FC = () => {
     return userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인');
   };
 
+  // 녹화 시작
+  const handleStartRecording = async () => {
+    if (!ovSessionId || !consultationId) {
+      alert("세션 정보가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
+      setRecordingId(ovSessionId);
+      setIsRecording(true);
+    } catch (e) {
+      alert("녹화 시작에 실패했습니다.");
+      console.error(e);
+    }
+  };
+
+  // 녹화 종료
+  const handleStopRecording = async () => {
+    if (!recordingId) {
+      alert("녹화 ID가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/stop/${recordingId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setIsRecording(false);
+      setRecordingId(null);
+    } catch (e) {
+      alert("녹화 종료에 실패했습니다.");
+      console.error(e);
+    }
+  };
+
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col">
       <div className="bg-gray-800 px-6 py-4 flex items-center justify-between border-b border-gray-700">
@@ -562,7 +611,7 @@ const VideoConsultationPage: React.FC = () => {
             상담 ID: {consultationId || "DEMO-001"}
           </span>
           <button
-            onClick={() => setIsRecording(!isRecording)}
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
             title={isRecording ? "녹화 중지" : "녹화 시작"}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               isRecording
