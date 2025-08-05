@@ -30,7 +30,8 @@ public class AuthService {
   private final UserLoginMapper userLoginMapper;
 
   /*
-   * 로그인 처리 - AuthenticationManager를 통해 인증 시도 (UserDetailsService + PasswordEncoder 내부 사용)
+   * 로그인 처리 - AuthenticationManager를 통해 인증 시도 (UserDetailsService +
+   * PasswordEncoder 내부 사용)
    * - 반환된 Authentication 객체에서 User 엔티티를 꺼내 한 번만 DB 조회
    * - JWT 토큰 생성 및 Redis 저장, 마지막 로그인 시간 업데이트
    */
@@ -40,9 +41,7 @@ public class AuthService {
       auth = authenticationManager.authenticate(
           new UsernamePasswordAuthenticationToken(
               loginRequest.getUserId(),
-              loginRequest.getPassword()
-          )
-      );
+              loginRequest.getPassword()));
     } catch (Exception ex) {
       throw new BadCredentialsException("Invalid user ID or password", ex);
     }
@@ -60,8 +59,7 @@ public class AuthService {
         "refresh_token:" + user.getUserId(),
         refreshToken,
         jwtUtil.getRefreshTokenValidity(),
-        TimeUnit.MILLISECONDS
-    );
+        TimeUnit.MILLISECONDS);
 
     // HTTP-only 쿠키로 refreshToken 설정
     ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
@@ -74,8 +72,9 @@ public class AuthService {
     response.setHeader("Set-Cookie", cookie.toString());
 
     // 마지막 로그인 시간 업데이트
-    user.setLastLoginAt(LocalDateTime.now());
-    userLoginMapper.update(user);
+    LocalDateTime now = LocalDateTime.now();
+    user.setLastLoginAt(now);
+    userLoginMapper.update(user.getId(), now);
 
     // 응답 DTO 생성 및 반환
     LoginResponse loginResponse = new LoginResponse();
@@ -137,8 +136,7 @@ public class AuthService {
           redisKey,
           newRefreshToken,
           jwtUtil.getRefreshTokenValidity(),
-          TimeUnit.MILLISECONDS
-      );
+          TimeUnit.MILLISECONDS);
 
       // 쿠키 갱신
       ResponseCookie cookie = ResponseCookie.from("refreshToken", newRefreshToken)
@@ -156,7 +154,6 @@ public class AuthService {
     loginResponse.setAccessToken(newAccessToken);
     return loginResponse;
   }
-
 
   public void logout(HttpServletRequest request, HttpServletResponse response) {
     // 쿠키에서 refreshToken 추출
