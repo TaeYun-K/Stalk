@@ -24,4 +24,11 @@
     WHERE recording_id = #{recordingId}
   </update>
 
+  <select id="findByConsultationId" parameterType="long" resultType="com.Stalk.project.api.openvidu.dto.out.VideoRecording">
+    SELECT *
+    FROM video_recordings
+    WHERE consultation_id = #{consultationId}
+    ORDER BY start_time DESC
+  </select>
+
 </mapper>

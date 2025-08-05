@@ -1,4 +1,5 @@
-import { ConsultationItem } from '@/types';
+import { ApprovalHistoryResponse, CertificateApprovalRequest, ConsultationDiaryResponse } from '@/types';
+import AuthService from './authService';
 
 interface AuthContextType {
   getAccessToken: () => string | null;
@@ -297,6 +298,64 @@ class ConsultationService {
     } catch (error) {
       console.error('Failed to get session info:', error);
       throw new Error('세션 정보 조회에 실패했습니다.');
+    }
+  }
+
+  // 상담별 녹화 목록 조회
+  static async getConsultationRecordings(consultationId: string): Promise<VideoRecording[]> {
+    try {
+      const accessToken = AuthService.getAccessToken();
+      if (!accessToken) {
+        throw new Error('인증이 필요합니다.');
+      }
+
+      const response = await fetch(`/api/recordings/consultations/${consultationId}/recordings`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.isSuccess) {
+        throw new Error(data.message || '녹화 목록 조회에 실패했습니다.');
+      }
+
+      return data.result || [];
+    } catch (error) {
+      console.error('Failed to get consultation recordings:', error);
+      throw new Error('상담 녹화 목록 조회에 실패했습니다.');
+    }
+  }
+
+  // 상담일지 전체 정보 조회 (녹화 + 상담 정보)
+  static async getConsultationDiary(consultationId: string): Promise<ConsultationDiaryResponse> {
+    try {
+      // 녹화 목록 조회
+      const recordings = await this.getConsultationRecordings(consultationId);
+      
+      // 상담 정보는 현재 하드코딩된 데이터 사용 (실제로는 별도 API 호출 필요)
+      const consultationInfo = {
+        id: parseInt(consultationId),
+        date: '2025. 07. 19.',
+        time: '20:00',
+        content: '입문 투자 상담',
+        expert: '김범주'
+      };
+
+      return {
+        recordings,
+        consultationInfo
+      };
+    } catch (error) {
+      console.error('Failed to get consultation diary:', error);
+      throw new Error('상담일지 조회에 실패했습니다.');
     }
   }
 }

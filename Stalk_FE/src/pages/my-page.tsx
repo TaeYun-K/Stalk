@@ -195,6 +195,9 @@ const MyPage = () => {
   
   // 상담일지 관련 상태
   const [selectedConsultation, setSelectedConsultation] = useState<ConsultationItem | null>(null);
+  const [consultationDiary, setConsultationDiary] = useState<ConsultationDiaryResponse | null>(null);
+  const [isLoadingDiary, setIsLoadingDiary] = useState(false);
+  const [diaryError, setDiaryError] = useState<string | null>(null);
   
   // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
   const isExpert = userProfile?.role === 'ADVISOR';
@@ -587,13 +590,27 @@ const MyPage = () => {
   };
 
   // 상담일지 관련 함수들
-  const handleConsultationDiaryClick = (consultation: ConsultationItem) => {
+  const handleConsultationDiaryClick = async (consultation: ConsultationItem) => {
     setSelectedConsultation(consultation);
     setActiveTab('상담일지');
+    setIsLoadingDiary(true);
+    setDiaryError(null);
+    
+    try {
+      const diaryData = await ConsultationService.getConsultationDiary(consultation.id);
+      setConsultationDiary(diaryData);
+    } catch (error) {
+      console.error('상담일지 조회 실패:', error);
+      setDiaryError('상담일지를 불러오는데 실패했습니다.');
+    } finally {
+      setIsLoadingDiary(false);
+    }
   };
 
   const handleCloseDiary = () => {
     setSelectedConsultation(null);
+    setConsultationDiary(null);
+    setDiaryError(null);
     setActiveTab('내 상담 내역');
   };
 
@@ -1347,109 +1364,178 @@ const MyPage = () => {
                   </button>
                 </div>
 
-                {/* 비디오 플레이어 */}
-                <div className="mb-6">
-                  <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-4">
-                    <div className="flex items-center justify-center w-full h-full">
-                      <button className="bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center transition-colors">
-                        <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z"/>
-                        </svg>
-                      </button>
-                    </div>
-                    
-                    {/* 비디오 컨트롤 */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
-                      <div className="flex items-center space-x-4">
-                        <button className="text-white">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z"/>
-                          </svg>
-                        </button>
-                        <div className="flex-1 bg-gray-600 rounded-full h-1">
-                          <div className="bg-white rounded-full h-1 w-0"></div>
+                {isLoadingDiary ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">상담일지를 불러오는 중...</span>
+                  </div>
+                ) : diaryError ? (
+                  <div className="text-center py-12">
+                    <div className="text-red-600 mb-4">⚠️ {diaryError}</div>
+                    <button 
+                      onClick={() => handleConsultationDiaryClick(selectedConsultation)}
+                      className="text-blue-600 hover:text-blue-700 text-sm"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                ) : consultationDiary ? (
+                  <div className="mb-6">
+                    {/* 녹화 영상 목록 */}
+                    {consultationDiary.recordings && consultationDiary.recordings.length > 0 ? (
+                      <div className="mb-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">📹 상담 녹화 영상</h3>
+                        <div className="space-y-4">
+                          {consultationDiary.recordings.map((recording, index) => (
+                            <div key={recording.id} className="border border-gray-200 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-medium text-gray-900">녹화 영상 {index + 1}</h4>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  recording.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                  recording.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {recording.status === 'COMPLETED' ? '완료' :
+                                   recording.status === 'PROCESSING' ? '처리중' : '대기중'}
+                                </span>
+                              </div>
+                              
+                              {/* 비디오 플레이어 */}
+                              <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-3">
+                                {recording.url ? (
+                                  <video 
+                                    controls 
+                                    className="w-full h-full rounded-lg"
+                                    src={recording.url}
+                                  >
+                                    브라우저가 비디오를 지원하지 않습니다.
+                                  </video>
+                                ) : (
+                                  <div className="flex items-center justify-center w-full h-full">
+                                    <button className="bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center transition-colors">
+                                      <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* 녹화 정보 */}
+                              <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                                <div>
+                                  <span className="font-medium">시작 시간:</span>
+                                  <span className="ml-2">{new Date(recording.startTime).toLocaleString('ko-KR')}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium">종료 시간:</span>
+                                  <span className="ml-2">{new Date(recording.endTime).toLocaleString('ko-KR')}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium">세션 ID:</span>
+                                  <span className="ml-2 font-mono text-xs">{recording.sessionId}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium">녹화 ID:</span>
+                                  <span className="ml-2 font-mono text-xs">{recording.recordingId}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <span className="text-white text-sm">0:00:00 / 1:00:00</span>
-                        <button className="text-white">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                          </svg>
-                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <p>이 상담의 녹화 영상이 없습니다.</p>
+                      </div>
+                    )}
+
+                    {/* 상담 정보 */}
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">📋 상담 정보</h3>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">상담 ID:</span>
+                          <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.id}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">상담일:</span>
+                          <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.date}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">상담시간:</span>
+                          <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.time}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">전문가:</span>
+                          <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.expert}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium text-gray-700">상담 내용:</span>
+                          <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.content}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* 상담 정보 */}
-                  <div className="flex items-center space-x-6 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center">
-                      <span className="font-medium">📅 상담일시:</span>
-                      <span className="ml-2">2025년 08월 21일(월) 오후 3시</span>
+                    {/* AI 안내 */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-start">
+                        <div className="text-blue-600 text-xl mr-3">🤖</div>
+                        <div>
+                          <h3 className="font-semibold text-blue-800 mb-2">Stalk AI가 상담 영상을 자동으로 요약해드립니다</h3>
+                          <p className="text-blue-700 text-sm">
+                            상담내용을 전문가가 직접 분석 작성한 상담일지에 대한 신뢰도와 정확성을 책임집니다.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium">👨‍💼 참여자:</span>
-                      <span className="ml-2">김윤수 투자운용전문가</span>
-                    </div>
-                  </div>
 
-                  {/* AI 안내 */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <div className="flex items-start">
-                      <div className="text-blue-600 text-xl mr-3">🤖</div>
+                    {/* 상담 내용 분석 (기본 템플릿) */}
+                    <div className="space-y-6">
                       <div>
-                        <h3 className="font-semibold text-blue-800 mb-2">Stalk AI가 상담 영상을 자동으로 요약해드립니다</h3>
-                        <p className="text-blue-700 text-sm">
-                          상담내용을 전문가가 직접 분석 작성한 상담일지에 대한 신뢰도와 정확성을 책임집니다.
-                        </p>
+                        <h3 className="font-bold text-lg text-gray-900 mb-3">1. 현재 포트폴리오 상태</h3>
+                        <ul className="space-y-2 text-gray-700">
+                          <li>• 주식 투자: 삼성전자 (30%), 투자 (25%), LG전자 (25%)</li>
+                          <li>• 주식 투자: 현금성 자산 주요 투자 성향, 투자한동향 입찰하다 중심으로 대정부산 회회사를 중의로 후보들 계속해는 표</li>
+                          <li>• 채권 투자: 국고채 위주의 저금리 표평가 중이며, 새로 투자 피상을 고려한 잠시 중다 중동부정리 에이시 후 여러</li>
+                          <li>• 향후 새로 투자전자 절약해서 후 에 신지미에 투자 있키 원에의 활용 위안 되물지 특황 공행중로 작동리에 잘된 것로 투처</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-900 mb-3">2. 리스크 관리 방안</h3>
+                        <ul className="space-y-2 text-gray-700">
+                          <li>• 분산 투자와 분배로 분배된 월간하는 영역을 투자하는 국세 부사무 대리, 영역 수첨현 어능 토형태는 최활하는 반면 형태</li>
+                          <li>• 총알 투자법: 과체와 수익한다며 다반짧은 있에 얘기토나타다건 위한 교에 수년간 상기 간여에 대다, 영역 개별 팰건 등인 종기에 준개약</li>
+                          <li>• 정기적 실적: 분명현개, 조기에 동한, 상황 선뢰관심한 중 활청 위 신증요여등 투리제거안전리어서 향한다 진회, 상종정화 적들</li>
+                          <li>• 의외 조심한 이두: 천공 한 정역 대경을 세상적인 밀청 통적며 토함든 사요되는 해현 전위 위중 위으로한 자국의 요과</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-900 mb-3">3. 기타 조언</h3>
+                        <ul className="space-y-2 text-gray-700">
+                          <li>• 장기 투자 대상 단장장이 서 인상한정 선구를 하 창제혀 장료해 정 깡의 부대료 구입 개경활뭍 좋중외 신다</li>
+                          <li>• 업력 기하로: 예상한다는 소책 사업 태양으려면서 되에마을 양이기능 위한 등 여화장 달런 요 신정의 무영 좋다</li>
+                          <li>• 확실하고: 실정 기능대물 실어진부력에서의 시장과 간경잘 변동 위 위안업 업의 보 추 정하등 없 오개 청제 세요</li>
+                          <li>• 전문가 조언: 정제한와 채능 내향에 이 경험을 간행 대부조언을 관년한 어보되어 건여여 교과대다, 공검 투 조성 이대에 가요</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-900 mb-3">4. 포트폴리오 조정 및 재분석</h3>
+                        <ul className="space-y-2 text-gray-700">
+                          <li>• 주식 포트폴리오 분야 의해 보고판과 책한 상황아 진약 계보경 입량 입권 호향한년 용하한 금과한 재무지표</li>
+                          <li>• 주가한 투자: 새고한 소지 관례 고터 장대면애신 수준소에 진하전 고대기모니산기 좋보다, 공화 적 무형을 무정히 조기</li>
+                          <li>• 정기적 경정조기 투 간계 원으로, 조기 검고주터 맞는 강제고적, 엳회 근앉터의 사회보고기 화기 조기의 대한 기확한 조준</li>
+                        </ul>
                       </div>
                     </div>
                   </div>
-
-                  {/* 상담 내용 분석 */}
-                  <div className="space-y-6">
-                    {/* 1. 현재 포트폴리오 상태 */}
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 mb-3">1. 현재 포트폴리오 상태</h3>
-                      <ul className="space-y-2 text-gray-700">
-                        <li>• 주식 투자: 삼성전자 (30%), 투자 (25%), LG전자 (25%)</li>
-                        <li>• 주식 투자: 현금성 자산 주요 투자 성향, 투자한동향 입찰하다 중심으로 대정부산 회회사를 중의로 후보들 계속해는 표</li>
-                        <li>• 채권 투자: 국고채 위주의 저금리 표평가 중이며, 새로 투자 피상을 고려한 잠시 중다 중동부정리 에이시 후 여러</li>
-                        <li>• 향후 새로 투자전자 절약해서 후 에 신지미에 투자 있키 원에의 활용 위안 되물지 특황 공행중로 작동리에 잘된 것로 투처</li>
-                      </ul>
-                    </div>
-
-                    {/* 2. 리스크 관리 방안 */}
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 mb-3">2. 리스크 관리 방안</h3>
-                      <ul className="space-y-2 text-gray-700">
-                        <li>• 분산 투자와 분배로 분배된 월간하는 영역을 투자하는 국세 부사무 대리, 영역 수첨현 어능 토형태는 최활하는 반면 형태</li>
-                        <li>• 총알 투자법: 과체와 수익한다며 다반짧은 있에 얘기토나타다건 위한 교에 수년간 상기 간여에 대다, 영역 개별 팰건 등인 종기에 준개약</li>
-                        <li>• 정기적 실적: 분명현개, 조기에 동한, 상황 선뢰관심한 중 활청 위 신증요여등 투리제거안전리어서 향한다 진회, 상종정화 적들</li>
-                        <li>• 의외 조심한 이두: 천공 한 정역 대경을 세상적인 밀청 통적며 토함든 사요되는 해현 전위 위중 위으로한 자국의 요과</li>
-                      </ul>
-                    </div>
-
-                    {/* 3. 기타 조언 */}
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 mb-3">3. 기타 조언</h3>
-                      <ul className="space-y-2 text-gray-700">
-                        <li>• 장기 투자 대상 단장장이 서 인상한정 선구를 하 창제혀 장료해 정 깡의 부대료 구입 개경활뭍 좋중외 신다</li>
-                        <li>• 업력 기하로: 예상한다는 소책 사업 태양으려면서 되에마을 양이기능 위한 등 여화장 달런 요 신정의 무영 좋다</li>
-                        <li>• 확실하고: 실정 기능대물 실어진부력에서의 시장과 간경잘 변동 위 위안업 업의 보 추 정하등 없 오개 청제 세요</li>
-                        <li>• 전문가 조언: 정제한와 채능 내향에 이 경험을 간행 대부조언을 관년한 어보되어 건여여 교과대다, 공검 투 조성 이대에 가요</li>
-                      </ul>
-                    </div>
-
-                    {/* 4. 포트폴리오 조정 및 재분석 */}
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 mb-3">4. 포트폴리오 조정 및 재분석</h3>
-                      <ul className="space-y-2 text-gray-700">
-                        <li>• 주식 포트폴리오 분야 의해 보고판과 책한 상황아 진약 계보경 입량 입권 호향한년 용하한 금과한 재무지표</li>
-                        <li>• 주가한 투자: 새고한 소지 관례 고터 장대면애신 수준소에 진하전 고대기모니산기 좋보다, 공화 적 무형을 무정히 조기</li>
-                        <li>• 정기적 경정조기 투 간계 원으로, 조기 검고주터 맞는 강제고적, 엳회 근앉터의 사회보고기 화기 조기의 대한 기확한 조준</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+                ) : null}
 
                 {/* 푸터 */}
                 <div className="border-t pt-6">

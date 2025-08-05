@@ -250,7 +250,7 @@ export interface CommunityCommentCreateRequestDto {
 
 export interface CommunityCommentUpdateRequestDto {
   content: string;
-} 
+}
 
 // 관리자 관련 타입들
 export enum ApprovalStatus {
@@ -357,4 +357,28 @@ export interface ApprovalHistoryResponse {
 export interface ProfileStatusResponse {
   advisorId: number;
   message: string;
+} 
+
+
+// 상담일지 관련 타입들
+export interface VideoRecording {
+  id: number;
+  consultationId: number;
+  recordingId: string;
+  sessionId: string;
+  url: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
+export interface ConsultationDiaryResponse {
+  recordings: VideoRecording[];
+  consultationInfo: {
+    id: number;
+    date: string;
+    time: string;
+    content: string;
+    expert: string;
+  };
 } 
