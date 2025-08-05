@@ -4,6 +4,7 @@ import com.Stalk.project.global.notification.dao.NotificationMapper;
 import com.Stalk.project.global.notification.dto.in.NotificationCreateDto;
 import com.Stalk.project.global.notification.dto.in.NotificationType;
 import com.Stalk.project.global.notification.dto.out.*;
+import com.Stalk.project.global.notification.event.CommentCreatedEvent;
 import com.Stalk.project.global.util.NotificationRedisUtil;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.exception.BaseException;
@@ -274,6 +275,37 @@ public class NotificationService {
         } catch (Exception e) {
             log.error("모든 알람 읽음 처리 실패 - userId: {}", userId, e);
             throw new BaseException(BaseResponseStatus.NOTIFICATION_UPDATE_FAILED);
+        }
+    }
+
+    /**
+     * 댓글 작성 알람 생성
+     */
+    public void createCommentNotification(CommentCreatedEvent event) {
+        try {
+            // 알람 메시지 생성
+            NotificationType notificationType = NotificationType.COMMENT_CREATED;
+            String message = notificationType.getMessageTemplate()
+                .replace("{commentAuthor}", event.getCommentAuthorName())
+                .replace("{postTitle}", event.getPostTitle());
+
+            // 알람 DTO 생성
+            NotificationCreateDto notificationDto = NotificationCreateDto.builder()
+                .userId(event.getPostAuthorId())
+                .type(NotificationType.valueOf(notificationType.getCode()))  // name() → getCode()로 수정
+                .title(notificationType.getTitle())
+                .message(message)
+                .relatedId(event.getCommentId())
+                .build();
+
+            // 알람 생성 (MySQL + Redis)
+            createNotification(notificationDto);
+
+            log.info("댓글 알람 생성 완료: 수신자={}, 댓글ID={}",
+                event.getPostAuthorId(), event.getCommentId());
+
+        } catch (Exception e) {
+            log.error("댓글 알람 생성 중 오류 발생: {}", e.getMessage(), e);
         }
     }
 }
