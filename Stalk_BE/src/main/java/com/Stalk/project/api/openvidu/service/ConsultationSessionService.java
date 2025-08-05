@@ -57,8 +57,9 @@ public class ConsultationSessionService {
     if (session != null) {
       openVidu.fetch(); // OpenVidu 상태 최신화
 
+      Session existingSession = session;
       boolean isValid = openVidu.getActiveSessions().stream()
-          .anyMatch(s -> s.getSessionId().equals(session.getSessionId()));
+          .anyMatch(s -> s.getSessionId().equals(existingSession.getSessionId()));
 
       if (!isValid) {
         log.warn("기존 세션이 OpenVidu에서 만료됨. 새로 생성합니다. consultationId={}, expiredSessionId={}", consultationId, session.getSessionId());
