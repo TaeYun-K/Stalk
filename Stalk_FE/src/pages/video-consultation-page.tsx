@@ -2,11 +2,12 @@ import {
   OpenVidu,
   Publisher,
   Session,
-  StreamManager,
   Subscriber,
 } from "openvidu-browser";
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
+import axios from "axios";
+import AuthService from "@/services/authService";
 
 import cameraOffIcon from "@/assets/images/icons/consultation/camera-off.svg";
 import cameraOnIcon from "@/assets/images/icons/consultation/camera-on.svg";
@@ -19,22 +20,15 @@ import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
-import { url } from "inspector";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
   consultationId: string;
   sessionId: string;        // OpenVidu 세션 ID
+  userRole?: 'ADVISOR' | 'USER';  // 사용자 역할 추가
 }
 
-interface Participant {
-  id: string;
-  name: string;
-  role: "expert" | "client";
-  videoEnabled: boolean;
-  audioEnabled: boolean;
-  streamManager?: StreamManager;
-}
+
 
 interface StockData {
   ticker: string;
@@ -71,13 +65,17 @@ const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
-  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
+  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId, userRole } = (state as LocationState) || {};
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [ov, setOv] = useState<OpenVidu | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+
+  // 사용자 정보 상태 추가
+  const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
+  const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(true);
 
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
@@ -89,28 +87,76 @@ const VideoConsultationPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
   const [consultationStartTime] = useState<Date>(new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] =
     useState<boolean>(true);
 
-  const [participants] = useState<Participant[]>([
-    {
-      id: "1",
-      name: "박주현",
-      role: "expert",
-      videoEnabled: true,
-      audioEnabled: true,
-    },
-    {
-      id: "2",
-      name: "김철수",
-      role: "client",
-      videoEnabled: false,
-      audioEnabled: false,
-    },
-  ]);
+  // 참가자 역할 구분을 위한 함수들
+  const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
+    try {
+      if (subscriber.stream.connection.data) {
+        const data = JSON.parse(subscriber.stream.connection.data);
+        return data.role || 'USER';
+      }
+    } catch (error) {
+      console.error('Error parsing subscriber data:', error);
+    }
+    // 기본값: 구독자는 반대 역할
+    return userRole === 'ADVISOR' ? 'USER' : 'ADVISOR';
+  };
+
+  const getParticipantName = (subscriber: Subscriber): string => {
+    try {
+      if (subscriber.stream.connection.data) {
+        const data = JSON.parse(subscriber.stream.connection.data);
+        return data.userData || data.name || '참가자';
+      }
+    } catch (error) {
+      console.error('Error parsing subscriber data:', error);
+    }
+    return '참가자';
+  };
+
+  const getRoleDisplayName = (role: 'ADVISOR' | 'USER'): string => {
+    return role === 'ADVISOR' ? '전문가' : '의뢰인';
+  };
+
+  // 사용자 정보 가져오기
+  const fetchUserInfo = async () => {
+    try {
+      setIsLoadingUserInfo(true);
+      const userProfile = await AuthService.getUserProfile();
+      setUserInfo(userProfile);
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
+      // 기본값 설정
+      setUserInfo({
+        name: userRole === 'ADVISOR' ? '김전문가' : '김의뢰인',
+        role: userRole || 'USER',
+        userId: '0',
+        contact: '',
+        email: '',
+        profileImage: ''
+      });
+    } finally {
+      setIsLoadingUserInfo(false);
+    }
+  };
+
+  // 컴포넌트 마운트 시 사용자 정보 가져오기
+  useEffect(() => {
+    fetchUserInfo();
+  }, []);
+
+  // 사용자 정보가 로드된 후 OpenVidu 초기화
+  useEffect(() => {
+    if (!isLoadingUserInfo && userInfo) {
+      initializeOpenVidu();
+    }
+  }, [isLoadingUserInfo, userInfo]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -139,8 +185,15 @@ const VideoConsultationPage: React.FC = () => {
       if (ovToken) {
         const session = openVidu.initSession();
 
-        // Connect to the session
-        await session.connect(ovToken);
+        // 사용자 정보를 포함한 연결 데이터 준비
+        const connectionData = {
+          role: userRole || 'USER',
+          userData: userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인'),
+          userId: userInfo?.userId || '0'
+        };
+
+        // Connect to the session with user data
+        await session.connect(ovToken, JSON.stringify(connectionData));
         setSession(session);
         
         // Subscribe to session events
@@ -228,24 +281,62 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  const leaveSession = () => {
-    if (session) {
-      session.disconnect();
-    }
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
-    if (publisher) {
-      const pubStream = publisher.stream?.getMediaStream();
-      if (pubStream) {
-        pubStream.getTracks().forEach((track) => track.stop());
+  const leaveSession = async (): Promise<void> => {
+
+    const token = AuthService.getAccessToken();
+    try {
+      // 1) 백엔드에 세션 종료 POST 요청
+      await axios.post(`/api/consultations/${consultationId}/session/close`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      console.error('상담 종료 API 실패:', error);
+    } finally {
+      // 2) OpenVidu 세션 해제
+      if (session) {
+        try {
+          session.disconnect();
+        } catch (err) {
+          console.error('세션 disconnect 중 오류:', err);
+        }
       }
+
+      // 3) 로컬 퍼블리셔(내 미디어) 트랙 정지 및 객체 파괴
+      if (publisher) {
+        try {
+          publisher.stream
+            .getMediaStream()
+            .getTracks()
+            .forEach(track => track.stop());
+        } catch (err) {
+          console.error('퍼블리셔 정리 중 오류:', err);
+        }
+      }
+
+      // 4) 모든 구독자 스트림 언구독 및 트랙 정지
+      subscribers.forEach(sub => {
+        // 언구독
+        try {
+          session?.unsubscribe(sub);
+        } catch (err) {
+          console.error('구독 해제 실패:', err);
+        }
+        // 미디어 트랙 중지
+        try {
+          sub.stream
+            .getMediaStream()
+            .getTracks()
+            .forEach(track => track.stop());
+        } catch (err) {
+          console.error('구독자 트랙 중지 실패:', err);
+        }
+      });
+
+      // 5) 상담 목록 화면으로 이동
+      navigate('/consultations');
     }
-    setSession(null);
-    setPublisher(null);
-    setSubscribers([]);
-    setOv(null);
-    navigate("/consultations");
   };
 
   const toggleVideo = async () => {
@@ -367,8 +458,6 @@ const VideoConsultationPage: React.FC = () => {
   };
 
   useEffect(() => {
-    initializeOpenVidu();
-
     return () => {
       if (localStream) {
         localStream.getTracks().forEach((track) => track.stop());
@@ -392,6 +481,25 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [publisher]);
 
+  // 구독자 비디오 렌더링을 위한 useEffect 추가
+  useEffect(() => {
+    subscribers.forEach((subscriber, index) => {
+      // 메인 비디오 렌더링
+      const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
+      if (videoElement) {
+        const mediaStream = subscriber.stream.getMediaStream();
+        videoElement.srcObject = mediaStream;
+      }
+      
+      // 미니뷰 비디오 렌더링
+      const miniVideoElement = document.getElementById(`subscriber-mini-video-${index}`) as HTMLVideoElement;
+      if (miniVideoElement) {
+        const mediaStream = subscriber.stream.getMediaStream();
+        miniVideoElement.srcObject = mediaStream;
+      }
+    });
+  }, [subscribers]);
+
   const toggleScreenShare = async () => {
     if (!isScreenSharing && ov && session) {
       try {
@@ -414,12 +522,70 @@ const VideoConsultationPage: React.FC = () => {
     if (newMessage.trim() && session) {
       const message: ChatMessage = {
         id: Date.now().toString(),
-        sender: "김철수",
+        sender: getCurrentUserDisplayName(),
         message: newMessage.trim(),
         timestamp: new Date(),
       };
       setChatMessages((prev) => [...prev, message]);
       setNewMessage("");
+    }
+  };
+
+  const getCurrentUserDisplayName = (): string => {
+    if (isLoadingUserInfo) {
+      return '로딩 중...';
+    }
+    return userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인');
+  };
+
+  // 녹화 시작
+  const handleStartRecording = async () => {
+    if (!ovSessionId || !consultationId) {
+      alert("세션 정보가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
+      setRecordingId(ovSessionId);
+      setIsRecording(true);
+    } catch (e) {
+      alert("녹화 시작에 실패했습니다.");
+      console.error(e);
+    }
+  };
+
+  // 녹화 종료
+  const handleStopRecording = async () => {
+    if (!recordingId) {
+      alert("녹화 ID가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/stop/${recordingId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setIsRecording(false);
+      setRecordingId(null);
+    } catch (e) {
+      alert("녹화 종료에 실패했습니다.");
+      console.error(e);
     }
   };
 
@@ -451,7 +617,7 @@ const VideoConsultationPage: React.FC = () => {
             상담 ID: {consultationId || "DEMO-001"}
           </span>
           <button
-            onClick={() => setIsRecording(!isRecording)}
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
             title={isRecording ? "녹화 중지" : "녹화 시작"}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               isRecording
@@ -475,40 +641,62 @@ const VideoConsultationPage: React.FC = () => {
         {!showStockChart ? (
           <div className="flex-1 p-4">
             <div className="h-full grid grid-cols-2 gap-4">
-              <div className="bg-gray-800 rounded-2xl overflow-hidden relative group">
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-32 h-32 bg-blue-600 rounded-full flex items-center justify-center text-4xl font-bold">
-                    박
-                  </div>
-                </div>
-                <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">박주현 (전문가)</span>
-                </div>
-                <div className="absolute bottom-4 right-4 flex space-x-2">
-                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                        clipRule="evenodd"
+              {/* 구독자 비디오 렌더링 */}
+              {subscribers.length > 0 ? (
+                subscribers.map((subscriber, index) => (
+                  <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
+                    <div className="w-full h-full">
+                      <video
+                        id={`subscriber-video-${index}`}
+                        autoPlay
+                        playsInline
+                        className="w-full h-full object-cover rounded-2xl"
                       />
-                    </svg>
+                    </div>
+                    <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                      <span className="text-sm font-medium">
+                        {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
+                      </span>
+                    </div>
+                    <div className="absolute bottom-4 right-4 flex space-x-2">
+                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg
+                          className="w-4 h-4"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg
+                          className="w-4 h-4"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                    </svg>
+                ))
+              ) : (
+                // 구독자가 없을 때 기본 표시
+                <div className="bg-gray-800 rounded-2xl overflow-hidden relative group">
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-32 h-32 bg-blue-600 rounded-full flex items-center justify-center text-4xl font-bold">
+                      대기
+                    </div>
+                  </div>
+                  <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                    <span className="text-sm font-medium">{getRoleDisplayName(userRole === 'ADVISOR' ? 'USER' : 'ADVISOR')} 대기 중</span>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="bg-gray-800 rounded-2xl overflow-hidden relative">
                 <div className="w-full h-full">
@@ -551,7 +739,7 @@ const VideoConsultationPage: React.FC = () => {
                   )}
                 </div>
                 <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">김철수 (나)</span>
+                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName(userRole || 'USER')})</span>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <div
@@ -660,40 +848,46 @@ const VideoConsultationPage: React.FC = () => {
                 {showParticipantFaces && (
                   <div className="flex items-center justify-between p-4 h-full">
                     <div className="flex items-center space-x-4 overflow-x-auto flex-1">
-                      <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-lg font-bold">
-                            박
+                      {/* 구독자 비디오 미니뷰 */}
+                      {subscribers.map((subscriber, index) => (
+                        <div key={index} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                          <div className="w-full h-full">
+                            <video
+                              id={`subscriber-mini-video-${index}`}
+                              autoPlay
+                              playsInline
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          </div>
+                          <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
+                            {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
+                          </div>
+                          <div className="absolute top-2 right-2 flex space-x-1">
+                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <svg
+                                className="w-2.5 h-2.5"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </div>
+                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <svg
+                                className="w-2.5 h-2.5"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                              </svg>
+                            </div>
                           </div>
                         </div>
-                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          박주현 (전문가)
-                        </div>
-                        <div className="absolute top-2 right-2 flex space-x-1">
-                          <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                            <svg
-                              className="w-2.5 h-2.5"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </div>
-                          <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                            <svg
-                              className="w-2.5 h-2.5"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
+                      ))}
 
                       <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                         {(publisher || localStream) &&
@@ -725,7 +919,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          김철수 (나)
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userRole || 'USER')})
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
@@ -773,31 +967,23 @@ const VideoConsultationPage: React.FC = () => {
             {showParticipants && (
               <div className="p-4 border-b border-gray-700">
                 <h3 className="text-lg font-semibold mb-4">
-                  참가자 ({participants.length})
+                  참가자 ({publisher ? 1 : 0 + subscribers.length})
                 </h3>
                 <div className="space-y-3">
-                  {participants.map((participant) => (
-                    <div
-                      key={participant.id}
-                      className="flex items-center space-x-3"
-                    >
+                  {/* 현재 사용자 (퍼블리셔) */}
+                  {publisher && (
+                    <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold">
-                        {participant.name[0]}
+                        나
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          {participant.name}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {participant.role === "expert" ? "전문가" : "의뢰인"}
-                        </p>
+                        <p className="text-sm font-medium">{getCurrentUserDisplayName()}</p>
+                        <p className="text-xs text-gray-400">{getRoleDisplayName(userRole || 'USER')}</p>
                       </div>
                       <div className="flex space-x-1">
                         <div
                           className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                            participant.audioEnabled
-                              ? "bg-green-500"
-                              : "bg-red-500"
+                            isAudioEnabled ? "bg-green-500" : "bg-red-500"
                           }`}
                         >
                           <svg
@@ -814,11 +1000,51 @@ const VideoConsultationPage: React.FC = () => {
                         </div>
                         <div
                           className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                            participant.videoEnabled
-                              ? "bg-green-500"
-                              : "bg-red-500"
+                            isVideoEnabled ? "bg-green-500" : "bg-red-500"
                           }`}
                         >
+                          <svg
+                            className="w-2.5 h-2.5"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 구독자들 */}
+                  {subscribers.map((subscriber, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center space-x-3"
+                    >
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-sm font-bold">
+                        {getParticipantName(subscriber)[0] || '참'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                          {getParticipantName(subscriber)}
+                        </p>
+                        <p className="text-xs text-gray-400">{getRoleDisplayName(getParticipantRole(subscriber))}</p>
+                      </div>
+                      <div className="flex space-x-1">
+                        <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                          <svg
+                            className="w-2.5 h-2.5"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </div>
+                        <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                           <svg
                             className="w-2.5 h-2.5"
                             fill="currentColor"
@@ -1024,10 +1250,6 @@ const VideoConsultationPage: React.FC = () => {
               <button
                 onClick={() => {
                   const newShowStockChart = !showStockChart;
-                  console.log("Chart toggle clicked:", {
-                    current: showStockChart,
-                    new: newShowStockChart,
-                  });
                   setShowStockChart(newShowStockChart);
                   if (newShowStockChart) {
                     setShowChat(false);

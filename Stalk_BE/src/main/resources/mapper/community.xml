@@ -1,233 +1,233 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.Stalk.project.community.dao.CommunityMapper">
+<mapper namespace="com.Stalk.project.api.community.dao.CommunityMapper">
 
-  <!-- 1. 커뮤니티 글 목록 조회 -->
-  <delete id="deleteAllCommentsOfPost">
-    DELETE
-    FROM community_comments
-    WHERE post_id = #{postId}
-  </delete>
+    <!-- 1. 커뮤니티 글 목록 조회 -->
+    <delete id="deleteAllCommentsOfPost">
+        DELETE
+        FROM community_comments
+        WHERE post_id = #{postId}
+    </delete>
 
-  <!-- 2. 사용자 이름 조회 (권한 체크용) -->
-  <delete id="deleteComment">
-    DELETE
-    FROM community_comments
-    WHERE id = #{commentId}
-  </delete>
+    <!-- 2. 사용자 이름 조회 (권한 체크용) -->
+    <delete id="deleteComment">
+        DELETE
+        FROM community_comments
+        WHERE id = #{commentId}
+    </delete>
 
-  <!-- 3. 커뮤니티 글 작성 -->
-  <insert id="createCommunityPost">
-    INSERT INTO community_posts (user_id,
-                                 category,
-                                 title,
-                                 content,
-                                 view_count,
-                                 comment_count,
-                                 created_at,
-                                 updated_at)
-    VALUES (#{userId},
-            #{request.category},
-            #{request.title},
-            #{request.content},
-            0,
-            0,
-            NOW(),
-            NOW())
-  </insert>
+    <!-- 3. 커뮤니티 글 작성 -->
+    <insert id="createCommunityPost">
+        INSERT INTO community_posts (user_id,
+                                     category,
+                                     title,
+                                     content,
+                                     view_count,
+                                     comment_count,
+                                     created_at,
+                                     updated_at)
+        VALUES (#{userId},
+                #{request.category},
+                #{request.title},
+                #{request.content},
+                0,
+                0,
+                NOW(),
+                NOW())
+    </insert>
 
-  <!-- 4. 마지막으로 생성된 글 ID 조회 -->
-  <insert id="createComment">
-    INSERT INTO community_comments (post_id, user_id, content, created_at, updated_at)
-    VALUES (#{postId}, #{userId}, #{content}, NOW(), NOW())
-  </insert>
+    <!-- 4. 마지막으로 생성된 글 ID 조회 -->
+    <insert id="createComment">
+        INSERT INTO community_comments (post_id, user_id, content, created_at, updated_at)
+        VALUES (#{postId}, #{userId}, #{content}, NOW(), NOW())
+    </insert>
 
-  <!-- 5. 커뮤니티 글 상세 조회 -->
-  <select id="findCommunityPosts"
-    resultType="com.Stalk.project.community.dto.out.CommunityPostSummaryDto">
-    SELECT
-    cp.id as postId,
-    cp.title,
-    CASE
-    WHEN u.role = 'ADVISOR' THEN u.name
-    ELSE u.nickname
-    END as authorName,
-    u.role as authorRole,
-    cp.category,
-    cp.view_count as viewCount,
-    cp.comment_count as commentCount,
-    DATE_FORMAT(cp.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-    FROM community_posts cp
-    INNER JOIN users u ON cp.user_id = u.id
-    <where>
-      cp.deleted_at IS NULL
-      <if test="category != null and category != '' and category != 'ALL'">
-        AND cp.category = #{category}
-      </if>
-    </where>
-    ORDER BY cp.created_at DESC
-    LIMIT #{pageRequest.limitPlusOne} OFFSET #{pageRequest.offset}
-  </select>
+    <!-- 5. 커뮤니티 글 상세 조회 -->
+    <select id="findCommunityPosts"
+            resultType="com.Stalk.project.api.community.dto.out.CommunityPostSummaryDto">
+        SELECT
+        cp.id as postId,
+        cp.title,
+        CASE
+        WHEN u.role = 'ADVISOR' THEN u.name
+        ELSE u.nickname
+        END as authorName,
+        u.role as authorRole,
+        cp.category,
+        cp.view_count as viewCount,
+        cp.comment_count as commentCount,
+        DATE_FORMAT(cp.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+        FROM community_posts cp
+        INNER JOIN users u ON cp.user_id = u.id
+        <where>
+            cp.deleted_at IS NULL
+            <if test="category != null and category != '' and category != 'ALL'">
+                AND cp.category = #{category}
+            </if>
+        </where>
+        ORDER BY cp.created_at DESC
+        LIMIT #{pageRequest.limitPlusOne} OFFSET #{pageRequest.offset}
+    </select>
 
-  <!-- 6. 커뮤니티 글의 댓글 목록 조회 (등록순 정렬) -->
-  <select id="findUserNameById" resultType="String">
-    SELECT CASE
-             WHEN role = 'ADVISOR' THEN name
-             ELSE nickname
-             END as userName
-    FROM users
-    WHERE id = #{userId}
-  </select>
+    <!-- 6. 커뮤니티 글의 댓글 목록 조회 (등록순 정렬) -->
+    <select id="findUserNameById" resultType="String">
+        SELECT CASE
+                   WHEN role = 'ADVISOR' THEN name
+                   ELSE nickname
+                   END as userName
+        FROM users
+        WHERE id = #{userId}
+    </select>
 
-  <!-- 7. 글 수정/삭제 권한 확인용 조회 -->
-  <select id="getLastInsertedPostId" resultType="Long">
-    SELECT LAST_INSERT_ID()
-  </select>
+    <!-- 7. 글 수정/삭제 권한 확인용 조회 -->
+    <select id="getLastInsertedPostId" resultType="Long">
+        SELECT LAST_INSERT_ID()
+    </select>
 
-  <!-- 8. 커뮤니티 글 수정 -->
-  <select id="findCommunityPostDetail"
-    resultType="com.Stalk.project.community.dto.out.CommunityPostDetailDto">
-    SELECT cp.id                                                 as postId,
-           cp.title,
-           cp.content,
-           CASE
-             WHEN u.role = 'ADVISOR' THEN u.name
-             ELSE u.nickname
-             END                                                 as authorName,
-           u.role                                                as authorRole,
-           CASE
-             WHEN u.role = 'ADVISOR' THEN u.image
-             ELSE uci.image_path
-             END                                                 as authorProfileImage,
-           cp.category,
-           CASE cp.category
-             WHEN 'QUESTION' THEN '질문'
-             WHEN 'TRADE_RECORD' THEN '매매기록'
-             WHEN 'STOCK_DISCUSSION' THEN '종목토론'
-             WHEN 'MARKET_ANALYSIS' THEN '시황분석'
-             END                                                 as categoryDisplayName,
-           cp.view_count                                         as viewCount,
-           cp.comment_count                                      as commentCount,
-           DATE_FORMAT(cp.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-    FROM community_posts cp
-           INNER JOIN users u ON cp.user_id = u.id
-           LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
-    WHERE cp.id = #{postId}
-      AND cp.deleted_at IS NULL
-  </select>
+    <!-- 8. 커뮤니티 글 수정 -->
+    <select id="findCommunityPostDetail"
+            resultType="com.Stalk.project.api.community.dto.out.CommunityPostDetailDto">
+        SELECT cp.id                                                 as postId,
+               cp.title,
+               cp.content,
+               CASE
+                   WHEN u.role = 'ADVISOR' THEN u.name
+                   ELSE u.nickname
+                   END                                                 as authorName,
+               u.role                                                as authorRole,
+               CASE
+                   WHEN u.role = 'ADVISOR' THEN u.image
+                   ELSE uci.image_path
+                   END                                                 as authorProfileImage,
+               cp.category,
+               CASE cp.category
+                   WHEN 'QUESTION' THEN '질문'
+                   WHEN 'TRADE_RECORD' THEN '매매기록'
+                   WHEN 'STOCK_DISCUSSION' THEN '종목토론'
+                   WHEN 'MARKET_ANALYSIS' THEN '시황분석'
+                   END                                                 as categoryDisplayName,
+               cp.view_count                                         as viewCount,
+               cp.comment_count                                      as commentCount,
+               DATE_FORMAT(cp.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+        FROM community_posts cp
+                 INNER JOIN users u ON cp.user_id = u.id
+                 LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
+        WHERE cp.id = #{postId}
+          AND cp.deleted_at IS NULL
+    </select>
 
-  <!-- 9. 커뮤니티 글 논리적 삭제 -->
-  <select id="findCommunityPostComments"
-    resultType="com.Stalk.project.community.dto.out.CommunityCommentDto">
-    SELECT cc.id                                                 as commentId,
-           cc.content,
-           CASE
-             WHEN u.role = 'ADVISOR' THEN u.name
-             ELSE u.nickname
-             END                                                 as authorName,
-           u.role                                                as authorRole,
-           CASE
-             WHEN u.role = 'ADVISOR' THEN u.image
-             ELSE uci.image_path
-             END                                                 as authorProfileImage,
-           DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-    FROM community_comments cc
-           INNER JOIN users u ON cc.user_id = u.id
-           LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
-    WHERE cc.post_id = #{postId}
-    ORDER BY cc.created_at ASC
-      LIMIT #{limitPlusOne}
-    OFFSET #{offset}
-  </select>
+    <!-- 9. 커뮤니티 글 논리적 삭제 -->
+    <select id="findCommunityPostComments"
+            resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
+        SELECT cc.id                                                 as commentId,
+               cc.content,
+               CASE
+                   WHEN u.role = 'ADVISOR' THEN u.name
+                   ELSE u.nickname
+                   END                                                 as authorName,
+               u.role                                                as authorRole,
+               CASE
+                   WHEN u.role = 'ADVISOR' THEN u.image
+                   ELSE uci.image_path
+                   END                                                 as authorProfileImage,
+               DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+        FROM community_comments cc
+                 INNER JOIN users u ON cc.user_id = u.id
+                 LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
+        WHERE cc.post_id = #{postId}
+        ORDER BY cc.created_at ASC
+            LIMIT #{limitPlusOne}
+        OFFSET #{offset}
+    </select>
 
-  <!-- 10. 글에 달린 모든 댓글 물리적 삭제 -->
-  <select id="findPostPermission"
-    resultType="com.Stalk.project.community.dto.out.CommunityPostPermissionDto">
-    SELECT cp.id         as postId,
-           cp.user_id    as authorId,
-           u.role        as authorRole,
-           cp.deleted_at as deletedAt
-    FROM community_posts cp
-           INNER JOIN users u ON cp.user_id = u.id
-    WHERE cp.id = #{postId}
-  </select>
+    <!-- 10. 글에 달린 모든 댓글 물리적 삭제 -->
+    <select id="findPostPermission"
+            resultType="com.Stalk.project.api.community.dto.out.CommunityPostPermissionDto">
+        SELECT cp.id         as postId,
+               cp.user_id    as authorId,
+               u.role        as authorRole,
+               cp.deleted_at as deletedAt
+        FROM community_posts cp
+                 INNER JOIN users u ON cp.user_id = u.id
+        WHERE cp.id = #{postId}
+    </select>
 
-  <!-- 글 존재 여부 확인 (삭제되지 않은 글만) -->
-  <select id="existsPostById" resultType="boolean">
-    SELECT COUNT(*) > 0
-    FROM community_posts
-    WHERE id = #{postId}
-      AND deleted_at IS NULL
-  </select>
+    <!-- 글 존재 여부 확인 (삭제되지 않은 글만) -->
+    <select id="existsPostById" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM community_posts
+        WHERE id = #{postId}
+          AND deleted_at IS NULL
+    </select>
 
-  <!-- 댓글 작성 -->
-  <select id="getLastInsertedCommentId" resultType="Long">
-    SELECT LAST_INSERT_ID()
-  </select>
+    <!-- 댓글 작성 -->
+    <select id="getLastInsertedCommentId" resultType="Long">
+        SELECT LAST_INSERT_ID()
+    </select>
 
-  <!-- 마지막 생성된 댓글 ID 조회 -->
-  <select id="findCommentsByPostId"
-    resultType="com.Stalk.project.community.dto.out.CommunityCommentDto">
-    SELECT cc.id                                                 as commentId,
-           cc.content,
-           CASE
-             WHEN u.role = 'ADVISOR' THEN u.name
-             ELSE u.nickname
-             END                                                 as authorName,
-           u.role                                                as authorRole,
-           CASE
-             WHEN u.role = 'ADVISOR' THEN u.image
-             ELSE uci.image_path
-             END                                                 as authorProfileImage,
-           DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-    FROM community_comments cc
-           INNER JOIN users u ON cc.user_id = u.id
-           LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
-    WHERE cc.post_id = #{postId}
-    ORDER BY cc.created_at ASC
-      LIMIT #{pageRequest.limitPlusOne}
-    OFFSET #{pageRequest.offset}
-  </select>
+    <!-- 마지막 생성된 댓글 ID 조회 -->
+    <select id="findCommentsByPostId"
+            resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
+        SELECT cc.id                                                 as commentId,
+               cc.content,
+               CASE
+                   WHEN u.role = 'ADVISOR' THEN u.name
+                   ELSE u.nickname
+                   END                                                 as authorName,
+               u.role                                                as authorRole,
+               CASE
+                   WHEN u.role = 'ADVISOR' THEN u.image
+                   ELSE uci.image_path
+                   END                                                 as authorProfileImage,
+               DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+        FROM community_comments cc
+                 INNER JOIN users u ON cc.user_id = u.id
+                 LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
+        WHERE cc.post_id = #{postId}
+        ORDER BY cc.created_at ASC
+            LIMIT #{pageRequest.limitPlusOne}
+        OFFSET #{pageRequest.offset}
+    </select>
 
-  <!-- 댓글 목록 조회 (페이징) -->
-  <select id="findCommentPermission"
-    resultType="com.Stalk.project.community.dto.out.CommunityCommentPermissionDto">
-    SELECT id,
-           user_id as userId,
-           post_id as postId,
-           content
-    FROM community_comments
-    WHERE id = #{commentId}
-  </select>
+    <!-- 댓글 목록 조회 (페이징) -->
+    <select id="findCommentPermission"
+            resultType="com.Stalk.project.api.community.dto.out.CommunityCommentPermissionDto">
+        SELECT id,
+               user_id as userId,
+               post_id as postId,
+               content
+        FROM community_comments
+        WHERE id = #{commentId}
+    </select>
 
-  <!-- 댓글 권한 확인 (수정/삭제용) -->
-  <update id="updateCommunityPost">
-    UPDATE community_posts
-    SET title      = #{title},
-        content    = #{content},
-        category   = #{category},
-        updated_at = NOW()
-    WHERE id = #{postId}
-      AND deleted_at IS NULL
-  </update>
+    <!-- 댓글 권한 확인 (수정/삭제용) -->
+    <update id="updateCommunityPost">
+        UPDATE community_posts
+        SET title      = #{title},
+            content    = #{content},
+            category   = #{category},
+            updated_at = NOW()
+        WHERE id = #{postId}
+          AND deleted_at IS NULL
+    </update>
 
-  <!-- 댓글 수정 -->
-  <update id="deleteCommunityPost">
-    UPDATE community_posts
-    SET deleted_at = NOW(),
-        updated_at = NOW()
-    WHERE id = #{postId}
-      AND deleted_at IS NULL
-  </update>
+    <!-- 댓글 수정 -->
+    <update id="deleteCommunityPost">
+        UPDATE community_posts
+        SET deleted_at = NOW(),
+            updated_at = NOW()
+        WHERE id = #{postId}
+          AND deleted_at IS NULL
+    </update>
 
-  <!-- 댓글 삭제 -->
-  <update id="updateComment">
-    UPDATE community_comments
-    SET content    = #{content},
-        updated_at = NOW()
-    WHERE id = #{commentId}
-  </update>
+    <!-- 댓글 삭제 -->
+    <update id="updateComment">
+        UPDATE community_comments
+        SET content    = #{content},
+            updated_at = NOW()
+        WHERE id = #{commentId}
+    </update>
 
 </mapper>

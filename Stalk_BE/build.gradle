@@ -57,11 +57,11 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
 
     // openVidu
-    implementation "io.openvidu:openvidu-java-client:2.29.0"
+    implementation "io.openvidu:openvidu-java-client:2.30.0"
 
     // Validation
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    
+
     // WebFlux for WebClient
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 

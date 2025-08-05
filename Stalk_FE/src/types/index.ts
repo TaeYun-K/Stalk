@@ -61,6 +61,24 @@ export interface SignupRequest {
   agreedPrivacy: boolean;
 }
 
+// 전문가 회원가입 요청 타입
+export interface AdvisorSignupRequest {
+  userId: string;
+  name: string;
+  nickname: string;
+  password: string;
+  passwordConfirm: string;
+  contact: string;
+  email: string;
+  certificateName: string;
+  certificateFileSn: string;
+  birth: string;
+  certificateFileNumber: string;
+  profileImage: File;
+  agreedTerms: boolean;
+  agreedPrivacy: boolean;
+}
+
 // 백엔드 SignupResponse와 일치
 export interface SignupResponse {
   success: boolean;
@@ -71,10 +89,6 @@ export interface SignupResponse {
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  userId: number;
-  userName: string;
-  role: 'USER' | 'ADVISOR' | 'ADMIN';
-  message: string;
 }
 
 export interface UserInfo {
@@ -111,10 +125,10 @@ export interface ConsultationItem {
 
 // 전문가 자격증 정보
 export interface QualificationData {
-  qualification: string;
-  certificateNumber: string;
-  birthDate: string;
-  verificationNumber: string;
+  certificateName: string;
+  certificateFileSn: string;
+  birth: string;
+  certificateFileNumber: string;
 }
 
 // 관심종목 타입 (기존에서 이동)
@@ -155,7 +169,7 @@ export interface SignupFormData {
   verificationCode: string;
   userType: 'general' | 'expert';
   profilePhoto: File | null;
-  qualifications: QualificationData[];
+  qualification: QualificationData;
   termsAgreement: boolean;
   privacyAgreement: boolean;
   thirdPartyAgreement: boolean;
@@ -173,4 +187,67 @@ export interface ScheduleData {
 export interface TabItem {
   id: string;
   label: string;
+}
+
+// 커뮤니티 관련 타입들
+export enum PostCategory {
+  ALL = 'ALL',
+  QUESTION = 'QUESTION',
+  TRADE_RECORD = 'TRADE_RECORD',
+  STOCK_DISCUSSION = 'STOCK_DISCUSSION',
+  MARKET_ANALYSIS = 'MARKET_ANALYSIS'
+}
+
+export interface CommunityPostSummaryDto {
+  postId: number;
+  title: string;
+  authorName: string;
+  authorRole: string;
+  category: string;
+  categoryDisplayName: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
+}
+
+export interface CommunityPostDetailDto {
+  postId: number;
+  title: string;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  category: string;
+  categoryDisplayName: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityPostCreateRequestDto {
+  category: string;
+  title: string;
+  content: string;
+}
+
+export interface CommunityPostUpdateRequestDto {
+  category: string;
+  title: string;
+  content: string;
+}
+
+export interface CommunityCommentDto {
+  commentId: number;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+}
+
+export interface CommunityCommentCreateRequestDto {
+  content: string;
+}
+
+export interface CommunityCommentUpdateRequestDto {
+  content: string;
 } 
