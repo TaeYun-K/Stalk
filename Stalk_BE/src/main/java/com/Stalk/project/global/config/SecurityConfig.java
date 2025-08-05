@@ -105,7 +105,7 @@ public class SecurityConfig {
                 "/v3/api-docs/**",
                 "/swagger-ui/**",
                 "/swagger-ui.html",
-                "/webjars/**"           // Swagger의 JS/CSS 리소스
+                "/webjars/**"
             ).permitAll()
             // 인증 없이 열어둘 애플리케이션 엔드포인트 -> 추후 /api/auth/** 예정
             .requestMatchers("/api/auth/**").permitAll()
