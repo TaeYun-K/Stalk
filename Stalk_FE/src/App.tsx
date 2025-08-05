@@ -72,7 +72,7 @@ const showSidebarRoutes: string[] = [
 ];
 
 // Footer를 숨길 페이지 목록
-const hideFooterRoutes: string[] = ['/SignupChoicePage', '/login'];
+const hideFooterRoutes: string[] = ['/SignupChoicePage', '/login', '/video-consultation'];
 
 const AppContent: React.FC = () => {
   const location = useLocation();
