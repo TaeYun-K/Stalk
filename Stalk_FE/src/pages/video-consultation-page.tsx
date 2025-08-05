@@ -274,9 +274,6 @@ const VideoConsultationPage: React.FC = () => {
           const subscriber = session.subscribe(event.stream, '');
           console.log('Subscribing to new stream:', event.stream.streamId);
 
-          // 즉시 상태 업데이트 
-          setSubscribers(prev => [...prev, subscriber]);
-
           subscriber.on('videoElementCreated', (event) => {
             console.log('📺 subscriber videoElementCreated');
 
@@ -286,6 +283,9 @@ const VideoConsultationPage: React.FC = () => {
 
             console.log('✅ 비디오 엘리먼트 설정 완료');
           });
+        
+          // 구독자 목록에 추가
+          setSubscribers(prev => [...prev, subscriber]);
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
