@@ -1,4 +1,4 @@
-import { ConsultationItem, VideoRecording, ConsultationDiaryResponse } from '@/types';
+import { ApprovalHistoryResponse, CertificateApprovalRequest, ConsultationDiaryResponse } from '@/types';
 import AuthService from './authService';
 
 interface AuthContextType {
