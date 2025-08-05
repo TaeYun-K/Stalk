@@ -12,12 +12,8 @@ import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
 import ConsultationService from '@/services/consultationService';
 import AuthService from '@/services/authService';
 import ScheduleService from '@/services/scheduleService';
-<<<<<<< HEAD
 import AdvisorService from '@/services/advisorService';
 import { ApprovalHistoryResponse, CertificateApprovalRequest } from '@/types';
-=======
-import { ConsultationDiaryResponse } from '@/types';
->>>>>>> bcba5f3d16534c4c790a5a494b5ca59d86521875
 
 interface ConsultationItem {
   id: string;
