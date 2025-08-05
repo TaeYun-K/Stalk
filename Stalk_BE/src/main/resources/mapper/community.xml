@@ -230,4 +230,20 @@
         WHERE id = #{commentId}
     </update>
 
+  <!-- 댓글 작성 시 알람 발송을 위한 정보 조회 -->
+  <select id="findCommentNotificationInfo"
+    resultType="com.Stalk.project.api.community.dto.out.CommentNotificationInfoDto">
+    SELECT
+      cp.user_id as postAuthorId,
+      cp.title as postTitle,
+      CASE
+        WHEN u.role = 'ADVISOR' THEN u.name
+        ELSE u.nickname
+        END as commentAuthorName
+    FROM community_posts cp
+           INNER JOIN users u ON u.id = #{commentAuthorId}
+    WHERE cp.id = #{postId}
+      AND cp.deleted_at IS NULL
+  </select>
+
 </mapper>

@@ -1,4 +1,4 @@
-package com.Stalk.project.api.reservation.dao;
+package com.Stalk.project.api.reservation.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

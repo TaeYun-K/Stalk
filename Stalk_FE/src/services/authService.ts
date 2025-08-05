@@ -1,4 +1,5 @@
 import { User, LoginRequest, LoginResponse, SignupRequest, AdvisorSignupRequest } from '@/types';
+import AdvisorService from './advisorService';
 
 // 메모리에 저장되는 토큰과 사용자 정보
 let accessToken: string | null = null;
@@ -68,7 +69,7 @@ class AuthService {
           'Accept': 'application/json',
         },
         body: JSON.stringify(cleanData),
-        // credentials: 'include' 제거
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -86,7 +87,8 @@ class AuthService {
         headers: {
           'Authorization': `Bearer ${result.accessToken}`,
           'Content-Type': 'application/json',
-        }
+        },
+        credentials: 'include',
       });
       
       if (userResponse.ok) {
@@ -110,6 +112,7 @@ class AuthService {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
           },
+          credentials: 'include',
         });
       }
     } catch (error) {
@@ -131,7 +134,7 @@ class AuthService {
       try {
         const response = await fetch('/api/auth/refresh', {
           method: 'POST',
-          // credentials: 'include' 제거
+          credentials: 'include',
         });
 
         if (!response.ok) {
@@ -174,7 +177,7 @@ class AuthService {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      // credentials: 'include' 제거
+      credentials: 'include',
     };
 
     const response = await fetch(url, config);
@@ -334,6 +337,23 @@ class AuthService {
       }
 
       const result = await response.json();
+      
+      // 회원가입 성공 시 자동으로 승인 요청
+      if (result.success) {
+        try {
+          await AdvisorService.requestCertificateApproval({
+            certificateName: data.certificateName,
+            certificateFileSn: data.certificateFileSn,
+            birth: data.birth,
+            certificateFileNumber: data.certificateFileNumber
+          });
+          result.message += " 자격증 승인 요청이 접수되었습니다.";
+        } catch (error) {
+          console.error('자격증 승인 요청 실패:', error);
+          // 회원가입은 성공했지만 승인 요청은 실패한 경우
+        }
+      }
+      
       return result;
     } catch (error) {
       console.error('전문가 회원가입 API 호출 실패:', error);
