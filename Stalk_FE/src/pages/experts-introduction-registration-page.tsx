@@ -111,31 +111,10 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   // 각 날짜별 시간 슬롯 설정 저장
   const [dateTimeSlots, setDateTimeSlots] = useState<Record<string, string[]>>({});
   
-  // 초기 시간 슬롯 설정 (오늘 이후의 현재 달 평일은 모든 시간 활성화)
+  // 초기 시간 슬롯 설정 (모든 날짜는 기본적으로 차단할 시간 없음)
   React.useEffect(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    
-    const initialTimeSlots: Record<string, string[]> = {};
-    const allTimeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
-    
-    // 현재 달의 모든 날짜를 확인
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentYear, currentMonth, day);
-      date.setHours(0, 0, 0, 0);
-      const dayOfWeek = date.getDay();
-      const dateKey = getDateKey(date);
-      
-      // 오늘 이후의 평일인 경우만 모든 시간 활성화 (빈 배열 = 모든 시간 활성화)
-      if (dayOfWeek >= 1 && dayOfWeek <= 5 && date >= today) {
-        initialTimeSlots[dateKey] = [];
-      }
-    }
-    
-    setDateTimeSlots(initialTimeSlots);
+    // 기본값: 모든 날짜에서 차단할 시간 없음 (빈 배열 = 모든 시간 예약 가능)
+    setDateTimeSlots({});
   }, []);
   
   // 평일 시간 슬롯 (모두 활성화된 상태로 시작)
@@ -464,25 +443,11 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
     const dateKey = getDateKey(date);
     const savedTimeSlots = dateTimeSlots[dateKey];
     
-    // 오늘 이후의 현재 달 평일이고 저장된 설정이 없는 경우 모든 시간 활성화 (빈 배열)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const dateYear = date.getFullYear();
-    const dateMonth = date.getMonth();
-    const dayOfWeek = date.getDay();
-    const isCurrentMonthWeekdayAfterToday = dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today;
-    
+    // 저장된 시간 슬롯 불러오기 (기본값: 빈 배열 = 차단할 시간 없음)
     if (savedTimeSlots !== undefined) {
       setSelectedTimeSlots(savedTimeSlots);
-    } else if (isCurrentMonthWeekdayAfterToday) {
-      // 오늘 이후의 현재 달 평일은 기본적으로 모든 시간 활성화 (빈 배열)
-      setSelectedTimeSlots([]);
     } else {
-      // 다른 날짜는 빈 시간 슬롯
+      // 기본값: 차단할 시간 없음 (모든 시간 예약 가능)
       setSelectedTimeSlots([]);
     }
   };
@@ -624,35 +589,14 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       return;
     }
     
-    // 오늘 이후의 현재 달 평일인지 확인
+    // 단순한 토글 방식: 선택된 시간 = 차단할 시간
     if (selectedDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const targetDate = new Date(selectedDate);
-      targetDate.setHours(0, 0, 0, 0);
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth();
-      const dateYear = selectedDate.getFullYear();
-      const dateMonth = selectedDate.getMonth();
-      const dayOfWeek = selectedDate.getDay();
-      const isCurrentMonthWeekdayAfterToday = dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today;
-      
-      if (isCurrentMonthWeekdayAfterToday) {
-        // 오늘 이후의 현재 달 평일: 기본 모든 시간 활성화, 클릭하면 비활성화 (차단)
-        if (selectedTimeSlots.includes(time)) {
-          // 이미 차단된 시간을 클릭하면 다시 활성화 (차단 해제)
-          setSelectedTimeSlots(selectedTimeSlots.filter(t => t !== time));
-        } else {
-          // 활성화된 시간을 클릭하면 차단
-          setSelectedTimeSlots([...selectedTimeSlots, time]);
-        }
+      if (selectedTimeSlots.includes(time)) {
+        // 이미 선택된 시간을 클릭하면 선택 해제 (차단 해제)
+        setSelectedTimeSlots(selectedTimeSlots.filter(t => t !== time));
       } else {
-        // 다른 날짜: 일반적인 토글 방식
-        if (selectedTimeSlots.includes(time)) {
-          setSelectedTimeSlots(selectedTimeSlots.filter(t => t !== time));
-        } else {
-          setSelectedTimeSlots([...selectedTimeSlots, time]);
-        }
+        // 선택되지 않은 시간을 클릭하면 선택 (차단)
+        setSelectedTimeSlots([...selectedTimeSlots, time]);
       }
     }
   };
@@ -710,28 +654,59 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         return;
       }
 
+      // 모든 날짜에 대해 처리 (운영 + 비운영 날짜 모두)
+      const allTimeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+      const processedDates = new Set<string>();
+
+      // 1. 운영 날짜들 처리
       for (const [dateKey, _] of operatingDates) {
-        // 해당 날짜의 저장된 시간 슬롯 가져오기
         const dateSpecificTimeSlots = dateTimeSlots[dateKey] || [];
-        const allTimeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
-        
-        // 선택되지 않은 시간들이 차단된 시간 (평일 기본 활성화 로직 적용)
         const date = new Date(dateKey);
-        const isWeekday = date.getDay() >= 1 && date.getDay() <= 5;
+        
+        // 오늘 이후의 현재 달 평일인지 확인
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+        const dateYear = date.getFullYear();
+        const dateMonth = date.getMonth();
+        const dayOfWeek = date.getDay();
+        const isCurrentMonthWeekdayAfterToday = dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today;
         
         let blockedTimes: string[];
-        if (isWeekday) {
-          // 평일: 선택된 시간들이 차단된 시간 (기본 모든 시간 활성화, 클릭하면 비활성화)
+        const dateStatus = getDateStatus(date);
+        
+        if (dateStatus === 'operating') {
+          // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
           blockedTimes = dateSpecificTimeSlots;
         } else {
-          // 주말: 선택된 시간들이 활성화된 시간, 나머지가 차단된 시간
-          blockedTimes = allTimeSlots.filter(time => !dateSpecificTimeSlots.includes(time));
+          // 휴무일: 모든 시간이 차단됨
+          blockedTimes = allTimeSlots;
         }
+        
+        console.log(`Processing operating date ${dateKey}: blockedTimes =`, blockedTimes);
         
         const success = await submitBlockedTimes(dateKey, blockedTimes);
         if (!success) {
           alert(`운영 시간 설정 저장에 실패했습니다: ${dateKey}`);
           return;
+        }
+        
+        processedDates.add(dateKey);
+      }
+
+      // 2. 비활성화된 날짜들 처리 (모든 시간 차단)
+      for (const [dateKey, status] of Object.entries(dateStatus)) {
+        if (status === 'inactive' && !processedDates.has(dateKey)) {
+          console.log(`Processing inactive date ${dateKey}: blocking all times`);
+          
+          const success = await submitBlockedTimes(dateKey, allTimeSlots);
+          if (!success) {
+            alert(`운영 시간 설정 저장에 실패했습니다: ${dateKey}`);
+            return;
+          }
         }
       }
       console.log('Blocked times submitted successfully');
@@ -749,7 +724,7 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   const submitBlockedTimes = async (date: string, blockedTimes: string[]) => {
     try {
       // 현재 사용자 정보 확인
-      const userInfo = await AuthService.getCurrentUser();
+      const userInfo = AuthService.getUserInfo();
       console.log(`Current user info before blocked times submission:`, userInfo);
       console.log(`Current user role:`, userInfo?.role);
       
@@ -1214,10 +1189,20 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                 <h3 className="text-left text-xl font-semibold text-black">초기 상담 영업 시간 설정</h3>
                 
                 <div className="bg-gray-50 p-6 rounded-lg text-left">
-                  <ul className="text-sm text-gray-700 leading-relaxed list-disc pl-5">
-                    <li>Stalk은 기본적으로 오전 9시부터 오후 8시까지 운영시간을 제공하고 있습니다.</li>
-                    <li>제공하는 운영시간 內 전문가님께서 운영하고자 하는 상담 시작 시간과 종료 시간 및 휴무일을 설정해주시기 바랍니다.</li>
-                  </ul>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-2">
+                      <span className="text-blue-600 font-bold">📋</span>
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-1">설정 방법</h4>
+                        <ul className="text-sm text-gray-700 leading-relaxed list-disc pl-4 space-y-1">
+                          <li>기본 상담 시간: 오전 9시 ~ 오후 8시 (12개 시간대)</li>
+                          <li>달력에서 날짜를 선택하고 <strong>운영/휴무</strong>를 설정하세요</li>
+                          <li><strong>운영일</strong>: 상담 불가능한 시간만 선택 (나머지는 예약 가능)</li>
+                          <li><strong>휴무일</strong>: 모든 시간이 자동으로 차단됩니다</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-8">
@@ -1290,24 +1275,24 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                    <div className="w-80 space-y-4">
                      <div className="">
                        <h4 className="text-left text-m font-semibold text-black mb-3">운영/휴무 설정</h4>
-                       <div>
-                                                 <div className="bg-white border border-gray-300 rounded-full space-x-2 p-1 flex mb-2">
-                             <button
+                       <div className="mb-3">
+                         <div className="bg-white border border-gray-300 rounded-full space-x-2 p-1 flex">
+                           <button
                              onClick={() => selectedDate && isDateEditableOrToday(selectedDate) && handleDateStatusChange('operating')}
                              className={`flex-1 py-2 rounded-full transition-colors text-sm ${
                                  currentDateStatus === 'operating' ? 'bg-blue-500 text-white' : 'bg-gray-300 text-white'
                              } ${selectedDate && !isDateEditableOrToday(selectedDate) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                             >
+                           >
                              운영
-                             </button>
-                             <button
+                           </button>
+                           <button
                              onClick={() => selectedDate && isDateEditableOrToday(selectedDate) && handleDateStatusChange('closed')}
                              className={`flex-1 py-2 rounded-full transition-colors text-sm ${
                                  currentDateStatus === 'closed' ? 'bg-red-500 text-white' : 'bg-gray-300 text-white'
                              } ${selectedDate && !isDateEditableOrToday(selectedDate) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                             >
+                           >
                              휴무
-                             </button>
+                           </button>
                          </div>
                        </div>
                      </div>
@@ -1326,9 +1311,26 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                            ? 'border-blue-500' 
                            : currentDateStatus === 'closed' 
                            ? 'border-red-500' 
-                           : 'border-white'
+                           : 'border-gray-300'
                        }`}>
-                            <div className="grid grid-cols-4 gap-2">
+                         {currentDateStatus === 'operating' && (
+                           <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
+                             ⏰ <strong>차단할 시간을 선택하세요</strong><br/>
+                             선택하지 않은 시간은 예약 가능합니다
+                           </div>
+                         )}
+                         {currentDateStatus === 'closed' && (
+                           <div className="mb-3 p-2 bg-red-50 rounded text-xs text-red-700">
+                             🚫 <strong>휴무일</strong> - 모든 시간이 자동으로 차단됩니다
+                           </div>
+                         )}
+                         {/* 지난 날짜 안내 문구 */}
+                         {selectedDate && !isDateEditableOrToday(selectedDate) && (
+                            <div className="mb-3 p-2 bg-gray-100 rounded text-xs text-gray-700">
+                            🚫 <strong>지난 날짜</strong> - 모든 시간이 자동으로 차단됩니다
+                          </div>
+                          )}
+                         <div className="grid grid-cols-4 gap-2">
                            {timeSlots.map((time) => {
                              const isDisabled = currentDateStatus !== 'operating';
                              const isSelected = selectedTimeSlots.includes(time);
@@ -1360,18 +1362,14 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                                     isDisabled
                                       ? 'border-gray-200 text-gray-200 bg-gray-50 cursor-not-allowed'
                                       : isPastTime
-                                      ? 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-50' // 과거 시간 (회색, 잠금)
+                                      ? 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-50'
                                       : isLocked && isSelected
-                                      ? 'border-red-300 text-red-300 bg-red-25 cursor-not-allowed opacity-60' // 잠금된 비활성화 시간 (연한 빨간색)
+                                      ? 'border-red-300 text-red-300 bg-red-25 cursor-not-allowed opacity-60'
                                       : isLocked && !isSelected
-                                      ? 'border-blue-300 text-blue-300 bg-blue-25 cursor-not-allowed opacity-60' // 잠금된 활성화 시간 (연한 파란색)
-                                      : isOperatingCurrentMonthWeekdayAfterToday && isSelected
-                                      ? 'border-gray-300 text-gray-300' // 현재 달 평일에서 차단된 시간 (회색)
-                                      : isOperatingCurrentMonthWeekdayAfterToday && !isSelected
-                                      ? 'border-blue-500 text-blue-500 bg-blue-50' // 현재 달 평일에서 활성화된 시간 (파란색)
+                                      ? 'border-blue-300 text-blue-300 bg-blue-25 cursor-not-allowed opacity-60'
                                       : isSelected
-                                      ? 'border-blue-500 text-blue-500 bg-blue-50' // 일반적으로 선택된 시간
-                                      : 'border-gray-300 text-gray-300 hover:border-blue-500 hover:text-blue-500' // 기본 상태
+                                      ? 'border-gray-300 text-gray-300' // 선택됨 = 차단할 시간 (빨간색)
+                                      : 'border-blue-500 text-blue-500 bg-blue-50 hover:border-blue-600 hover:text-blue-600' // 미선택 = 예약 가능 시간 (초록색)
                                   }`}
                                 >
                                   {time}
@@ -1380,14 +1378,6 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                                                       })}
                           </div>
                        </div>
-                                                 {/* 지난 날짜 안내 문구 */}
-                          {selectedDate && !isDateEditableOrToday(selectedDate) && (
-                            <div className="mt-4 p-3 border border-red-500 bg-red-50 rounded-lg">
-                              <p className="text-red-500 text-xs font-normal text-center">
-                                지난 일자는 상담 영업 설정(변경)을 할 수 없습니다.
-                              </p>
-                            </div>
-                          )}
                      </div>
                    </div>
                 </div>

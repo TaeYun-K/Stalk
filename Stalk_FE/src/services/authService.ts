@@ -200,8 +200,6 @@ class AuthService {
         // FormData인 경우 Content-Type을 설정하지 않음 (브라우저가 자동 설정)
         ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       },
-
-      credentials: 'include',
     };
 
     console.log('Request URL:', url);
