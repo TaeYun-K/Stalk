@@ -6,6 +6,7 @@ import com.Stalk.project.api.openvidu.dto.out.VideoRecording;
 import io.openvidu.java.client.Recording;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -43,5 +44,9 @@ public class VideoRecordingService {
             recording.getUrl(),
             recording.getStatus().name()
         );
+    }
+
+    public List<VideoRecording> getRecordingsByConsultation(Long consultationId) {
+        return videoRecordingMapper.findByConsultationId(consultationId);
     }
 }

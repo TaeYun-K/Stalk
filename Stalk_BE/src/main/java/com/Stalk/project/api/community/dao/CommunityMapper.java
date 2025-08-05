@@ -2,6 +2,7 @@ package com.Stalk.project.api.community.dao;
 
 import com.Stalk.project.api.community.dto.in.CommunityPostCreateRequestDto;
 import com.Stalk.project.api.community.dto.in.CommunityPostListRequestDto;
+import com.Stalk.project.api.community.dto.out.CommentNotificationInfoDto;
 import com.Stalk.project.api.community.dto.out.CommunityCommentDto;
 import com.Stalk.project.api.community.dto.out.CommunityCommentPermissionDto;
 import com.Stalk.project.api.community.dto.out.CommunityPostDetailDto;
@@ -120,4 +121,13 @@ public interface CommunityMapper {
    * @return 사용자 이름 (일반 사용자: nickname, 전문가: name)
    */
   String findUserNameById(@Param("userId") Long userId);
+
+  /**
+   * 댓글 작성 시 알람 발송을 위한 정보 조회
+   * @param postId 글 ID
+   * @param commentAuthorId 댓글 작성자 ID
+   * @return 알람 발송에 필요한 정보
+   */
+  CommentNotificationInfoDto findCommentNotificationInfo(@Param("postId") Long postId,
+      @Param("commentAuthorId") Long commentAuthorId);
 }

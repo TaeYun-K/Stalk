@@ -57,24 +57,26 @@ public class NotificationEventListener {
         }
     }
 
-    @Async("notificationExecutor")
+    /**
+     * 댓글 작성 이벤트 처리
+     */
     @EventListener
+    @Async("notificationExecutor")
     public void handleCommentCreated(CommentCreatedEvent event) {
         try {
-            NotificationCreateDto dto = NotificationCreateDto.builder()
-                    .userId(event.getTargetUserId())
-                    .type(NotificationType.COMMENT_CREATED)
-                    .title("새로운 댓글")
-                    .message(event.getMessage())
-                    .relatedId(event.getCommentId())
-                    .build();
-            
-            notificationService.createNotification(dto);
-            
-            log.debug("댓글 작성 알람 전송 완료 - postAuthorId: {}", event.getTargetUserId());
-            
+            log.info("댓글 알람 이벤트 수신: postId={}, commentId={}, 글작성자={}, 댓글작성자={}",
+                event.getPostId(), event.getCommentId(), event.getPostAuthorId(), event.getCommentAuthorId());
+
+            // 자기 글에 자기가 댓글 달면 알람 안 보내기
+            if (!event.getCommentAuthorId().equals(event.getPostAuthorId())) {
+                notificationService.createCommentNotification(event);
+                log.info("댓글 알람 전송 완료: 수신자={}", event.getPostAuthorId());
+            } else {
+                log.info("자기 댓글이므로 알람 전송 안함: userId={}", event.getCommentAuthorId());
+            }
         } catch (Exception e) {
-            log.error("댓글 작성 알람 전송 실패 - postAuthorId: {}", event.getTargetUserId(), e);
+            log.error("댓글 알람 처리 중 오류 발생: postId={}, commentId={}",
+                event.getPostId(), event.getCommentId(), e);
         }
     }
 }

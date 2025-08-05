@@ -1,17 +1,53 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import newsIcon from '@/assets/images/icons/news_icon.png';
 import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
+import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
-  const { isLoggedIn, logout, userInfo, isLoggingOut } = useAuth();
+  const location = useLocation();
+  const { isLoggedIn, logout, isLoggingOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
+  
+  // mypage에서는 상담내역 드롭다운 숨기기
+  const isMyPage = location.pathname === '/mypage';
+
+  // 사용자 프로필 이미지 가져오기
+  const fetchUserProfileImage = async () => {
+    try {
+      const response = await AuthService.authenticatedRequest('/api/users/me');
+      const data = await response.json();
+      
+      
+      
+      if (data.result?.profileImage) {
+        setUserProfileImage(data.result.profileImage);
+      } else {
+        
+        setUserProfileImage(profileDefault);
+      }
+    } catch (error) {
+      console.error('프로필 이미지 로드 실패:', error);
+      setUserProfileImage(profileDefault);
+    }
+  };
+
+  // 로그인 상태가 변경될 때 프로필 이미지 가져오기
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchUserProfileImage();
+    } else {
+      setUserProfileImage('');
+    }
+  }, [isLoggedIn]);
 
   // 검색 함수
   const handleSearch = (): void => {
@@ -62,6 +98,13 @@ const Navbar: React.FC = () => {
               className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
             >
               상품 조회
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
+            </button>
+            <button 
+              onClick={() => navigate('/mypage?tab=내 상담 내역')}
+              className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
+            >
+              상담내역
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
             </button>
             <div 
@@ -152,9 +195,24 @@ const Navbar: React.FC = () => {
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm  duration-300"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                    {userInfo?.userName?.charAt(0) || '사'}
-                  </div>
+                  {userProfileImage ? (
+                    <img
+                      src={userProfileImage}
+                      alt="프로필"
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = profileDefault;
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={profileDefault}
+                      alt="프로필"
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(_e) => {
+                      }}
+                    />
+                  )}
                   
                   
                 </button>
@@ -176,6 +234,20 @@ const Navbar: React.FC = () => {
                       </svg>
                       <span>마이 페이지</span>
                     </button>
+                    {!isMyPage && (
+                      <button
+                        onClick={() => {
+                          navigate('/mypage?tab=내 상담 내역');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span>상담 내역</span>
+                      </button>
+                    )}
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
                       onClick={async () => {
