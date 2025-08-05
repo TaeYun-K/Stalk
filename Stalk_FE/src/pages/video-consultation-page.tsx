@@ -263,16 +263,28 @@ const VideoConsultationPage: React.FC = () => {
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscribing to new stream:', event.stream.streamId);
 
-          // streamPlaying 이벤트가 발생한 뒤에만 비디오를 attach
-          subscriber.on('streamPlaying', () => {
-          console.log('Subscriber stream playing:', subscriber.stream.streamId);
-          setSubscribers(prev => {
-            const newSubscribers = [...prev, subscriber];
-            // 인덱스는 새 배열 길이-1
-            setTimeout(() => attachSubscriberVideo(subscriber, newSubscribers.length - 1), 0);
-            return newSubscribers;
+          subscriber.on('videoElementCreated', (e) => {
+            const videoEl = e.element as HTMLVideoElement;
+
+            // 1. DOM에 붙이기 (직접 제어할 경우)
+            const container = document.getElementById('video-grid'); // 또는 subscriber 영역
+            if (container) {
+              container.appendChild(videoEl);
+            }
+
+            // 2. autoplay 허용을 위해 muted/playsInline 보장
+            videoEl.muted = false;
+            videoEl.playsInline = true;
+
+            // 3. playing 이벤트 발생 시점에 subscriber 등록
+            videoEl.addEventListener('playing', () => {
+              console.log('▶️ video is playing for', subscriber.stream.streamId);
+              setSubscribers(prev => {
+                const newArr = [...prev, subscriber];
+                return newArr;
+              });
+            });
           });
-        });
 
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
