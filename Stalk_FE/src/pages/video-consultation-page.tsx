@@ -98,7 +98,8 @@ const VideoConsultationPage: React.FC = () => {
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
     try {
       if (subscriber.stream.connection.data) {
-        const data = JSON.parse(subscriber.stream.connection.data);
+        const raw = subscriber.stream.connection.data;
+        const data = JSON.parse(raw.split('%/%')[0]);
         console.log('Parsed subscriber data:', data);
         return data.role || 'USER';
       }
@@ -112,7 +113,8 @@ const VideoConsultationPage: React.FC = () => {
   const getParticipantName = (subscriber: Subscriber): string => {
     try {
       if (subscriber.stream.connection.data) {
-        const data = JSON.parse(subscriber.stream.connection.data);
+        const raw = subscriber.stream.connection.data;
+        const data = JSON.parse(raw.split('%/%')[0]);
         console.log('Parsed subscriber data:', data);
         return data.userData || data.name || '참가자';
       }
@@ -263,7 +265,8 @@ const VideoConsultationPage: React.FC = () => {
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscribing to new stream:', event.stream.streamId);
 
-          console.log('Raw connection data:', subscriber.stream.connection.data);
+          const raw = subscriber.stream.connection.data as string;
+          console.log('Subscriber connection data:', raw);
 
           // subscriber.on('videoElementCreated', (e) => {
           //   const videoEl = e.element as HTMLVideoElement;
