@@ -118,4 +118,93 @@
     WHERE id = #{reservationId}
   </update>
 
+  <!-- 결제 대기 상태로 예약 생성 -->
+  <insert id="createPendingReservation" parameterType="com.Stalk.project.api.payment.dto.PaymentReservationDto" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO consultation_sessions (
+      user_id, advisor_id, date, start_time, end_time,
+      request_message, order_id, amount, payment_status,
+      status, created_at
+    ) VALUES (
+               #{userId}, #{advisorId}, #{date}, #{startTime}, #{endTime},
+               #{requestMessage}, #{orderId}, #{amount}, 'PENDING',
+               'PENDING', NOW()
+             )
+  </insert>
+
+  <!-- 결제 성공 시 예약 정보 업데이트 -->
+  <update id="updateReservationPaymentSuccess">
+    UPDATE consultation_sessions
+    SET payment_key = #{paymentKey},
+        payment_status = 'PAID',
+        payment_method = #{paymentMethod},
+        card_company = #{cardCompany},
+        receipt_url = #{receiptUrl},
+        paid_at = #{approvedAt}
+    WHERE order_id = #{orderId}
+  </update>
+
+  <!-- 결제 실패 시 예약 정보 업데이트 -->
+  <update id="updateReservationPaymentFailure">
+    UPDATE consultation_sessions
+    SET payment_status = 'FAILED',
+        failure_code = #{failureCode},
+        failure_reason = #{failureReason}
+    WHERE order_id = #{orderId}
+  </update>
+
+  <!-- 주문번호로 예약 정보 조회 -->
+  <select id="findReservationByOrderId" resultType="com.Stalk.project.api.payment.dto.PaymentReservationDto">
+    SELECT id, user_id as userId, advisor_id as advisorId,
+      date, start_time as startTime, end_time as endTime,
+      request_message as requestMessage, order_id as orderId,
+      amount, payment_status as paymentStatus, payment_key as paymentKey,
+      payment_method as paymentMethod, card_company as cardCompany,
+      receipt_url as receiptUrl, status
+    FROM consultation_sessions
+    WHERE order_id = #{orderId}
+  </select>
+
+  <!-- 어드바이저 존재 및 승인 여부 확인 -->
+  <select id="isValidAdvisor" resultType="boolean">
+    SELECT COUNT(*) > 0
+    FROM advisor
+    WHERE advisor_id = #{advisorId} AND is_approved = 1
+  </select>
+
+  <!-- 어드바이저 이름 조회 -->
+  <select id="getAdvisorNameById" resultType="String">
+    SELECT u.name
+    FROM users u
+           INNER JOIN advisor a ON u.id = a.advisor_id
+    WHERE a.advisor_id = #{advisorId} AND a.is_approved = 1
+  </select>
+
+  <!-- 사용자 정보 조회 -->
+  <select id="getUserInfoById" resultType="com.Stalk.project.api.payment.dto.UserInfoDto">
+    SELECT name, email
+    FROM users
+    WHERE id = #{userId} AND is_active = 1
+  </select>
+
+  <!-- 예약 시간 중복 체크 -->
+  <select id="checkReservationConflict" resultType="int">
+    SELECT COUNT(*)
+    FROM consultation_sessions
+    WHERE advisor_id = #{advisorId}
+      AND date = #{date}
+      AND start_time = #{startTime}
+      AND payment_status IN ('PENDING', 'PAID')
+      AND status != 'CANCELED'
+  </select>
+
+  <!-- 결제 취소 시 예약 정보 업데이트 -->
+  <update id="updateReservationPaymentCancellation">
+    UPDATE consultation_sessions
+    SET payment_status = 'CANCELLED',
+        status = 'CANCELED',
+        cancel_reason = #{cancelReason},
+        payment_cancelled_at = #{canceledAt}
+    WHERE order_id = #{orderId}
+  </update>
+
 </mapper>
