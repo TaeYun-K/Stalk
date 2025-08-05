@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Configuration;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 
 @Configuration
 public class GoogleCloudConfig {
@@ -33,9 +35,16 @@ public class GoogleCloudConfig {
    */
   @Bean
   public GoogleCredentials googleCredentials() throws IOException {
-    String cleanPath = credentialsPath.replace("file:", "");
-    return GoogleCredentials.fromStream(new FileInputStream(cleanPath))
-        .createScoped(List.of("https://www.googleapis.com/auth/cloud-platform"));
+    if (credentialsPath.startsWith("classpath:")) {
+      String relativePath = credentialsPath.replace("classpath:", "");
+      Resource resource = new ClassPathResource(relativePath);
+      return GoogleCredentials.fromStream(resource.getInputStream())
+          .createScoped(List.of("https://www.googleapis.com/auth/cloud-platform"));
+    } else {
+      String cleanPath = credentialsPath.replace("file:", "");
+      return GoogleCredentials.fromStream(new FileInputStream(cleanPath))
+          .createScoped(List.of("https://www.googleapis.com/auth/cloud-platform"));
+    }
   }
 
   /**
