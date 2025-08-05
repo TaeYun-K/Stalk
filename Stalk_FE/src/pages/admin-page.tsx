@@ -284,14 +284,14 @@ const AdminPage = () => {
                                   disabled={loading}
                                   className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
                                 >
-                                  상담 승인
+                                  자격증 승인
                                 </button>
                                 <button
                                   onClick={() => handleReject(expert.requestId)}
                                   disabled={loading}
                                   className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
                                 >
-                                  상담 거절
+                                  자격증 거절
                                 </button>
                               </>
                             )}

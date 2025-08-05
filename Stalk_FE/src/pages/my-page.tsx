@@ -14,6 +14,8 @@ import ConsultationService from '@/services/consultationService';
 import AuthService from '@/services/authService';
 import ScheduleService from '@/services/scheduleService';
 import AdvisorService from '@/services/advisorService';
+import UserService from '@/services/userService';
+import FavoriteService, { FavoriteAdvisorResponseDto } from '@/services/favoriteService';
 import { ApprovalHistoryResponse, CertificateApprovalRequest } from '@/types';
 
 interface ConsultationItem {
@@ -58,69 +60,131 @@ const MyPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfileResponse | null>(null);
 
+  // 찜한 전문가 관련 상태
+  const [favoriteAdvisors, setFavoriteAdvisors] = useState<FavoriteAdvisorResponseDto[]>([]);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+
+  // 찜한 전문가 목록 로드
+  useEffect(() => {
+    const isExpertUser = userProfile?.role === 'ADVISOR';
+    if (activeTab === '찜한 전문가' && !isExpertUser && userProfile) {
+      loadFavoriteAdvisors();
+    }
+  }, [activeTab, userProfile]);
+
+  // 찜한 전문가 목록 로드 함수
+  const loadFavoriteAdvisors = async () => {
+    try {
+      setFavoriteLoading(true);
+      setFavoriteError(null);
+      
+      const response = await FavoriteService.getFavoriteAdvisors();
+      
+      // 백엔드 응답 구조에 맞게 수정
+      const result = response.result;
+      
+      setFavoriteAdvisors(result?.content || []);
+      
+    } catch (error) {
+      setFavoriteError(error instanceof Error ? error.message : '찜한 전문가 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
+
+  const handleRemoveFavorite = async (advisorId: number) => {
+    try {
+      await FavoriteService.removeFavoriteAdvisor(advisorId);
+      // 찜해제 후 목록 다시 로드
+      await loadFavoriteAdvisors();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '찜해제에 실패했습니다.');
+    }
+  };
+
+  // 백엔드 기준 preferredTradeStyle enum 값을 한글로 변환하는 함수
+  const getTradeStyleDisplayName = (tradeStyle: string): string => {
+    switch (tradeStyle) {
+      case 'SHORT':
+        return '단기';
+      case 'MID_SHORT':
+        return '중단기';
+      case 'MID':
+        return '중기';
+      case 'MID_LONG':
+        return '중장기';
+      case 'LONG':
+        return '장기';
+      default:
+        return tradeStyle;
+    }
+  };
+
+  // 사용자 정보 로드 함수
+  const loadUserInfo = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // 로그인 상태가 아니면 로드하지 않음
+      if (!AuthService.isLoggedIn()) {
+        setError('로그인이 필요합니다.');
+        return;
+      }
+      
+      const userProfileData = await AuthService.getUserProfile();
+      
+      if (!userProfileData) {
+        throw new Error('사용자 정보를 불러올 수 없습니다.');
+      }
+      
+      // 백엔드 응답 구조에 맞게 데이터 설정
+      const profileData: UserProfileResponse = {
+        userId: userProfileData.userId || '',
+        name: userProfileData.name || '',
+        contact: userProfileData.contact || '',
+        email: userProfileData.email || '',
+        profileImage: userProfileData.profileImage || 'default',
+        role: userProfileData.role || 'USER'
+      };
+      
+      setUserProfile(profileData);
+      
+      // 폼 데이터 업데이트
+      setEditInfoForm({
+        name: profileData.name,
+        contact: profileData.contact,
+        email: profileData.email
+      });
+      
+      // 프로필 폼 업데이트
+      setProfileForm(prev => ({
+        ...prev,
+        nickname: profileData.name,
+        selectedAvatar: profileData.profileImage || 'fox'
+      }));
+      
+    } catch (err) {
+      console.error('사용자 정보 로드 실패:', err);
+      const errorMessage = err instanceof Error ? err.message : '사용자 정보를 불러올 수 없습니다.';
+      setError(errorMessage);
+      
+      // 네트워크 에러인 경우에만 기본값 설정
+      if (err instanceof Error && err.message.includes('network')) {
+        setEditInfoForm({
+          name: userInfo?.userName || '',
+          contact: '',
+          email: ''
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 사용자 정보 로드
   useEffect(() => {
-    const loadUserInfo = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        // 로그인 상태가 아니면 로드하지 않음
-        if (!AuthService.isLoggedIn()) {
-          setError('로그인이 필요합니다.');
-          return;
-        }
-        
-        const userProfileData = await AuthService.getUserProfile();
-        
-        if (!userProfileData) {
-          throw new Error('사용자 정보를 불러올 수 없습니다.');
-        }
-        
-        // 백엔드 응답 구조에 맞게 데이터 설정
-        const profileData: UserProfileResponse = {
-          userId: userProfileData.userId || '',
-          name: userProfileData.name || '',
-          contact: userProfileData.contact || '',
-          email: userProfileData.email || '',
-          profileImage: userProfileData.profileImage || 'default',
-          role: userProfileData.role || 'USER'
-        };
-        
-        setUserProfile(profileData);
-        
-        // 폼 데이터 업데이트
-        setEditInfoForm({
-          name: profileData.name,
-          contact: profileData.contact,
-          email: profileData.email
-        });
-        
-        // 프로필 폼 업데이트
-        setProfileForm(prev => ({
-          ...prev,
-          nickname: profileData.name,
-          selectedAvatar: profileData.profileImage || 'fox'
-        }));
-        
-      } catch (err) {
-        console.error('사용자 정보 로드 실패:', err);
-        const errorMessage = err instanceof Error ? err.message : '사용자 정보를 불러올 수 없습니다.';
-        setError(errorMessage);
-        
-        // 네트워크 에러인 경우에만 기본값 설정
-        if (err instanceof Error && err.message.includes('network')) {
-          setEditInfoForm({
-            name: userInfo?.userName || '',
-            contact: '',
-            email: ''
-          });
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadUserInfo();
   }, [userInfo]);
   
@@ -256,19 +320,95 @@ const MyPage = () => {
     ]
   };
 
-  const favoriteExperts = [
-    {
-      id: 1,
-      name: '박주현',
-      role: '컨설턴트',
-      reviews: 50,
-      tags: ['#입문자 대상', '#금융'],
-      image: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=200&h=200&fit=crop&crop=face'
-    }
-  ];
+  // 실제 상담 내역을 위한 상태 추가
+  const [realConsultationData, setRealConsultationData] = useState<{
+    '상담 전': ConsultationItem[];
+    '상담 완료': ConsultationItem[];
+  }>({
+    '상담 전': [],
+    '상담 완료': []
+  });
+  const [isLoadingConsultations, setIsLoadingConsultations] = useState(false);
+  const [consultationError, setConsultationError] = useState<string | null>(null);
 
-  // 8개의 동일한 카드를 생성
-  const expertCards = Array(8).fill(null).map(() => favoriteExperts[0]);
+  // 실제 상담 내역 불러오기
+  const loadConsultationHistory = async () => {
+    if (activeTab !== '내 상담 내역') return;
+    
+    try {
+      setIsLoadingConsultations(true);
+      setConsultationError(null);
+      
+      // 로그인 상태 확인
+      if (!AuthService.isLoggedIn()) {
+        setConsultationError('로그인이 필요합니다.');
+        return;
+      }
+
+      // 예약 내역 조회 API 호출
+      const response = await fetch('/api/reservations?pageNo=1&pageSize=50', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${AuthService.getAccessToken()}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('상담 내역을 불러올 수 없습니다.');
+      }
+
+      const data = await response.json();
+      console.log('상담 내역 API 응답:', data);
+
+      if (data.isSuccess && data.result) {
+        const reservations = data.result.content || [];
+        
+        // 예약 데이터를 ConsultationItem 형태로 변환
+        const scheduledConsultations: ConsultationItem[] = [];
+        const completedConsultations: ConsultationItem[] = [];
+
+        reservations.forEach((reservation: any) => {
+          const consultationItem: ConsultationItem = {
+            id: reservation.reservationId?.toString() || '',
+            date: reservation.date || '',
+            time: reservation.time || '',
+            content: reservation.content || '상담 요청',
+            expert: reservation.advisorName || reservation.advisorUserId || '전문가',
+            videoConsultation: reservation.status === 'COMPLETED' ? '상담 완료' : '상담 입장',
+            action: reservation.status === 'COMPLETED' ? '상세보기' : '취소 요청'
+          };
+
+          if (reservation.status === 'COMPLETED') {
+            completedConsultations.push(consultationItem);
+          } else {
+            scheduledConsultations.push(consultationItem);
+          }
+        });
+
+        setRealConsultationData({
+          '상담 전': scheduledConsultations,
+          '상담 완료': completedConsultations
+        });
+      } else {
+        throw new Error(data.message || '상담 내역을 불러올 수 없습니다.');
+      }
+    } catch (error) {
+      console.error('상담 내역 로드 에러:', error);
+      setConsultationError(error instanceof Error ? error.message : '상담 내역을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoadingConsultations(false);
+    }
+  };
+
+  // 상담 내역 탭이 활성화될 때 데이터 로드
+  useEffect(() => {
+    if (activeTab === '내 상담 내역') {
+      loadConsultationHistory();
+    }
+  }, [activeTab]);
+
+
 
   // Avatar options
   const avatarOptions = [
@@ -288,6 +428,36 @@ const MyPage = () => {
 
   const handleEditInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditInfoForm({ ...editInfoForm, [e.target.name]: e.target.value });
+  };
+
+  // 정보 수정 제출 핸들러
+  const handleEditInfoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // 로딩 상태 설정
+      setIsLoading(true);
+      
+      // 사용자 정보 수정 API 호출
+      const result = await UserService.updateUserInfo(userProfile?.userId || '', editInfoForm);
+      
+      if (result.success) {
+        // 성공 시 사용자 정보 다시 로드
+        await loadUserInfo();
+        setShowEditInfoModal(false);
+        
+        // 성공 메시지 표시
+        alert(result.message);
+      } else {
+        // 에러 메시지 표시
+        alert(result.message);
+      }
+    } catch (error) {
+      console.error('정보 수정 오류:', error);
+      alert('정보 수정 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -789,57 +959,147 @@ const MyPage = () => {
                   </button>
                 </div>
 
-                {/* Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일자</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담시간</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담 요청 내용</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">전문가</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                          {consultationTab === '상담 전' ? '화상상담' : '화상상담'}
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                          {consultationTab === '상담 전' ? '상담취소' : '차트조회'}
-                        </th>
-                        {consultationTab === '상담 완료' && (
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일지</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {consultationData[consultationTab as keyof typeof consultationData].map((item, index) => (
-                        <tr key={index} className="border-b border-gray-100">
-                          <td className="px-4 py-3 text-left text-sm text-gray-900">{item.date}</td>
-                          <td className="px-4 py-3 text-left text-sm text-gray-900">{item.time}</td>
-                          <td className="px-4 py-3 text-left text-sm text-gray-900">{item.content}</td>
-                          <td className="px-4 py-3 text-left text-sm text-gray-900">{item.expert}</td>
-                          <td className="px-4 py-3 text-left">
-                            <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors" onClick={() => handleEnterConsultation(item)}>
-                            {item.videoConsultation}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3">
-                            <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
-                              {item.action}
-                            </button>
-                          </td>
+                {/* 로딩 상태 표시 */}
+                {isLoadingConsultations && (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-gray-600">상담 내역을 불러오는 중...</span>
+                  </div>
+                )}
+
+                {/* 에러 상태 표시 */}
+                {consultationError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-red-800">{consultationError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 실제 상담 내역 테이블 */}
+                {!isLoadingConsultations && !consultationError && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일자</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담시간</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담 요청 내용</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">전문가</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
+                            {consultationTab === '상담 전' ? '화상상담' : '화상상담'}
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
+                            {consultationTab === '상담 전' ? '상담취소' : '차트조회'}
+                          </th>
                           {consultationTab === '상담 완료' && (
-                            <td className="px-4 py-3">
-                              <button 
-                                onClick={() => handleConsultationDiaryClick(item)}
-                                className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                              >
-                                상담일지
-                              </button>
-                            </td>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일지</th>
                           )}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {realConsultationData[consultationTab as keyof typeof realConsultationData].length > 0 ? (
+                          realConsultationData[consultationTab as keyof typeof realConsultationData].map((item, index) => (
+                            <tr key={index} className="border-b border-gray-100">
+                              <td className="px-4 py-3 text-left text-sm text-gray-900">{item.date}</td>
+                              <td className="px-4 py-3 text-left text-sm text-gray-900">{item.time}</td>
+                              <td className="px-4 py-3 text-left text-sm text-gray-900">{item.content}</td>
+                              <td className="px-4 py-3 text-left text-sm text-gray-900">{item.expert}</td>
+                              <td className="px-4 py-3 text-left">
+                                <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors" onClick={() => handleEnterConsultation(item)}>
+                                {item.videoConsultation}
+                                </button>
+                              </td>
+                              <td className="px-4 py-3">
+                                <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
+                                  {item.action}
+                                </button>
+                              </td>
+                              {consultationTab === '상담 완료' && (
+                                <td className="px-4 py-3">
+                                  <button 
+                                    onClick={() => handleConsultationDiaryClick(item)}
+                                    className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                                  >
+                                    상담일지
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={consultationTab === '상담 완료' ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
+                              {consultationTab === '상담 전' ? '예정된 상담이 없습니다.' : '완료된 상담이 없습니다.'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* 하드코딩된 데이터 (WebRTC 상담방 수정용) */}
+                <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">하드코딩된 데이터 (WebRTC 상담방 수정용)</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일자</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담시간</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담 요청 내용</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">전문가</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
+                            {consultationTab === '상담 전' ? '화상상담' : '화상상담'}
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
+                            {consultationTab === '상담 전' ? '상담취소' : '차트조회'}
+                          </th>
+                          {consultationTab === '상담 완료' && (
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일지</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {consultationData[consultationTab as keyof typeof consultationData].map((item, index) => (
+                          <tr key={index} className="border-b border-gray-200">
+                            <td className="px-4 py-3 text-left text-sm text-gray-900">{item.date}</td>
+                            <td className="px-4 py-3 text-left text-sm text-gray-900">{item.time}</td>
+                            <td className="px-4 py-3 text-left text-sm text-gray-900">{item.content}</td>
+                            <td className="px-4 py-3 text-left text-sm text-gray-900">{item.expert}</td>
+                            <td className="px-4 py-3 text-left">
+                              <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors" onClick={() => handleEnterConsultation(item)}>
+                              {item.videoConsultation}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
+                                {item.action}
+                              </button>
+                            </td>
+                            {consultationTab === '상담 완료' && (
+                              <td className="px-4 py-3">
+                                <button 
+                                  onClick={() => handleConsultationDiaryClick(item)}
+                                  className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                                >
+                                  상담일지
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -847,52 +1107,76 @@ const MyPage = () => {
             {activeTab === '찜한 전문가' && !isExpert && (
               <div className="bg-white rounded-lg p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">찜한 전문가</h2>
-                
-                {/* Expert Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {expertCards.map((expert, index) => (
-                    <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow">
-                      {/* Review Count */}
-                      <div className="flex items-center mb-3">
-                        <svg className="w-4 h-4 text-yellow-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <span className="text-sm text-gray-600">리뷰({expert.reviews})</span>
-                      </div>
+                {favoriteLoading ? (
+                  <div className="text-center py-8">
+                    <p>로딩 중...</p>
+                  </div>
+                ) : favoriteError ? (
+                  <div className="text-center py-8 text-red-600">
+                    <p>{favoriteError}</p>
+                  </div>
+                ) : !favoriteAdvisors || favoriteAdvisors.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>찜한 전문가가 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    {favoriteAdvisors.map((advisor) => (
+                  <div key={advisor.advisorId} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow relative">
+                    {/* 찜해제 버튼 - 오른쪽 위 */}
+                    <button
+                      onClick={() => handleRemoveFavorite(advisor.advisorId)}
+                      className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition-colors"
+                      title="찜해제"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
 
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-1 mb-4">
-                        {expert.tags.map((tag, tagIndex) => (
-                          <span
-                            key={tagIndex}
-                            className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-md"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Profile Image */}
-                      <div className="text-center mb-3">
-                        <img
-                          src={expert.image}
-                          alt={expert.name}
-                          className="w-20 h-20 rounded-full mx-auto object-cover border-2 border-gray-200"
-                        />
-                      </div>
-
-                      {/* Role */}
-                      <div className="text-center mb-1">
-                        <span className="text-xs text-gray-500">{expert.role}</span>
-                      </div>
-
-                      {/* Name */}
-                      <div className="text-center">
-                        <h3 className="text-lg font-semibold text-gray-900">{expert.name}</h3>
-                      </div>
+                    {/* Review Count */}
+                    <div className="flex items-center mb-3">
+                      <svg className="w-4 h-4 text-yellow-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <span className="text-sm text-gray-600">리뷰({advisor.reviewCount})</span>
                     </div>
-                  ))}
-                </div>
+
+                        {/* Profile Image */}
+                        <div className="text-center mb-3">
+                          <img
+                            src={advisor.profileImage || profileDefault}
+                            alt={advisor.name}
+                            className="w-20 h-20 rounded-full mx-auto object-cover border-2 border-gray-200"
+                          />
+                        </div>
+
+                        {/* Name */}
+                        <div className="text-center mb-1">
+                          <h3 className="text-lg font-semibold text-gray-900">{advisor.name}</h3>
+                        </div>
+
+                        {/* Trading Style */}
+                        <div className="text-center mb-4">
+                          <span className="text-sm text-gray-500">{getTradeStyleDisplayName(advisor.preferredTradeStyle)}</span>
+                        </div>
+
+                        {/* Short Intro */}
+                        <p className="text-sm text-gray-600 mb-4 text-center line-clamp-2">{advisor.shortIntro}</p>
+
+                        {/* Action Button */}
+                        <div className="text-center">
+                          <button
+                            onClick={() => navigate(`/expert-detail/${advisor.advisorId}`)}
+                            className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition-colors w-full"
+                          >
+                            상세보기
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1259,7 +1543,7 @@ const MyPage = () => {
               </button>
             </div>
             
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleEditInfoSubmit}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">이름</label>
                 <input
