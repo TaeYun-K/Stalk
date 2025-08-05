@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.Stalk.project.api.advisor.dao.AdvisorMapper">
 
@@ -84,7 +85,7 @@
 
   <!-- 어드바이저의 최신 리뷰 조회 -->
   <select id="findLatestReviewsByAdvisorId"
-    resultType="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
+          resultType="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
     SELECT ar.id                                           as reviewId,
            u.nickname                                      as nickname,
            ar.rating                                       as rating,

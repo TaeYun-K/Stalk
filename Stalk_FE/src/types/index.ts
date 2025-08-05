@@ -187,4 +187,67 @@ export interface ScheduleData {
 export interface TabItem {
   id: string;
   label: string;
+}
+
+// 커뮤니티 관련 타입들
+export enum PostCategory {
+  ALL = 'ALL',
+  QUESTION = 'QUESTION',
+  TRADE_RECORD = 'TRADE_RECORD',
+  STOCK_DISCUSSION = 'STOCK_DISCUSSION',
+  MARKET_ANALYSIS = 'MARKET_ANALYSIS'
+}
+
+export interface CommunityPostSummaryDto {
+  postId: number;
+  title: string;
+  authorName: string;
+  authorRole: string;
+  category: string;
+  categoryDisplayName: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
+}
+
+export interface CommunityPostDetailDto {
+  postId: number;
+  title: string;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  category: string;
+  categoryDisplayName: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityPostCreateRequestDto {
+  category: string;
+  title: string;
+  content: string;
+}
+
+export interface CommunityPostUpdateRequestDto {
+  category: string;
+  title: string;
+  content: string;
+}
+
+export interface CommunityCommentDto {
+  commentId: number;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+}
+
+export interface CommunityCommentCreateRequestDto {
+  content: string;
+}
+
+export interface CommunityCommentUpdateRequestDto {
+  content: string;
 } 
