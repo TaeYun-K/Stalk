@@ -263,6 +263,8 @@ const VideoConsultationPage: React.FC = () => {
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscribing to new stream:', event.stream.streamId);
 
+          console.log('Raw connection data:', subscriber.stream.connection.data);
+
           // subscriber.on('videoElementCreated', (e) => {
           //   const videoEl = e.element as HTMLVideoElement;
           //   videoEl.muted = false;
