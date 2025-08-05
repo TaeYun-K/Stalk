@@ -24,7 +24,7 @@ public class ConsultationSessionService {
   private final Map<String, Session> sessionMap = new ConcurrentHashMap<>();
   private final Map<String, Instant> createdAtMap = new ConcurrentHashMap<>();
 
-  private ConsultationSessionMapper consultationSessionMapper;
+  private final ConsultationSessionMapper consultationSessionMapper;
 
   /**
    * 토큰 발급 메서드
