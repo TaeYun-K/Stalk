@@ -99,6 +99,7 @@ const VideoConsultationPage: React.FC = () => {
     try {
       if (subscriber.stream.connection.data) {
         const data = JSON.parse(subscriber.stream.connection.data);
+        console.log('Parsed subscriber data:', data);
         return data.role || 'USER';
       }
     } catch (error) {
@@ -259,14 +260,19 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           const subscriber = session.subscribe(event.stream, undefined);
-          
+          console.log('Subscribing to new stream:', event.stream.streamId);
+
+          // streamPlaying 이벤트가 발생한 뒤에만 비디오를 attach
+          subscriber.on('streamPlaying', () => {
+          console.log('Subscriber stream playing:', subscriber.stream.streamId);
           setSubscribers(prev => {
             const newSubscribers = [...prev, subscriber];
-            setTimeout(() => {
-              attachSubscriberVideo(subscriber, newSubscribers.length - 1); // optional
-            }, 100);
+            // 인덱스는 새 배열 길이-1
+            setTimeout(() => attachSubscriberVideo(subscriber, newSubscribers.length - 1), 0);
             return newSubscribers;
           });
+        });
+
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
@@ -546,11 +552,13 @@ const VideoConsultationPage: React.FC = () => {
 
   // 로컬 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
-    if (publisher) {
-      const videoElement = document.getElementById("local-video-element");
+    if (publisher && isVideoEnabled) {
+      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
       if (videoElement) {
-        const mediaStream = publisher.stream.getMediaStream();
-        videoElement.srcObject = mediaStream;
+        videoElement.srcObject = publisher.stream.getMediaStream();
+        videoElement.play().catch((e) => {
+          console.error("Error playing local video:", e);
+        });
       }
     }
   }, [publisher]);
