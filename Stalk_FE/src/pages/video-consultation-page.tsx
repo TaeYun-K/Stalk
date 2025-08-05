@@ -271,14 +271,17 @@ const VideoConsultationPage: React.FC = () => {
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscribing to new stream:', event.stream.streamId);
 
+          // 즉시 상태 업데이트 (이 부분이 중요!)
+          setSubscribers(prev => [...prev, subscriber]);
+
           subscriber.on('videoElementCreated', (event) => {
             console.log('📺 subscriber videoElementCreated');
-
-            setSubscribers(prev => [...prev, subscriber]);
 
             const videoElement = event.element as HTMLVideoElement;
             videoElement.playsInline = true; // 모바일에서도 자동 재생 가능하도록 설정
             videoElement.muted = false; // 자동 재생을 위해 음소거 설정
+
+            console.log('✅ 비디오 엘리먼트 설정 완료');
           });
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
@@ -758,8 +761,6 @@ const VideoConsultationPage: React.FC = () => {
                         autoPlay
                         playsInline
                         className="w-full h-full object-cover rounded-2xl"
-                        ref={(el) => {if(el) {subscriber.addVideoElement(el as HTMLVideoElement);}}
-                      }
                       />
                     </div>
                     <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
@@ -966,7 +967,6 @@ const VideoConsultationPage: React.FC = () => {
                               autoPlay
                               playsInline
                               className="w-full h-full object-cover rounded-lg"
-                              ref={(el) => {if (el) {subscriber.addVideoElement(el as HTMLVideoElement);} }}
                             />
                           </div>
                           <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
