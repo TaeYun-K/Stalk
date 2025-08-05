@@ -839,7 +839,7 @@ const VideoConsultationPage: React.FC = () => {
                   )}
                 </div>
                 <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName(userInfo?.role || 'USER')})</span>
+                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName((userInfo?.role || 'USER') as 'ADVISOR' || 'USER')})</span>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <div
