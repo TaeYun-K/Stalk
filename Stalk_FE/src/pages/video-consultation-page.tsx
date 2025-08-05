@@ -222,6 +222,12 @@ const VideoConsultationPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+  subscribers.forEach((subscriber, index) => {
+    attachSubscriberVideo(subscriber, index);
+  });
+}, [subscribers]);
+
   const getDuration = (): string => {
     const diff = Math.floor(
       (currentTime.getTime() - consultationStartTime.getTime()) / 1000
