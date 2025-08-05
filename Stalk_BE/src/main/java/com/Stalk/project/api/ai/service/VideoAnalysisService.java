@@ -6,6 +6,9 @@ import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.vertexai.VertexAI;
+import com.google.cloud.vertexai.api.Content;
+import com.google.cloud.vertexai.api.FileData;
+import com.google.cloud.vertexai.api.Part;
 import com.google.cloud.vertexai.api.GenerateContentResponse;
 import com.google.cloud.vertexai.generativeai.GenerativeModel;
 import com.google.cloud.vertexai.generativeai.ResponseHandler;
@@ -47,12 +50,18 @@ public class VideoAnalysisService {
    * @return 데이터베이스에 저장된 분석 결과 객체
    * @throws IOException 파일 업로드 또는 AI 분석 중 오류 발생 시
    */
+// VideoAnalysisService.java
+
   public AnalysisResult processAndSaveAnalysis(MultipartFile file) throws IOException {
+    System.out.println("DEBUG: 1. GCS에 파일 업로드를 시작합니다...");
     // 1. 파일을 GCS에 업로드하고 URI를 받습니다.
     String gcsUri = uploadFileToGcs(file);
+    System.out.println("DEBUG: 2. GCS 업로드 성공! URI: " + gcsUri);
 
     // 2. GCS URI를 사용하여 Vertex AI에 분석을 요청합니다.
+    System.out.println("DEBUG: 3. Vertex AI 분석을 시작합니다...");
     String summary = analyzeVideo(gcsUri, file.getContentType());
+    System.out.println("DEBUG: 4. Vertex AI 분석 성공!");
 
     // 3. 분석 결과를 데이터베이스에 저장합니다.
     AnalysisResult result = new AnalysisResult();
@@ -91,19 +100,26 @@ public class VideoAnalysisService {
   private String analyzeVideo(String gcsUri, String mimeType) throws IOException {
     GenerativeModel model = new GenerativeModel(modelName, vertexAI);
 
-    // 프롬프트에 URI를 직접 삽입
-    String promptText = String.format("""
-        아래의 GCS URI에서 비디오를 분석하여 요약해 주세요:
-        %s
+    // Builder 패턴을 사용하여 Part 객체들을 생성합니다.
+    Content content = Content.newBuilder()
+        .addParts(
+            Part.newBuilder().setFileData(
+                FileData.newBuilder()
+                    .setFileUri(gcsUri)
+                    .setMimeType(mimeType)
+            )
+        ) // 비디오 Part
+        .addParts(
+            Part.newBuilder().setText("""
+                요구사항:
+                1. 영상 내 시각 및 음성 정보를 기반으로 요약
+                2. 주요 사건 식별 및 타임스탬프 포함
+                3. 영상의 분위기 및 목적 판단
+                """)
+        ) // 텍스트 Part
+        .build();
 
-        요구사항:
-        1. 영상 내 시각 및 음성 정보를 기반으로 요약
-        2. 주요 사건 식별 및 타임스탬프 포함
-        3. 영상의 분위기 및 목적 판단
-        """, gcsUri);
-
-    // 텍스트 프롬프트만 전달
-    GenerateContentResponse response = model.generateContent(promptText);
+    GenerateContentResponse response = model.generateContent(content);
 
     return ResponseHandler.getText(response);
   }
