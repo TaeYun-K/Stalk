@@ -265,24 +265,13 @@ const VideoConsultationPage: React.FC = () => {
 
           subscriber.on('videoElementCreated', (e) => {
             const videoEl = e.element as HTMLVideoElement;
-
-            // 1. DOM에 붙이기 (직접 제어할 경우)
-            const container = document.getElementById('video-grid'); // 또는 subscriber 영역
-            if (container) {
-              container.appendChild(videoEl);
-            }
-
-            // 2. autoplay 허용을 위해 muted/playsInline 보장
             videoEl.muted = false;
             videoEl.playsInline = true;
 
-            // 3. playing 이벤트 발생 시점에 subscriber 등록
-            videoEl.addEventListener('playing', () => {
-              console.log('▶️ video is playing for', subscriber.stream.streamId);
-              setSubscribers(prev => {
-                const newArr = [...prev, subscriber];
-                return newArr;
-              });
+            // mediaStream이 준비된 후, subscriber를 상태에 추가
+            subscriber.on('streamPlaying', () => {
+              console.log('▶️ streamPlaying for', subscriber.stream.streamId);
+              setSubscribers(prev => [...prev, subscriber]);
             });
           });
 
@@ -578,12 +567,16 @@ const VideoConsultationPage: React.FC = () => {
 
   // 구독자 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
-    console.log('Subscribers changed, count:', subscribers.length);
+    console.log('👀 Subscribers changed, count:', subscribers.length);
     subscribers.forEach((subscriber, index) => {
-      // 이미 attachSubscriberVideo가 streamPlaying 이벤트에서 호출되므로
-      // 여기서는 추가 처리만 수행
-      if (subscriber.stream && subscriber.stream.getMediaStream()) {
-        attachSubscriberVideo(subscriber, index);
+      const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
+      if (videoElement && subscriber.stream) {
+        const mediaStream = subscriber.stream.getMediaStream();
+        if (mediaStream) {
+          videoElement.srcObject = mediaStream;
+          videoElement.play().catch(console.error);
+          console.log(`📺 attached subscriber video ${index}`);
+        }
       }
     });
   }, [subscribers]);
