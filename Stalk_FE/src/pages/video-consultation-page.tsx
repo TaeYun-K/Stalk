@@ -546,11 +546,13 @@ const VideoConsultationPage: React.FC = () => {
 
   // 로컬 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
-    if (publisher) {
-      const videoElement = document.getElementById("local-video-element");
+    if (publisher && isVideoEnabled) {
+      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
       if (videoElement) {
-        const mediaStream = publisher.stream.getMediaStream();
-        videoElement.srcObject = mediaStream;
+        videoElement.srcObject = publisher.stream.getMediaStream();
+        videoElement.play().catch((e) => {
+          console.error("Error playing local video:", e);
+        });
       }
     }
   }, [publisher]);
