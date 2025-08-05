@@ -194,8 +194,27 @@ public enum BaseResponseStatus {
   // 자격증 승인 요청 관련
   APPROVAL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1712, "자격 승인 요청에 실패했습니다."),
   PREVIOUS_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1713, "이전 요청을 찾을 수 없습니다."),
-  APPROVAL_HISTORY_FETCH_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1714, "승인 이력 조회에 실패했습니다.");
+  APPROVAL_HISTORY_FETCH_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1714, "승인 이력 조회에 실패했습니다."),
 
+  // 알람 관련
+  // BaseResponseStatus.java에 추가할 에러 코드들
+
+  // 알람 관련 에러 코드 (1800번대)
+  NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1801, "알람을 찾을 수 없습니다."),
+  NOTIFICATION_CREATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1802, "알람 생성에 실패했습니다."),
+  NOTIFICATION_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1803, "알람 업데이트에 실패했습니다."),
+  NOTIFICATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1804, "해당 알람에 접근할 권한이 없습니다."),
+  NOTIFICATION_REDIS_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, false, 1805, "알람 캐시 처리 중 오류가 발생했습니다."),
+
+
+  // 결제 관련 에러 (1900번대)
+  PAYMENT_PREPARE_FAILED(HttpStatus.BAD_REQUEST, false, 1901, "결제 준비에 실패했습니다."),
+  PAYMENT_CONFIRM_FAILED(HttpStatus.BAD_REQUEST, false, 1902, "결제 승인에 실패했습니다."),
+  PAYMENT_CANCEL_FAILED(HttpStatus.BAD_REQUEST, false, 1903, "결제 취소에 실패했습니다."),
+  PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1904, "결제 정보를 찾을 수 없습니다."),
+  INVALID_PAYMENT_AMOUNT(HttpStatus.BAD_REQUEST, false, 1905, "유효하지 않은 결제 금액입니다."),
+  PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, false, 1906, "이미 처리된 결제입니다."),
+  PAYMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1907, "결제 접근 권한이 없습니다."); // 추가
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;

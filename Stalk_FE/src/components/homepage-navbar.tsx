@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 import newsIcon from '@/assets/images/icons/news_icon.png';
@@ -8,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
@@ -16,19 +18,19 @@ const HomePageNavbar: React.FC = () => {
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   const [isNavBarScrolled, setIsNavBarScrolled] = useState<boolean>(false); // 스크롤 상태 관리
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
+  
+  // mypage에서는 상담내역 드롭다운 숨기기
+  const isMyPage = location.pathname === '/mypage';
 
   // 사용자 프로필 이미지 가져오기
   const fetchUserProfileImage = async () => {
     try {
-      // 실제 API 호출 (임시로 localStorage에서 user_id를 가져온다고 가정)
-      const userId = localStorage.getItem('userId') || '1'; // 임시 user_id
-      
-      // API 호출 예시 (실제 엔드포인트로 수정 필요)
-      const response = await fetch(`/api/user_community_images?user_id=${userId}`);
+      // AuthService를 사용하여 인증된 요청으로 프로필 이미지 가져오기
+      const response = await AuthService.authenticatedRequest('/api/users/me');
       const data = await response.json();
       
-      if (data.image_path) {
-        setUserProfileImage(data.image_path);
+      if (data.result?.profileImage) {
+        setUserProfileImage(data.result.profileImage);
       } else {
         setUserProfileImage(profileDefault);
       }
@@ -123,6 +125,13 @@ const HomePageNavbar: React.FC = () => {
               className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
             >
               상품 조회
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
+            </button>
+            <button 
+              onClick={() => navigate('/mypage?tab=내 상담 내역')}
+              className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
+            >
+              상담내역
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
             </button>
             <div 
@@ -231,18 +240,20 @@ const HomePageNavbar: React.FC = () => {
                       </svg>
                       <span>마이페이지</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        navigate('/consultations');
-                        setShowProfileMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <span>상담 내역</span>
-                    </button>
+                    {!isMyPage && (
+                      <button
+                        onClick={() => {
+                          navigate('/mypage?tab=내 상담 내역');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span>상담 내역</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         navigate('/favorites');

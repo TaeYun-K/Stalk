@@ -57,8 +57,8 @@ dependencies {
     // OpenAPI (Swagger)
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
 
-    // OpenVidu
-    implementation "io.openvidu:openvidu-java-client:2.29.0"
+    // openVidu
+    implementation "io.openvidu:openvidu-java-client:2.30.0"
 
     // Validation
     implementation 'org.springframework.boot:spring-boot-starter-validation'
@@ -79,7 +79,6 @@ dependencies {
     implementation platform('com.google.cloud:libraries-bom:26.43.0')
     implementation 'com.google.cloud:google-cloud-vertexai'
     implementation 'com.google.cloud:google-cloud-storage'
-    implementation 'com.google.protobuf:protobuf-java:3.25.3'
     runtimeOnly 'com.h2database:h2'
 }
 

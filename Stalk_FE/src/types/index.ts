@@ -187,4 +187,198 @@ export interface ScheduleData {
 export interface TabItem {
   id: string;
   label: string;
+}
+
+// 커뮤니티 관련 타입들
+export enum PostCategory {
+  ALL = 'ALL',
+  QUESTION = 'QUESTION',
+  TRADE_RECORD = 'TRADE_RECORD',
+  STOCK_DISCUSSION = 'STOCK_DISCUSSION',
+  MARKET_ANALYSIS = 'MARKET_ANALYSIS'
+}
+
+export interface CommunityPostSummaryDto {
+  postId: number;
+  title: string;
+  authorName: string;
+  authorRole: string;
+  category: string;
+  categoryDisplayName: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
+}
+
+export interface CommunityPostDetailDto {
+  postId: number;
+  title: string;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  category: string;
+  categoryDisplayName: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityPostCreateRequestDto {
+  category: string;
+  title: string;
+  content: string;
+}
+
+export interface CommunityPostUpdateRequestDto {
+  category: string;
+  title: string;
+  content: string;
+}
+
+export interface CommunityCommentDto {
+  commentId: number;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+}
+
+export interface CommunityCommentCreateRequestDto {
+  content: string;
+}
+
+export interface CommunityCommentUpdateRequestDto {
+  content: string;
+}
+
+// 관리자 관련 타입들
+export enum ApprovalStatus {
+  ALL = 'ALL',
+  PENDING = 'PENDING', 
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
+export enum RejectionReason {
+  INVALID_CERTIFICATE = 'INVALID_CERTIFICATE',
+  EXPIRED_CERTIFICATE = 'EXPIRED_CERTIFICATE',
+  INSUFFICIENT_DOCUMENTS = 'INSUFFICIENT_DOCUMENTS',
+  VERIFICATION_FAILED = 'VERIFICATION_FAILED',
+  OTHER = 'OTHER'
+}
+
+// 전문가 인증 요청 정보
+export interface AdvisorApprovalRequest {
+  requestId: number;
+  advisorId: number;
+  status: string;
+  requestedAt: string;
+  processedAt: string | null;
+  advisorName: string;
+  email: string;
+  contact: string;
+  certificateInfo: {
+    certificateName: string;
+    certificateNumber: string;
+    serialNumber: string;
+  };
+  processedBy: {
+    adminId: number;
+    adminName: string;
+  } | null;
+  rejectionReason: string | null;
+  customReason: string | null;
+}
+
+// 인증 요청 목록 조회 요청
+export interface ApprovalRequestListRequest {
+  status: ApprovalStatus;
+  pageNo: number;
+  pageSize: number;
+}
+
+// 승인/거절 액션 요청
+export interface ApprovalActionRequest {
+  rejectionReason: RejectionReason;
+  customReason?: string;
+}
+
+// 승인/거절 액션 응답
+export interface ApprovalActionResponse {
+  requestId: number;
+  advisorId: number;
+  status: string;
+  processedAt: string;
+  processedBy: string;
+  rejectionReason?: string;
+  customReason?: string;
+}
+
+// 페이징 응답
+export interface CursorPage<T> {
+  content: T[];
+  nextCursor: number | null;
+  hasNext: boolean;
+  pageSize: number;
+  pageNo: number;
+}
+
+// 전문가 자격증 승인 요청 관련 타입들
+export interface CertificateApprovalRequest {
+  previousRequestId?: number;
+  certificateName: string;
+  certificateFileSn: string;
+  birth: string;
+  certificateFileNumber: string;
+}
+
+export interface CertificateApprovalResponse {
+  requestId: number;
+  status: string;
+  requestType: string;
+  message: string;
+}
+
+export interface ApprovalHistoryResponse {
+  requestId: number;
+  certificateName: string;
+  certificateFileSn: string;
+  certificateFileNumber: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  statusDisplayName: string;
+  requestedAt: string;
+  processedAt?: string;
+  rejectionReason?: string;
+  processedByAdminName?: string;
+  previousRequestId?: number;
+}
+
+export interface ProfileStatusResponse {
+  advisorId: number;
+  message: string;
+} 
+
+
+// 상담일지 관련 타입들
+export interface VideoRecording {
+  id: number;
+  consultationId: number;
+  recordingId: string;
+  sessionId: string;
+  url: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
+export interface ConsultationDiaryResponse {
+  recordings: VideoRecording[];
+  consultationInfo: {
+    id: number;
+    date: string;
+    time: string;
+    content: string;
+    expert: string;
+  };
 } 

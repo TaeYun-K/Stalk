@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.List;
 
 @Configuration
 public class GoogleCloudConfig {
@@ -32,9 +33,9 @@ public class GoogleCloudConfig {
    */
   @Bean
   public GoogleCredentials googleCredentials() throws IOException {
-    // 'file:' 접두사를 제거하여 순수 파일 경로만 사용합니다.
     String cleanPath = credentialsPath.replace("file:", "");
-    return GoogleCredentials.fromStream(new FileInputStream(cleanPath));
+    return GoogleCredentials.fromStream(new FileInputStream(cleanPath))
+        .createScoped(List.of("https://www.googleapis.com/auth/cloud-platform"));
   }
 
   /**

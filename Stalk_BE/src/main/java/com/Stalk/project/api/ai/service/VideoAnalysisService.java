@@ -19,7 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.UUID;
 
 @Service
@@ -102,6 +101,7 @@ public class VideoAnalysisService {
 
     // Builder 패턴을 사용하여 Part 객체들을 생성합니다.
     Content content = Content.newBuilder()
+        .setRole("user")
         .addParts(
             Part.newBuilder().setFileData(
                 FileData.newBuilder()
@@ -123,5 +123,4 @@ public class VideoAnalysisService {
 
     return ResponseHandler.getText(response);
   }
-
 }

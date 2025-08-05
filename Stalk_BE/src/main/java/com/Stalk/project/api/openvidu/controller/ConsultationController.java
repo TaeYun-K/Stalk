@@ -12,9 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.NoSuchElementException;
-import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "상담 관련 Controller")
 @Slf4j
@@ -92,44 +92,31 @@ public class ConsultationController {
   }
 
   @Operation(
-      summary = "상담방 종료",
-      description = "주어진 consultationId에 해당하는 OpenVidu 세션을 종료합니다."
+          summary = "상담방 종료",
+          description = "주어진 consultationId에 해당하는 OpenVidu 세션을 종료하고 sessionId를 저장, 관련 정보를 정리합니다."
   )
-  @DeleteMapping("/{consultationId}/session")
+  @PostMapping("/{consultationId}/session/close")
   public ResponseEntity<BaseResponse<Void>> closeSession(
-      @PathVariable String consultationId
+          @PathVariable String consultationId
   ) {
     log.info("▶ 상담방 세션 종료 요청: consultationId={}", consultationId);
     try {
       sessionService.closeSession(consultationId);
       log.info("✅ 세션 종료 성공: consultationId={}", consultationId);
 
-      // 성공 래핑 (result는 null)
-      BaseResponse<Void> response = new BaseResponse<>(BaseResponseStatus.SUCCESS);
-      return ResponseEntity
-          .ok(response);  // 필요하다면 .status(HttpStatus.NO_CONTENT).body(response) 로 204 사용 가능
+      return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
 
     } catch (ResponseStatusException e) {
-      log.warn("⚠️ 세션 종료 중 상태 예외 발생: {}", e.getStatusCode());
-
-      // e.getStatusCode()가 404라면 NOT_FOUND_SESSION 사용
-      BaseResponse<Void> response = new BaseResponse<>(
-          e.getStatusCode() == HttpStatus.NOT_FOUND
+      BaseResponseStatus status = e.getStatusCode() == HttpStatus.NOT_FOUND
               ? BaseResponseStatus.NOT_FOUND_SESSION
-              : BaseResponseStatus.INTERNAL_SERVER_ERROR
-      );
-      return ResponseEntity
-          .status(e.getStatusCode())
-          .body(response);
+              : BaseResponseStatus.INTERNAL_SERVER_ERROR;
+      return ResponseEntity.status(e.getStatusCode()).body(new BaseResponse<>(status));
 
     } catch (OpenViduJavaClientException | OpenViduHttpException e) {
       log.error("❌ OpenVidu 서버 에러로 세션 종료 실패:", e);
-
-      BaseResponse<Void> response =
-          new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR);
-      return ResponseEntity
-          .status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(response);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+              .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
     }
   }
+
 }

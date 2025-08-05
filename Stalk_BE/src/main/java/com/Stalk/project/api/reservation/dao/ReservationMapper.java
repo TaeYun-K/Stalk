@@ -1,6 +1,9 @@
 package com.Stalk.project.api.reservation.dao;
 
+import com.Stalk.project.api.reservation.dto.ReservationCancelCheckDto;
 import com.Stalk.project.api.reservation.dto.in.CancelReason;
+import com.Stalk.project.api.payment.dto.PaymentReservationDto;
+import com.Stalk.project.api.payment.dto.UserInfoDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.global.util.PageRequestDto;
 import org.apache.ibatis.annotations.Mapper;
@@ -26,13 +29,6 @@ public interface ReservationMapper {
       @Param("startTime") LocalTime startTime);
 
   /**
-   * 기존 예약 존재 여부 확인 ReservationService에서 isTimeAlreadyReserved() 로 호출 (시간 범위 체크)
-   */
-  Boolean isTimeAlreadyReserved(@Param("advisorUserId") Long advisorUserId,
-      @Param("date") LocalDate date,
-      @Param("startTime") LocalTime startTime);
-
-  /**
    * 상담 예약 생성 ReservationService에서 insertConsultationReservation() 로 호출
    */
   int insertConsultationReservation(@Param("userId") Long userId,
@@ -46,11 +42,6 @@ public interface ReservationMapper {
    * 마지막 생성된 예약 ID 조회
    */
   Long getLastInsertId();
-
-  /**
-   * 사용자 role 조회
-   */
-  String getUserRole(@Param("userId") Long userId);
 
   /**
    * 사용자 ID로 advisor_id 조회
@@ -86,11 +77,66 @@ public interface ReservationMapper {
       @Param("canceledAt") LocalDateTime canceledAt);
 
   /**
-   * 알림 생성
+   * 결제 대기 상태로 예약 생성
    */
-  int createNotification(@Param("userId") Long userId,
-      @Param("type") String type,
-      @Param("title") String title,
-      @Param("message") String message,
-      @Param("relatedId") Long relatedId);
+  Long createPendingReservation(PaymentReservationDto reservationDto);
+
+  /**
+   * 결제 성공 시 예약 정보 업데이트
+   */
+  int updateReservationPaymentSuccess(
+      @Param("orderId") String orderId,
+      @Param("paymentKey") String paymentKey,
+      @Param("paymentMethod") String paymentMethod,
+      @Param("cardCompany") String cardCompany,
+      @Param("receiptUrl") String receiptUrl,
+      @Param("approvedAt") String approvedAt
+  );
+
+  /**
+   * 결제 실패 시 예약 정보 업데이트
+   */
+  int updateReservationPaymentFailure(
+      @Param("orderId") String orderId,
+      @Param("failureCode") String failureCode,
+      @Param("failureReason") String failureReason
+  );
+
+  /**
+   * 주문번호로 예약 정보 조회
+   */
+  PaymentReservationDto findReservationByOrderId(@Param("orderId") String orderId);
+
+  /**
+   * 어드바이저 존재 및 승인 여부 확인
+   */
+  boolean isValidAdvisor(@Param("advisorId") Long advisorId);
+
+  /**
+   * 어드바이저 이름 조회
+   */
+  String getAdvisorNameById(@Param("advisorId") Long advisorId);
+
+  /**
+   * 사용자 정보 조회 (이름, 이메일)
+   */
+  UserInfoDto getUserInfoById(@Param("userId") Long userId);
+
+  /**
+   * 예약 시간 중복 체크
+   */
+  int checkReservationConflict(
+      @Param("advisorId") Long advisorId,
+      @Param("date") String date,
+      @Param("startTime") String startTime
+  );
+
+  /**
+   * 결제 취소 시 예약 정보 업데이트
+   */
+  int updateReservationPaymentCancellation(
+      @Param("orderId") String orderId,
+      @Param("cancelReason") String cancelReason,
+      @Param("canceledAt") String canceledAt
+  );
 }

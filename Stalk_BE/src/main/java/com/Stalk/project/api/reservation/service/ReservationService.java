@@ -1,18 +1,24 @@
 package com.Stalk.project.api.reservation.service;
 
-import com.Stalk.project.api.reservation.dao.ReservationCancelCheckDto;
+import com.Stalk.project.api.reservation.dto.ReservationCancelCheckDto;
 import com.Stalk.project.api.reservation.dao.ReservationMapper;
 import com.Stalk.project.api.reservation.dto.in.ConsultationReservationRequestDto;
 import com.Stalk.project.api.reservation.dto.in.ReservationCancelRequestDto;
 import com.Stalk.project.api.reservation.dto.out.ConsultationReservationResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto;
+import com.Stalk.project.api.user.dao.UserProfileMapper;
+import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
 import com.Stalk.project.global.exception.BaseException;
+import com.Stalk.project.global.notification.event.ReservationCanceledEvent;
+import com.Stalk.project.global.notification.event.ReservationCreatedEvent;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.PageRequestDto;
+import com.Stalk.project.global.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,28 +39,26 @@ import java.util.List;
 public class ReservationService {
 
   private final ReservationMapper reservationMapper;
+  private final ApplicationEventPublisher eventPublisher; // 이벤트 발행용
+  private final UserProfileMapper userProfileMapper;  // 알람에서 사용자
 
   /**
-   * 상담 예약 생성 (토큰 기반 인증 적용), 동시성 이슈 해결
-   *
-   * @param currentUserId 현재 로그인한 사용자 ID (토큰에서 추출)
-   * @param requestDto    예약 요청 정보
-   * @return 예약 생성 결과
-   */
-  /**
-   * 상담 예약 생성 - 동시성 이슈 완전 해결 버전
+   * 상담 예약 생성 (SecurityUtil 기반 인증)
    */
   public ConsultationReservationResponseDto createConsultationReservation(
-      Long currentUserId, String currentUserRole, ConsultationReservationRequestDto requestDto) {
+      ConsultationReservationRequestDto requestDto) {
 
-    log.info("상담 예약 생성 시작: userId={}, role={}, advisorUserId={}",
-        currentUserId, currentUserRole, requestDto.getAdvisorUserId());
+    // SecurityUtil을 통한 현재 사용자 정보 획득
+    Long currentUserId = getCurrentUserPrimaryId();
+
+    log.info("상담 예약 생성 시작: userId={}, advisorUserId={}",
+        currentUserId, requestDto.getAdvisorUserId());
 
     LocalDate requestDate = LocalDate.parse(requestDto.getDate());
     LocalTime requestTime = LocalTime.parse(requestDto.getTime());
 
     // 1. 기본 검증 (권한 포함)
-    validateBasicReservationRequest(currentUserId, currentUserRole, requestDto.getAdvisorUserId(),
+    validateBasicReservationRequest(currentUserId, requestDto.getAdvisorUserId(),
         requestDate, requestTime);
 
     // 2. 예약 생성 (DB 제약조건이 동시성 보호)
@@ -67,6 +71,25 @@ public class ReservationService {
 
     log.info("상담 예약 생성 완료: userId={}, reservationId={}", currentUserId, reservationId);
 
+    // ✅ 이벤트 발행 코드
+    try {
+      // 클라이언트 정보 조회
+      UserProfileResponseDto clientProfile = userProfileMapper.findUserProfileById(currentUserId);
+      String clientName = clientProfile != null ? clientProfile.getName() : "Unknown";
+      String dateTime = String.format("%s %s", requestDto.getDate(), requestDto.getTime());
+
+      eventPublisher.publishEvent(new ReservationCreatedEvent(
+          requestDto.getAdvisorUserId(),
+          clientName,
+          dateTime
+      ));
+
+      log.debug("예약 생성 이벤트 발행 완료 - clientName: {}", clientName);
+    } catch (Exception e) {
+      log.warn("예약 생성 이벤트 발행 실패 (예약은 성공)", e);
+    }
+
+
     return ConsultationReservationResponseDto.builder()
         .reservationId(reservationId)
         .scheduledTime(scheduledTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
@@ -74,14 +97,14 @@ public class ReservationService {
   }
 
   /**
-   * 예약 요청 검증
+   * 예약 요청 검증 (SecurityUtil 활용)
    */
-  private void validateBasicReservationRequest(Long currentUserId, String currentUserRole,
-      Long advisorUserId, LocalDate requestDate, LocalTime requestTime) {
+  private void validateBasicReservationRequest(Long currentUserId, Long advisorUserId,
+      LocalDate requestDate, LocalTime requestTime) {
     LocalDate today = LocalDate.now();
 
     // 0. 사용자 권한 확인 - 일반 사용자만 예약 가능
-    if (!"USER".equals(currentUserRole)) {
+    if (!SecurityUtil.isCurrentUserRegularUser()) {
       throw new BaseException(BaseResponseStatus.RESERVATION_USER_ONLY);
     }
 
@@ -111,7 +134,7 @@ public class ReservationService {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 
-    // 6. 본인 예약 방지 (이제 USER만 예약하므로 실제로는 발생하지 않음)
+    // 6. 본인 예약 방지 (USER가 ADVISOR 예약하는 경우는 없지만 안전장치)
     if (currentUserId.equals(advisorUserId)) {
       throw new BaseException(BaseResponseStatus.SELF_RESERVATION_NOT_ALLOWED);
     }
@@ -167,41 +190,37 @@ public class ReservationService {
   }
 
   /**
-   * 예약 내역 조회 (사용자 타입별 동적 처리)
+   * 예약 내역 조회 (SecurityUtil 기반)
    */
   @Transactional(readOnly = true)
-  public CursorPage<ReservationDetailResponseDto> getReservationList(Long userId,
-      PageRequestDto pageRequest) {
-    log.info("예약 내역 조회 시작: userId={}", userId);
+  public CursorPage<ReservationDetailResponseDto> getReservationList(PageRequestDto pageRequest) {
+    Long currentUserId = getCurrentUserPrimaryId();
+    String currentUserRole = SecurityUtil.getCurrentUserRoleRequired();
 
-    // 1. 사용자 role 조회
-    String userRole = reservationMapper.getUserRole(userId);
-    if (userRole == null) {
-      throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
-    }
+    log.info("예약 내역 조회 시작: userId={}, role={}", currentUserId, currentUserRole);
 
     List<ReservationDetailResponseDto> reservations;
 
-    // 2. 역할별 예약 내역 조회
-    if ("ADVISOR".equals(userRole)) {
+    // 역할별 예약 내역 조회
+    if ("ADVISOR".equals(currentUserRole)) {
       // 전문가: advisor_id 조회 후 해당 전문가의 예약 내역
-      Long advisorId = reservationMapper.getAdvisorIdByUserId(userId);
+      Long advisorId = reservationMapper.getAdvisorIdByUserId(currentUserId);
       if (advisorId == null) {
         throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
       }
       reservations = reservationMapper.findAdvisorReservations(advisorId, pageRequest);
     } else {
       // 일반 사용자: user_id로 직접 예약 내역 조회
-      reservations = reservationMapper.findUserReservations(userId, pageRequest);
+      reservations = reservationMapper.findUserReservations(currentUserId, pageRequest);
     }
 
-    // 3. CursorPage 처리
+    // CursorPage 처리
     boolean hasNext = reservations.size() > pageRequest.getPageSize();
     if (hasNext) {
       reservations.remove(reservations.size() - 1);
     }
 
-    log.info("예약 내역 조회 완료: userId={}, count={}", userId, reservations.size());
+    log.info("예약 내역 조회 완료: userId={}, count={}", currentUserId, reservations.size());
 
     return CursorPage.<ReservationDetailResponseDto>builder()
         .content(reservations)
@@ -213,22 +232,23 @@ public class ReservationService {
   }
 
   /**
-   * 예약 취소 처리
+   * 예약 취소 처리 (SecurityUtil 기반)
    */
-  public ReservationCancelResponseDto cancelReservation(Long reservationId, Long currentUserId,
+  public ReservationCancelResponseDto cancelReservation(Long reservationId,
       ReservationCancelRequestDto requestDto) {
+    Long currentUserId = getCurrentUserPrimaryId();
+
     log.info("예약 취소 시작: reservationId={}, userId={}", reservationId, currentUserId);
 
     // 1. 예약 조회 및 검증
-    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(
-        reservationId);
+    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(reservationId);
     if (reservation == null) {
       throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
     }
 
     // 2. 취소 권한 확인
-    if (!currentUserId.equals(reservation.getUserId()) && !currentUserId.equals(
-        reservation.getAdvisorId())) {
+    if (!currentUserId.equals(reservation.getUserId()) &&
+        !currentUserId.equals(reservation.getAdvisorId())) {
       throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
     }
 
@@ -257,8 +277,40 @@ public class ReservationService {
       throw new BaseException(BaseResponseStatus.CANCEL_REQUEST_FAILED);
     }
 
-    // 6. 상대방 알림 생성
-    createCancelNotification(reservation, currentUserId);
+    // ✅ 이벤트 발행 코드
+    try {
+      // 알림 대상과 취소한 사람 이름 결정
+      Long targetUserId;
+      String canceledByName;
+
+      if (currentUserId.equals(reservation.getUserId())) {
+        // 일반 사용자가 취소 → 전문가에게 알림
+        targetUserId = reservation.getAdvisorId();
+        // 취소한 사람(일반 사용자) 이름 조회
+        UserProfileResponseDto userProfile = userProfileMapper.findUserProfileById(currentUserId);
+        canceledByName = userProfile != null ? userProfile.getName() : "Unknown";
+      } else {
+        // 전문가가 취소 → 일반 사용자에게 알림
+        targetUserId = reservation.getUserId();
+        // 취소한 사람(전문가) 이름 조회
+        UserProfileResponseDto advisorProfile = userProfileMapper.findUserProfileById(currentUserId);
+        canceledByName = advisorProfile != null ? advisorProfile.getName() : "Unknown";
+      }
+
+      String dateTime = String.format("%s %s", reservation.getDate(), reservation.getStartTime());
+      String reason = requestDto.getCancelReason().toString(); // 또는 .name()
+
+      eventPublisher.publishEvent(new ReservationCanceledEvent(
+          targetUserId,
+          canceledByName,
+          dateTime,
+          reason
+      ));
+
+      log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}", canceledByName);
+    } catch (Exception e) {
+      log.warn("예약 취소 이벤트 발행 실패 (취소는 성공)", e);
+    }
 
     log.info("예약 취소 완료: reservationId={}, userId={}", reservationId, currentUserId);
 
@@ -271,48 +323,14 @@ public class ReservationService {
   }
 
   /**
-   * 취소 알림 생성
+   * SecurityUtil에서 현재 사용자 PK 획득 (BaseException 변환)
    */
-  private void createCancelNotification(ReservationCancelCheckDto reservation, Long canceledBy) {
+  private Long getCurrentUserPrimaryId() {
     try {
-      // 알림 대상 결정 (취소한 사람이 아닌 상대방)
-      Long notificationTargetUserId;
-      String canceledByName;
-
-      if (canceledBy.equals(reservation.getUserId())) {
-        // 일반 사용자가 취소 → 전문가에게 알림
-        notificationTargetUserId = reservation.getAdvisorId();
-        canceledByName = reservation.getClientName();
-      } else {
-        // 전문가가 취소 → 일반 사용자에게 알림
-        notificationTargetUserId = reservation.getUserId();
-        canceledByName = reservation.getAdvisorName();
-      }
-
-      // 알림 메시지 생성
-      String notificationMessage = String.format(
-          "%s님이 %s %s 상담 예약을 취소하였습니다.",
-          canceledByName,
-          reservation.getDate(),
-          reservation.getStartTime()
-      );
-
-      // 알림 저장
-      reservationMapper.createNotification(
-          notificationTargetUserId,
-          "RESERVATION_CANCELED",
-          "예약 취소 알림",
-          notificationMessage,
-          reservation.getId()
-      );
-
-      log.info("취소 알림 생성 완료: targetUserId={}, message={}",
-          notificationTargetUserId, notificationMessage);
-
-    } catch (Exception e) {
-      log.error("알림 생성 중 오류 (예약 취소는 성공): reservationId={}",
-          reservation.getId(), e);
-      // 알림 생성 실패해도 예약 취소 자체는 성공으로 처리
+      return SecurityUtil.getCurrentUserPrimaryIdRequired();
+    } catch (RuntimeException e) {
+      log.error("인증된 사용자 정보 획득 실패: {}", e.getMessage());
+      throw new BaseException(BaseResponseStatus.INVALID_USER_JWT);
     }
   }
 }

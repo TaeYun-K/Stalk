@@ -1,7 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 import ExpertProfileImage from '@/assets/expert_profile_image.png';
+import AuthService from '@/services/authService';
+import ProfileDefaultImage from '@/assets/images/profiles/Profile_default.svg';
+
+// 전문가 정보 API Response Interfaces
+interface ApiCareer {
+  id: number;
+  title: string;
+  description: string;
+  started_at: string;
+  ended_at: string;
+  created_at: string;
+}
+
+interface ApiCertificate {
+  id: number;
+  certificate_file_sn: string;
+  birth: string;
+  certificate_file_number: string;
+  certificate_name: string;
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  certificate_url: string;
+  created_at: string;
+}
+
+interface ApiReview {
+  review_id: number;
+  nickname: string;
+  rating: number;
+  content: string;
+  profile_image: string;
+  created_at: string;
+}
+
+interface ApiAdvisorDetail {
+  user_id: number;
+  name: string;
+  profile_image_url: string;
+  short_intro: string;
+  long_intro: string;
+  preferred_trade_style: string;
+  contact: string;
+  avg_rating: number;
+  review_count: number;
+  careers: ApiCareer[];
+  certificates: ApiCertificate[];
+  reviews: ApiReview[];
+  has_more_reviews: boolean;
+}
+
+interface ApiResponse {
+  httpStatus: string;
+  isSuccess: boolean;
+  message: string;
+  code: number;
+  result: ApiAdvisorDetail;
+}
 
 interface Review {
   id: number;
@@ -9,23 +67,28 @@ interface Review {
   username: string;
   date: string;
   content: string;
+  rating: number;
 }
 
-interface Expert {
-  id: string;
-  name: string;
-  title: string;
-  tagline: string;
-  image: string;
-  introduction: string;
-  qualifications: string[];
-  experience: Array<{
-    period: string;
-    position: string;
-  }>;
-  rating: number;
-  reviewCount: number;
-  consultationFee: string;
+// 전문가 예약 시간 테이블 API Response Interfaces
+interface ApiTimeSlot {
+  time: string;
+  is_available: boolean;
+  is_reserved: boolean;
+  is_blocked: boolean;
+}
+
+interface ApiAvailableTimesResponse {
+  date: string;
+  time_slots: ApiTimeSlot[];
+}
+
+interface ApiAvailableTimesApiResponse {
+  httpStatus: string;
+  isSuccess: boolean;
+  message: string;
+  code: number;
+  result: ApiAvailableTimesResponse;
 }
 
 const ExpertDetailPage: React.FC = () => {
@@ -34,11 +97,71 @@ const ExpertDetailPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showReservationModal, setShowReservationModal] = useState<boolean>(false);
+  const [displayedReviews, setDisplayedReviews] = useState<number>(3);
+  
+  // API 상태 관리
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expertData, setExpertData] = useState<ApiAdvisorDetail | null>(null);
+  
+  // 예약 가능 시간 API 상태 관리
+  const [availableTimesLoading, setAvailableTimesLoading] = useState(false);
+  const [availableTimesError, setAvailableTimesError] = useState<string | null>(null);
+  const [availableTimes, setAvailableTimes] = useState<ApiTimeSlot[]>([]);
+  
   // 사용자 정보 (실제로는 API에서 가져올 데이터)
   const userInfo = {
     name: '김싸피',
     contact: '010-0000-0000'
   };
+
+  // API 호출
+  useEffect(() => {
+    const fetchExpertDetails = async () => {
+      if (!id) {
+        setError('전문가 ID가 없습니다.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        
+        // 토큰 확인
+        const token = AuthService.getAccessToken();
+        if (!token) {
+          throw new Error('로그인 후 이용하실 수 있는 서비스입니다.');
+        }
+        
+        const response = await AuthService.authenticatedRequest(`/api/advisors/${id}`);
+        
+        if (response.status === 401) {
+          // 401 에러 시 토큰 제거하고 로그인 페이지로 리다이렉트
+          AuthService.removeAccessToken();
+          navigate('/login');
+          return;
+        }
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch expert details');
+        }
+        
+        const data: ApiResponse = await response.json();
+        if (data.isSuccess) {
+          setExpertData(data.result);
+        } else {
+          throw new Error(data.message || 'Failed to fetch expert details');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Error fetching expert details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExpertDetails();
+  }, [id, navigate]);
 
   const [reservationForm, setReservationForm] = useState({
     name: userInfo.name,
@@ -48,77 +171,7 @@ const ExpertDetailPage: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
 
-  // 전문가 정보 데이터 (실제로는 API에서 가져올 데이터)
-  const expertsData: Record<string, Expert> = {
-    '1': {
-      id: '1',
-      name: '제임스',
-      title: '컨설턴트',
-      tagline: '주식 투자, 어디서부터 시작해야 할지 막막하신가요?',
-      image: ExpertProfileImage,
-      introduction: '중급자도 쉽게 이해할 수 있는 명확한 솔루션을 제공합니다. 8년간의 경험을 바탕으로 기술적 분석을 통한 객관적인 매수/매도 타이밍을 제시하며, 데이터 기반 전략으로 자산을 보호하고 성장시켜 드립니다. 저와 함께라면 투자가 더 이상 어렵지 않습니다.',
-      qualifications: [
-        'CFA (Chartered Financial Analyst)',
-        '투자자산운용사',
-        '금융투자분석사'
-      ],
-      experience: [
-        {
-          period: '2020년 현재',
-          position: '스톡 소속 재무 컨설턴트'
-        },
-        {
-          period: '2018년 - 2020년',
-          position: '골드만삭스 투자분석팀'
-        },
-        {
-          period: '2015년 - 2018년',
-          position: 'JP모건 체이스 자산관리팀'
-        },
-        {
-          period: '2012년 6월',
-          position: '경영학과 졸업'
-        }
-      ],
-      rating: 4.8,
-      reviewCount: 127,
-      consultationFee: '80,000원'
-    },
-    '2': {
-      id: '2',
-      name: '박주현',
-      title: '컨설턴트',
-      tagline: '주식 투자, 어디서부터 시작해야 할지 막막하신가요?',
-      image: ExpertProfileImage,
-      introduction: '초보자도 쉽게 이해할 수 있는 명확한 솔루션을 제공합니다. 5년간의 경험을 바탕으로 기술적 분석을 통한 객관적인 매수/매도 타이밍을 제시하며, 데이터 기반 전략으로 자산을 보호하고 성장시켜 드립니다. 저와 함께라면 투자가 더 이상 어렵지 않습니다.',
-      qualifications: [
-        '투자자산운용사',
-        '금융투자분석사',
-        '투자권유대행인'
-      ],
-      experience: [
-        {
-          period: '2019년 현재',
-          position: '스톡 소속 재무 컨설턴트'
-        },
-        {
-          period: '2020년 - 2024년',
-          position: '미래에셋증권 조사분석팀'
-        },
-        {
-          period: '2016년 3월 - 2019년',
-          position: 'KB증권 주식브로커리지팀'
-        },
-        {
-          period: '2013년 2월',
-          position: '경제학과 졸업'
-        }
-      ],
-      rating: 4.6,
-      reviewCount: 89,
-      consultationFee: '50,000원'
-    }
-  };
+
 
   // 연도만 추출하는 함수
   const formatPeriod = (period: string): string => {
@@ -147,36 +200,39 @@ const ExpertDetailPage: React.FC = () => {
     return period;
   };
 
-  // 현재 전문가 정보 가져오기
-  const expert = expertsData[id || '1'] || expertsData['1'];
+  // API 데이터를 기반으로 전문가 정보 생성
+  const expert = expertData ? {
+    id: expertData.user_id.toString(),
+    name: expertData.name,
+    title: '컨설턴트',
+    tagline: expertData.short_intro,
+    image: expertData.profile_image_url || ExpertProfileImage,
+    introduction: expertData.long_intro,
+    qualifications: expertData.certificates.map(cert => cert.certificate_name),
+    experience: expertData.careers.map(career => ({
+      period: `${new Date(career.started_at).getFullYear()} - ${career.ended_at ? new Date(career.ended_at).getFullYear() : '현재'}`,
+      position: career.title
+    })),
+    rating: expertData.avg_rating,
+    reviewCount: expertData.review_count,
+    consultationFee: '상담료 정보 없음' // API에 consultationFee가 없으므로 기본값 사용
+  } : null;
 
-  const reviews: Review[] = [
-    {
-      id: 1,
-      avatar: '🦊',
-      username: '왕초보투자자',
-      date: '2025.07.17',
-      content: '아무것도 모르는 상태에서 상담받았는데 정말 친절하고 제 수준에 맞춰서 쉽게 설명해주셨어요. 특히 차트 보는 법을 배우고 나서는 주식 앱을 열어보는 게 두렵지 않아졌어요. 전문가님이 투자의 새로운 세계를 열어주신 분이에요. 강력 추천!'
-    },
-    {
-      id: 2,
-      avatar: '🐼',
-      username: '왕초보투자자',
-      date: '2025.07.15',
-      content: '아무것도 모르는 상태에서 상담받았는데 정말 친절하고 제 수준에 맞춰서 쉽게 설명해주셨어요. 특히 차트 보는 법을 배우고 나서는 주식 앱을 열어보는 게 두렵지 않아졌어요. 전문가님이 투자의 새로운 세계를 열어주신 분이에요. 강력 추천!'
-    },
-    {
-      id: 3,
-      avatar: '🐱',
-      username: '왕초보투자자',
-      date: '2025.07.12',
-      content: '아무것도 모르는 상태에서 상담받았는데 정말 친절하고 제 수준에 맞춰서 쉽게 설명해주셨어요. 특히 차트 보는 법을 배우고 나서는 주식 앱을 열어보는 게 두렵지 않아졌어요. 전문가님이 투자의 새로운 세계를 열어주신 분이에요. 강력 추천!'
-    }
-  ];
+  // API 리뷰 데이터를 기반으로 리뷰 생성
+  const reviews: Review[] = expertData ? expertData.reviews.map((review) => ({
+    id: review.review_id,
+    avatar: review.profile_image || ProfileDefaultImage,
+    username: review.nickname,
+    rating: review.rating,
+    date: new Date(review.created_at).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\./g, '.'),
+    content: review.content
+  })) : [];
 
-  const timeSlots = [
-    '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00', '18:00'
-  ];
+
 
   // 달력 관련 함수들
   const getDaysInMonth = (date: Date) => {
@@ -197,7 +253,107 @@ const ExpertDetailPage: React.FC = () => {
 
   const handleDateClick = (date: Date) => {
     setSelectedCalendarDate(date);
-    setSelectedDate(formatDate(date));
+    const formattedDate = formatDate(date);
+    setSelectedDate(formattedDate);
+    
+    // 날짜 선택 시 예약 가능 시간 조회
+    if (id) {
+      fetchAvailableTimes(id, formattedDate);
+    }
+  };
+
+  // 예약 가능 시간 조회 API
+    const fetchAvailableTimes = async (advisorId: string, date: string) => {
+    try {
+      setAvailableTimesLoading(true);
+      setAvailableTimesError(null);
+      
+      // 현재 사용자 정보 확인
+      const userInfo = AuthService.getUserInfo();
+      console.log('Current user info:', userInfo);
+      console.log('Current user role:', userInfo?.role);
+      
+      // 토큰 상태 확인
+      const currentToken = AuthService.getAccessToken();
+      console.log('Current token exists:', !!currentToken);
+      
+      if (currentToken) {
+        // JWT 토큰 디코딩하여 만료 시간 확인
+        try {
+          const base64Url = currentToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(window.atob(base64));
+          
+          const currentTime = Math.floor(Date.now() / 1000); // 현재 시간 (초)
+          const expirationTime = payload.exp; // 토큰 만료 시간
+          
+          console.log('Token expiration check:');
+          console.log('- Current time:', new Date(currentTime * 1000).toISOString());
+          console.log('- Expiration time:', new Date(expirationTime * 1000).toISOString());
+          console.log('- Time until expiration:', expirationTime - currentTime, 'seconds');
+          console.log('- Is expired:', currentTime >= expirationTime);
+          
+          if (currentTime >= expirationTime) {
+            console.log('Token is expired, attempting refresh...');
+            try {
+              await AuthService.refreshToken();
+              console.log('Token refreshed successfully after expiration');
+            } catch (error) {
+              console.log('Token refresh failed after expiration:', error);
+              throw new Error('토큰이 만료되었습니다. 다시 로그인해주세요.');
+            }
+          } else if (expirationTime - currentTime <= 180) { // 3분 이내 만료
+            console.log('Token expires soon, attempting refresh...');
+            try {
+              await AuthService.refreshToken();
+              console.log('Token refreshed successfully before expiration');
+            } catch (error) {
+              console.log('Token refresh failed before expiration:', error);
+            }
+          } else {
+            console.log('Token is still valid');
+          }
+        } catch (error) {
+          console.log('Error decoding token:', error);
+        }
+      } else {
+        console.log('No token found');
+        throw new Error('로그인이 필요한 서비스입니다.');
+      }
+      
+      const response = await AuthService.authenticatedRequest(
+        `/api/advisors/${advisorId}/available-times?date=${date}`
+      );
+      
+      if (response.status === 401) {
+        throw new Error('로그인이 필요한 서비스입니다.');
+      }
+      
+      if (response.status === 403) {
+        throw new Error('일반 사용자만 사용 가능한 서비스입니다.');
+      }
+      
+      if (response.status === 404) {
+        throw new Error('존재하지 않은 전문가입니다.');
+      }
+      
+      if (!response.ok) {
+        throw new Error('예약 가능 시간 조회에 실패했습니다.');
+      }
+      
+      const data: ApiAvailableTimesApiResponse = await response.json();
+      if (data.isSuccess) {
+        setAvailableTimes(data.result.time_slots);
+      } else {
+        throw new Error(data.message || '예약 가능 시간 조회에 실패했습니다.');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '예약 가능 시간 조회 중 오류가 발생했습니다.';
+      setAvailableTimesError(errorMessage);
+      console.error('Error fetching available times:', err);
+    } finally {
+      setAvailableTimesLoading(false);
+    }
   };
 
   const handlePrevMonth = () => {
@@ -231,6 +387,10 @@ const ExpertDetailPage: React.FC = () => {
       ...reservationForm,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleLoadMoreReviews = () => {
+    setDisplayedReviews(prev => prev + 3);
   };
 
   // 달력 렌더링
@@ -288,6 +448,65 @@ const ExpertDetailPage: React.FC = () => {
     return days;
   };
 
+  // Loading 상태
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <NewNavbar userType="general" onUserTypeChange={() => {}} />
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="mt-4 text-gray-600">전문가 정보를 불러오는 중...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error 상태
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white">
+        <NewNavbar userType="general" onUserTypeChange={() => {}} />
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">오류가 발생했습니다</h3>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+              >
+                다시 시도
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 데이터가 없는 경우
+  if (!expert) {
+    return (
+      <div className="min-h-screen bg-white">
+        <NewNavbar userType="general" onUserTypeChange={() => {}} />
+        <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🔍</div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">전문가 정보를 찾을 수 없습니다</h3>
+              <p className="text-gray-600 mb-4">요청하신 전문가 정보가 존재하지 않습니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <NewNavbar userType="general" onUserTypeChange={() => {}} />
@@ -305,7 +524,7 @@ const ExpertDetailPage: React.FC = () => {
                     {expert.name}
                   </h1>
                   <h3 className='text-left text-l font-semibold text-blue-500 mb-2'>{expert.title}</h3>
-                  <h3 className='text-left text-l font-medium text-gray-400 mb-2'>/  010-0000-0000</h3>
+                  <h3 className='text-left text-l font-medium text-gray-400 mb-2'>/  {expertData?.contact || '010-0000-0000'}</h3>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center mb-2 ml-4">
                       <div className="flex text-yellow-400">
@@ -377,16 +596,16 @@ const ExpertDetailPage: React.FC = () => {
             {/* Reviews */}
             <section className="mt-8">
               <div className="flex flex-row items-end space-x-3 mb-4">
-                <h2 className="text-left text-2xl font-bold text-gray-900">리뷰</h2>
+                <h2 className="text-left text-2xl font-bold text-gray-900">상담 후기</h2>
                 <h3 className="text-left text-gray-500 text-sm">Reviews</h3>
               </div>
               <div className="space-y-6">
-                {reviews.map((review) => (
+                {reviews.slice(0, displayedReviews).map((review) => (
                   <div key={review.id} className="py-6">
                     <div className="flex items-center mb-3">
-                      <span className="text-2xl mr-3">{review.avatar}</span>
-                      <div>
-                        <div className="font-medium text-gray-90 font-semibold">{review.username}</div>
+                      <img src={review.avatar} alt={`${review.username}의 프로필 사진`} className='w-10 h-10 rounded-full'/>
+                      <div className='ml-3'>
+                        <div className="text-left font-medium text-gray-90 font-semibold">{review.username} ⭐ {review.rating}</div>
                         <div className="text-left text-sm text-gray-500">{review.date}</div>
                       </div>
                     </div>
@@ -394,9 +613,14 @@ const ExpertDetailPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <button className="mt-4 text-gray-600 bg-gray-200 py-3 px-6 rounded-full hover:text-blue-700 hover:bg-blue-200 hover:font-semibold font-medium">
-                더보기
-              </button>
+              {displayedReviews < reviews.length && (
+                <button 
+                  onClick={handleLoadMoreReviews}
+                  className="mt-4 text-gray-600 bg-gray-100 py-3 px-6 rounded-full hover:text-gray-700 hover:bg-gray-200 hover:font-semibold font-medium transition-colors"
+                >
+                  더보기
+                </button>
+              )}
             </section>
           </div>
 
@@ -412,28 +636,41 @@ const ExpertDetailPage: React.FC = () => {
                   </li>
                   <li className="flex items-start">
                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                    <span>예약 후 24시간 내에 확정 및 줌 미팅 정보를 보내드립니다.</span>
+                    <span>예약 후 즉시 예약이 확정되며 예약 정보는 마이페이지의 내 상담 내역에서 확인할 수 있습니다.</span>
                   </li>
                   <li className="flex items-start">
                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                    <span>방해 행위(녹화 등) 시 전문가가 상담을 중단할 수 있습니다.</span>
+                    <span>방해 행위(욕설 등) 시 전문가가 상담을 중단할 수 있습니다.</span>
                   </li>
                 </ul>
               </div>
               
-              <button
-                onClick={() => {
-                  setReservationForm({
-                    name: userInfo.name,
-                    phone: userInfo.contact,
-                    requestDetails: ''
-                  });
-                  setShowReservationModal(true);
-                }}
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg"
-              >
-                예약하기
-              </button>
+                                                           <button
+                  onClick={() => {
+                    // 토큰 확인
+                    const token = AuthService.getAccessToken();
+                    if (!token) {
+                      alert('로그인이 필요한 서비스입니다.');
+                      navigate('/login');
+                      return;
+                    }
+                    
+                    setReservationForm({
+                      name: userInfo.name,
+                      phone: userInfo.contact,
+                      requestDetails: ''
+                    });
+                    setSelectedDate('');
+                    setSelectedTime('');
+                    setSelectedCalendarDate(null);
+                    setAvailableTimes([]);
+                    setAvailableTimesError(null);
+                    setShowReservationModal(true);
+                  }}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg"
+                >
+                  예약하기
+                </button>
             </div>
           </div>
         </div>
@@ -534,28 +771,65 @@ const ExpertDetailPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 시간</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {timeSlots.map((time) => (
-                      <button
-                        key={time}
-                        type="button"
-                        onClick={() => setSelectedTime(time)}
-                        className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                          selectedTime === time
-                            ? 'bg-blue-500 text-white border-blue-500'
-                            : time === '09:00' || time === '12:00' || time === '18:00'
-                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
-                        }`}
-                        disabled={time === '09:00' || time === '12:00' || time === '18:00'}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                                 <div>
+                   <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 시간</label>
+                   
+                   {/* 에러 메시지 표시 */}
+                   {availableTimesError && (
+                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                       <p className="text-red-600 text-sm">{availableTimesError}</p>
+                     </div>
+                   )}
+                   
+                   {/* 로딩 상태 */}
+                   {availableTimesLoading && (
+                     <div className="mb-4 flex items-center justify-center py-4">
+                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                       <span className="ml-2 text-sm text-gray-600">예약 가능 시간을 불러오는 중...</span>
+                     </div>
+                   )}
+                   
+                   {/* 시간 슬롯 표시 */}
+                   {!availableTimesLoading && !availableTimesError && selectedDate && (
+                     <div className="grid grid-cols-3 gap-2">
+                       {availableTimes.length > 0 ? (
+                         availableTimes.map((timeSlot) => {
+                           const isDisabled = !timeSlot.is_available || timeSlot.is_reserved || timeSlot.is_blocked;
+                           const isSelected = selectedTime === timeSlot.time;
+                           
+                           return (
+                             <button
+                               key={timeSlot.time}
+                               type="button"
+                               onClick={() => !isDisabled && setSelectedTime(timeSlot.time)}
+                               className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                                 isSelected
+                                   ? 'bg-blue-500 text-white border-blue-500'
+                                   : isDisabled
+                                   ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                   : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
+                               }`}
+                               disabled={isDisabled}
+                             >
+                               {timeSlot.time}
+                             </button>
+                           );
+                         })
+                       ) : (
+                         <div className="col-span-3 text-center py-4 text-gray-500 text-sm border border-red-500 rounded-lg p-3 bg-red-50 text-red-500">
+                           선택한 날짜에 예약 가능한 시간이 없습니다.
+                         </div>
+                       )}
+                     </div>
+                   )}
+                   
+                   {/* 날짜를 선택하지 않은 경우 안내 메시지 */}
+                   {!selectedDate && !availableTimesLoading && !availableTimesError && (
+                     <div className="text-center py-4 text-sm border border-blue-500 rounded-lg p-3 bg-blue-50 text-blue-500">
+                       날짜 선택 시 예약 가능한 시간을 확인할 수 있습니다.
+                     </div>
+                   )}
+                 </div>
 
                 <div>
                   <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 요청 사항</label>

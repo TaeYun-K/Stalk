@@ -20,8 +20,6 @@ import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
-import { url } from "inspector";
-import { error } from "console";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -89,6 +87,7 @@ const VideoConsultationPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
   const [consultationStartTime] = useState<Date>(new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
@@ -127,37 +126,90 @@ const VideoConsultationPage: React.FC = () => {
 
   // 사용자 정보 가져오기
   const fetchUserInfo = async () => {
-    try {
-      setIsLoadingUserInfo(true);
-      const userProfile = await AuthService.getUserProfile();
-      setUserInfo(userProfile);
-    } catch (error) {
-      console.error('사용자 정보 조회 실패:', error);
-      // 기본값 설정
-      setUserInfo({
-        name: userRole === 'ADVISOR' ? '김전문가' : '김의뢰인',
-        role: userRole || 'USER',
-        userId: '0',
-        contact: '',
-        email: '',
-        profileImage: ''
-      });
-    } finally {
-      setIsLoadingUserInfo(false);
+  try {
+    console.log('fetchUserInfo called');
+    setIsLoadingUserInfo(true);
+    
+    const userProfile = await AuthService.getUserProfile();
+    console.log('User profile received:', userProfile);
+    
+    setUserInfo(userProfile);
+  } catch (error) {
+    console.error('사용자 정보 조회 실패:', error);
+    
+    // 실패 시에도 기본 구조는 설정 (OpenVidu 초기화를 위해)
+    setUserInfo({
+      name: '', // 빈 문자열로 설정하여 기본값 로직이 작동하도록
+      role: userRole || 'USER',
+      userId: '0',
+      contact: '',
+      email: '',
+      profileImage: ''
+    });
+  } finally {
+    setIsLoadingUserInfo(false);
+    console.log('fetchUserInfo completed');
     }
   };
 
-  // 컴포넌트 마운트 시 사용자 정보 가져오기
   useEffect(() => {
-    fetchUserInfo();
-  }, []);
+  console.log('Component mounted, checking conditions for initialization...');
+  console.log('ovToken exists:', !!ovToken);
+  console.log('consultationId:', consultationId);
+  console.log('userRole:', userRole);
 
-  // 사용자 정보가 로드된 후 OpenVidu 초기화
+  // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
+  if (ovToken && consultationId) {
+    const initializeConsultation = async () => {
+      try {
+        console.log('Starting consultation initialization...');
+        
+        // 1. 미디어 권한 확인
+        const hasPermissions = await checkMediaPermissions();
+        if (!hasPermissions) {
+          console.warn('Media permissions denied, cannot proceed');
+          return;
+        }
+
+        // 2. 사용자 정보 가져오기
+        console.log('Fetching user info...');
+        await fetchUserInfo();
+
+        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
+        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
+        
+      } catch (error) {
+        console.error('Error during consultation initialization:', error);
+        alert('상담 초기화 중 오류가 발생했습니다.');
+      }
+    };
+
+    initializeConsultation();
+  } else {
+    console.warn('Missing required data for consultation:', {
+      hasToken: !!ovToken,
+      hasConsultationId: !!consultationId
+    });
+  }
+  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
+
+  // 사용자 정보 로딩 완료 후 OpenVidu 초기화
   useEffect(() => {
-    if (!isLoadingUserInfo && userInfo) {
+    console.log('User info state changed:', {
+      isLoadingUserInfo,
+      hasUserInfo: !!userInfo,
+      hasToken: !!ovToken,
+      hasSession: !!session
+    });
+
+    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
+    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
+      console.log('All conditions met, initializing OpenVidu...');
       initializeOpenVidu();
     }
-  }, [isLoadingUserInfo, userInfo]);
+  }, [isLoadingUserInfo, userInfo, ovToken, session]);
+
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -177,51 +229,79 @@ const VideoConsultationPage: React.FC = () => {
       .padStart(2, "0")}`;
   };
 
+  // 1. OpenVidu 초기화 함수
   const initializeOpenVidu = async () => {
+    if (session || ov) {
+      console.warn('OpenVidu already initialized or in progress');
+      return;
+    }
+
+    // 필수 조건 재확인
+    if (!ovToken) {
+      console.error('No OpenVidu token available');
+      alert('상담 토큰이 없습니다. 다시 입장해주세요.');
+      return;
+    }
+
+    if (!userInfo) {
+      console.error('No user info available');
+      return;
+    }
+
     try {
-      const openVidu = new OpenVidu()
+      console.log('Initializing OpenVidu...');
+      const openVidu = new OpenVidu();
       setOv(openVidu);
       
-      // If we have session ID and token, connect to the session
       if (ovToken) {
         const session = openVidu.initSession();
+  
+        // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
+        session.on('streamCreated', (event) => {
+          const subscriber = session.subscribe(event.stream, undefined);
+          
+          setSubscribers(prev => {
+            const newSubscribers = [...prev, subscriber];
+            setTimeout(() => {
+              attachSubscriberVideo(subscriber, newSubscribers.length - 1); // optional
+            }, 100);
+            return newSubscribers;
+          });
 
+          // 이후에 발생할 수 있는 이벤트만 로그로 남김
+          subscriber.on('streamPlaying', () => {
+            console.log('Subscriber stream playing:', subscriber.stream.streamId);
+          });
+        });
+        
+        session.on('streamDestroyed', (event) => {
+          console.log('Stream destroyed:', event.stream.streamId);
+          setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
+        });
+  
+        session.on('connectionCreated', (event) => {
+          console.log('Connection created:', event.connection.connectionId);
+        });
+  
+        session.on('connectionDestroyed', (event) => {
+          console.log('Connection destroyed:', event.connection.connectionId);
+        });
+  
         // 사용자 정보를 포함한 연결 데이터 준비
         const connectionData = {
           role: userRole || 'USER',
           userData: userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인'),
           userId: userInfo?.userId || '0'
         };
-
-        // Connect to the session with user data
+  
+        // 세션에 연결
+        console.log('Connecting to session with token:', ovToken.substring(0, 20) + '...');
         await session.connect(ovToken, JSON.stringify(connectionData));
         setSession(session);
+        console.log('Connected to session successfully');
         
-        // Subscribe to session events
-        session.on('streamCreated', (event) => {
-          const subscriber = session.subscribe(event.stream, undefined);
-          setSubscribers(prev => [...prev, subscriber]);
-        });
-        
-        session.on('streamDestroyed', (event) => {
-          setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
-        });
-        
-        // Start publishing after connecting
-        if (openVidu) {
-          const publisher = await openVidu.initPublisherAsync(undefined, {
-            audioSource: undefined,
-            videoSource: undefined,
-            publishAudio: true,
-            publishVideo: true,
-            ...DEFAULT_VIDEO_CONFIG,
-          });
-          
-          await session.publish(publisher);
-          setPublisher(publisher);
-          setIsVideoEnabled(true);
-          setIsAudioEnabled(true);
-        }
+        // Publisher 생성 및 발행
+        await createAndPublishStream(openVidu, session);
       }
     } catch (error) {
       console.error("Error initializing OpenVidu:", error);
@@ -229,63 +309,123 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  const startMedia = async () => {
-    if (!ov) return;
-    
-    // If already connected to session with publisher, don't reinitialize
-    if (session && publisher) {
-      return;
-    }
-
+  // 2. Publisher 생성 함수 분리
+  const createAndPublishStream = async (openVidu: OpenVidu, session: Session) => {
     try {
-      if (publisher) {
-        const stream = publisher.stream?.getMediaStream();
-        if (stream) {
-          stream.getTracks().forEach((track) => track.stop());
-        }
-      }
-
-      const newPublisher = await ov.initPublisherAsync(undefined, {
-        videoSource: undefined,
+      const publisher = await openVidu.initPublisherAsync(undefined, {
         audioSource: undefined,
+        videoSource: undefined,
         publishAudio: true,
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
-
-      setPublisher(newPublisher);
       
-      // If we have a session, publish to it
-      if (session) {
-        await session.publish(newPublisher);
-      }
+      // Publisher 스트림이 준비되면 발행
+      publisher.on('streamCreated', () => {
+        console.log('Publisher stream created');
+      });
 
-      const mediaStream = newPublisher.stream.getMediaStream();
-      setLocalStream(mediaStream);
+      publisher.on('streamPlaying', () => {
+        console.log('Publisher stream playing');
+        // 로컬 비디오 요소에 연결
+        setTimeout(() => attachLocalVideo(publisher), 100);
+      });
 
-      setTimeout(() => {
-        const videoElement = document.getElementById(
-          "local-video-element"
-        ) as HTMLVideoElement;
-        if (videoElement) {
-          videoElement.srcObject = mediaStream;
-        }
-      }, 100);
-
+      console.log('Publishing stream...');
+      await session.publish(publisher);
+      setPublisher(publisher);
       setIsVideoEnabled(true);
       setIsAudioEnabled(true);
+      
+      console.log('Publisher created and published');
+      
     } catch (error) {
-      console.error("Error starting media:", error);
-      alert(
-        "카메라 또는 마이크에 접근할 수 없습니다. 브라우저 권한을 확인해주세요."
-      );
+      console.error("Error creating publisher:", error);
+      throw error;
     }
   };
 
-  const leaveSession = async (): Promise<void> => {
+  // 3. 비디오 요소 연결 함수들 개선
+  const attachLocalVideo = (publisher: Publisher) => {
+    console.log('Attaching local video...');
+    const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
+    if (videoElement && publisher.stream) {
+      const mediaStream = publisher.stream.getMediaStream();
+      if (mediaStream) {
+        videoElement.srcObject = mediaStream;
+        videoElement.play().catch(e => console.error('Error playing local video:', e));
+        console.log('Local video attached successfully');
+      } else {
+        console.warn('No media stream available for local video');
+      }
+    } else {
+      console.warn('Local video element not found or publisher stream not ready');
+    }
+  };
+
+  // 4. 구독자 비디오 연결 함수
+  const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
+    // 메인 비디오 연결
+    const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
+    if (videoElement && subscriber.stream) {
+      const mediaStream = subscriber.stream.getMediaStream();
+      if (mediaStream) {
+        videoElement.srcObject = mediaStream;
+        videoElement.play().catch(console.error);
+        console.log(`Subscriber video ${index} attached`);
+      } else {
+        console.warn('No media stream available for subscriber video');
+      }
+    }
+    // 미니 비디오 연결
+    const miniVideoElement = document.getElementById(`subscriber-mini-video-${index}`) as HTMLVideoElement;
+    if (miniVideoElement && subscriber.stream) {
+      const mediaStream = subscriber.stream.getMediaStream();
+      if (mediaStream) {
+        miniVideoElement.srcObject = mediaStream;
+        miniVideoElement.play().catch(console.error);
+        console.log(`Subscriber mini video ${index} attached`);
+      }
+      else{
+        console.warn('No media stream available for subscriber mini video');
+      }
+    }
+  };
+
+  // 5. 미디어 시작 함수
+  const startMedia = async () => {
+    console.log('startMedia called');
+    if (!ov || !session) {
+      console.warn('OpenVidu or session not initialized');
+      alert('연결이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    
+    // 이미 publisher가 있다면 재시작하지 않음
+    if (publisher) {
+      console.log('Publisher already exists');
+      return;
+    }
+  
     try {
-      // 1) 백엔드에 세션 종료 DELETE 요청
-      await axios.delete(`/api/consultations/${consultationId}/session`);
+      await createAndPublishStream(ov, session);
+    } catch (error) {
+      console.error("Error starting media:", error);
+      alert("카메라 또는 마이크에 접근할 수 없습니다. 브라우저 권한을 확인해주세요.");
+    }
+  };
+
+  // 6. 상담 종료 함수
+  const leaveSession = async (): Promise<void> => {
+
+    const token = AuthService.getAccessToken();
+    try {
+      // 1) 백엔드에 세션 종료 POST 요청
+      await axios.post(`/api/consultations/${consultationId}/session/close`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
     } catch (error) {
       console.error('상담 종료 API 실패:', error);
     } finally {
@@ -305,7 +445,6 @@ const VideoConsultationPage: React.FC = () => {
             .getMediaStream()
             .getTracks()
             .forEach(track => track.stop());
-          publisher.destroy();
         } catch (err) {
           console.error('퍼블리셔 정리 중 오류:', err);
         }
@@ -335,124 +474,62 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
+  // 7. 비디오 및 오디오 토글 함수들
   const toggleVideo = async () => {
-    if (!ov) return;
-
+    console.log('toggleVideo called, current state:', isVideoEnabled);
+    if (!publisher) {
+      console.warn('Publisher not available');
+      return;
+    }
+  
     const newVideoState = !isVideoEnabled;
-
+  
     try {
-      if (!newVideoState) {
-        if (publisher) {
-          publisher.publishVideo(false);
-
-          const stream = publisher.stream?.getMediaStream();
-          if (stream) {
-            stream.getVideoTracks().forEach((track) => {
-              track.stop();
-              stream.removeTrack(track);
-            });
-          }
-        }
+      if (newVideoState) {
+        // 비디오 켜기
+        await publisher.publishVideo(true);
+        console.log('Video enabled');
       } else {
-        if (publisher) {
-          const currentStream = publisher.stream?.getMediaStream();
-          if (currentStream) {
-            currentStream.getTracks().forEach((track) => track.stop());
-          }
-        }
-
-        const newPublisher = await ov.initPublisherAsync(undefined, {
-          videoSource: undefined,
-          audioSource: isAudioEnabled ? undefined : false,
-          publishAudio: isAudioEnabled,
-          publishVideo: true,
-          ...DEFAULT_VIDEO_CONFIG,
-        });
-
-        setPublisher(newPublisher);
-        const mediaStream = newPublisher.stream.getMediaStream();
-        setLocalStream(mediaStream);
-
-        setTimeout(() => {
-          const videoElement = document.getElementById(
-            "local-video-element"
-          ) as HTMLVideoElement;
-          if (videoElement) {
-            videoElement.srcObject = mediaStream;
-          }
-        }, 100);
+        // 비디오 끄기
+        await publisher.publishVideo(false);
+        console.log('Video disabled');
       }
-
+  
       setIsVideoEnabled(newVideoState);
     } catch (error) {
       console.error("Error toggling video:", error);
-      alert(
-        newVideoState
-          ? "카메라를 시작할 수 없습니다."
-          : "카메라를 중지할 수 없습니다."
-      );
+      alert(newVideoState ? "카메라를 시작할 수 없습니다." : "카메라를 중지할 수 없습니다.");
     }
   };
 
   const toggleAudio = async () => {
-    if (!ov) return;
-
+    console.log('toggleAudio called, current state:', isAudioEnabled);
+    if (!publisher) {
+      console.warn('Publisher not available');
+      return;
+    }
+  
     const newAudioState = !isAudioEnabled;
-
+  
     try {
-      if (!newAudioState) {
-        if (publisher) {
-          publisher.publishAudio(false);
-
-          const stream = publisher.stream?.getMediaStream();
-          if (stream) {
-            stream.getAudioTracks().forEach((track) => {
-              track.stop();
-              stream.removeTrack(track);
-            });
-          }
-        }
+      if (newAudioState) {
+        // 오디오 켜기
+        await publisher.publishAudio(true);
+        console.log('Audio enabled');
       } else {
-        if (publisher) {
-          const currentStream = publisher.stream?.getMediaStream();
-          if (currentStream) {
-            currentStream.getTracks().forEach((track) => track.stop());
-          }
-        }
-
-        const newPublisher = await ov.initPublisherAsync(undefined, {
-          videoSource: isVideoEnabled ? undefined : false,
-          audioSource: undefined,
-          publishAudio: true,
-          publishVideo: isVideoEnabled,
-          ...DEFAULT_VIDEO_CONFIG,
-        });
-
-        setPublisher(newPublisher);
-        const mediaStream = newPublisher.stream.getMediaStream();
-        setLocalStream(mediaStream);
-
-        setTimeout(() => {
-          const videoElement = document.getElementById(
-            "local-video-element"
-          ) as HTMLVideoElement;
-          if (videoElement) {
-            videoElement.srcObject = mediaStream;
-          }
-        }, 100);
+        // 오디오 끄기
+        await publisher.publishAudio(false);
+        console.log('Audio disabled');
       }
-
+  
       setIsAudioEnabled(newAudioState);
     } catch (error) {
       console.error("Error toggling audio:", error);
-      alert(
-        newAudioState
-          ? "마이크를 시작할 수 없습니다."
-          : "마이크를 중지할 수 없습니다."
-      );
+      alert(newAudioState ? "마이크를 시작할 수 없습니다." : "마이크를 중지할 수 없습니다.");
     }
   };
 
+  // 8. 컴포넌트 언마운트 시 리소스 정리
   useEffect(() => {
     return () => {
       if (localStream) {
@@ -467,6 +544,7 @@ const VideoConsultationPage: React.FC = () => {
     };
   }, []);
 
+  // 로컬 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
     if (publisher) {
       const videoElement = document.getElementById("local-video-element");
@@ -479,22 +557,33 @@ const VideoConsultationPage: React.FC = () => {
 
   // 구독자 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
+    console.log('Subscribers changed, count:', subscribers.length);
     subscribers.forEach((subscriber, index) => {
-      // 메인 비디오 렌더링
-      const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
-      if (videoElement) {
-        const mediaStream = subscriber.stream.getMediaStream();
-        videoElement.srcObject = mediaStream;
-      }
-      
-      // 미니뷰 비디오 렌더링
-      const miniVideoElement = document.getElementById(`subscriber-mini-video-${index}`) as HTMLVideoElement;
-      if (miniVideoElement) {
-        const mediaStream = subscriber.stream.getMediaStream();
-        miniVideoElement.srcObject = mediaStream;
+      // 이미 attachSubscriberVideo가 streamPlaying 이벤트에서 호출되므로
+      // 여기서는 추가 처리만 수행
+      if (subscriber.stream && subscriber.stream.getMediaStream()) {
+        attachSubscriberVideo(subscriber, index);
       }
     });
   }, [subscribers]);
+
+  // 카메라와 마이크 권한 확인 함수
+  const checkMediaPermissions = async () => {
+    try {
+      console.log('Checking media permissions...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      console.log('Media permissions granted');
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error('Media permissions denied:', error);
+      alert('카메라와 마이크 권한이 필요합니다. 브라우저 설정을 확인해주세요.');
+      return false;
+    }
+  };
 
   const toggleScreenShare = async () => {
     if (!isScreenSharing && ov && session) {
@@ -531,7 +620,64 @@ const VideoConsultationPage: React.FC = () => {
     if (isLoadingUserInfo) {
       return '로딩 중...';
     }
-    return userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인');
+
+    if (userInfo?.name) {
+      return userInfo.name;
+    }
+
+    // 이름이 없을 경우에만 역할 기반 기본값 사용
+    return userRole === 'ADVISOR' ? '전문가' : '의뢰인';
+  };
+
+  // 녹화 시작
+  const handleStartRecording = async () => {
+    if (!ovSessionId || !consultationId) {
+      alert("세션 정보가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
+      setRecordingId(ovSessionId);
+      setIsRecording(true);
+    } catch (e) {
+      alert("녹화 시작에 실패했습니다.");
+      console.error(e);
+    }
+  };
+
+  // 녹화 종료
+  const handleStopRecording = async () => {
+    if (!recordingId) {
+      alert("녹화 ID가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/stop/${recordingId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setIsRecording(false);
+      setRecordingId(null);
+    } catch (e) {
+      alert("녹화 종료에 실패했습니다.");
+      console.error(e);
+    }
   };
 
   return (
@@ -562,7 +708,7 @@ const VideoConsultationPage: React.FC = () => {
             상담 ID: {consultationId || "DEMO-001"}
           </span>
           <button
-            onClick={() => setIsRecording(!isRecording)}
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
             title={isRecording ? "녹화 중지" : "녹화 시작"}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               isRecording
