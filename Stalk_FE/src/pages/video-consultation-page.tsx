@@ -126,37 +126,90 @@ const VideoConsultationPage: React.FC = () => {
 
   // 사용자 정보 가져오기
   const fetchUserInfo = async () => {
-    try {
-      setIsLoadingUserInfo(true);
-      const userProfile = await AuthService.getUserProfile();
-      setUserInfo(userProfile);
-    } catch (error) {
-      console.error('사용자 정보 조회 실패:', error);
-      // 기본값 설정
-      setUserInfo({
-        name: userRole === 'ADVISOR' ? '김전문가' : '김의뢰인',
-        role: userRole || 'USER',
-        userId: '0',
-        contact: '',
-        email: '',
-        profileImage: ''
-      });
-    } finally {
-      setIsLoadingUserInfo(false);
+  try {
+    console.log('fetchUserInfo called');
+    setIsLoadingUserInfo(true);
+    
+    const userProfile = await AuthService.getUserProfile();
+    console.log('User profile received:', userProfile);
+    
+    setUserInfo(userProfile);
+  } catch (error) {
+    console.error('사용자 정보 조회 실패:', error);
+    
+    // 실패 시에도 기본 구조는 설정 (OpenVidu 초기화를 위해)
+    setUserInfo({
+      name: '', // 빈 문자열로 설정하여 기본값 로직이 작동하도록
+      role: userRole || 'USER',
+      userId: '0',
+      contact: '',
+      email: '',
+      profileImage: ''
+    });
+  } finally {
+    setIsLoadingUserInfo(false);
+    console.log('fetchUserInfo completed');
     }
   };
 
-  // 컴포넌트 마운트 시 사용자 정보 가져오기
   useEffect(() => {
-    fetchUserInfo();
-  }, []);
+  console.log('Component mounted, checking conditions for initialization...');
+  console.log('ovToken exists:', !!ovToken);
+  console.log('consultationId:', consultationId);
+  console.log('userRole:', userRole);
 
-  // 사용자 정보가 로드된 후 OpenVidu 초기화
+  // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
+  if (ovToken && consultationId) {
+    const initializeConsultation = async () => {
+      try {
+        console.log('Starting consultation initialization...');
+        
+        // 1. 미디어 권한 확인
+        const hasPermissions = await checkMediaPermissions();
+        if (!hasPermissions) {
+          console.warn('Media permissions denied, cannot proceed');
+          return;
+        }
+
+        // 2. 사용자 정보 가져오기
+        console.log('Fetching user info...');
+        await fetchUserInfo();
+
+        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
+        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
+        
+      } catch (error) {
+        console.error('Error during consultation initialization:', error);
+        alert('상담 초기화 중 오류가 발생했습니다.');
+      }
+    };
+
+    initializeConsultation();
+  } else {
+    console.warn('Missing required data for consultation:', {
+      hasToken: !!ovToken,
+      hasConsultationId: !!consultationId
+    });
+  }
+  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
+
+  // 사용자 정보 로딩 완료 후 OpenVidu 초기화
   useEffect(() => {
-    if (!isLoadingUserInfo && userInfo) {
+    console.log('User info state changed:', {
+      isLoadingUserInfo,
+      hasUserInfo: !!userInfo,
+      hasToken: !!ovToken,
+      hasSession: !!session
+    });
+
+    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
+    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
+      console.log('All conditions met, initializing OpenVidu...');
       initializeOpenVidu();
     }
-  }, [isLoadingUserInfo, userInfo]);
+  }, [isLoadingUserInfo, userInfo, ovToken, session]);
+
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -178,6 +231,23 @@ const VideoConsultationPage: React.FC = () => {
 
   // 1. OpenVidu 초기화 함수
   const initializeOpenVidu = async () => {
+    if (session || ov) {
+      console.warn('OpenVidu already initialized or in progress');
+      return;
+    }
+
+    // 필수 조건 재확인
+    if (!ovToken) {
+      console.error('No OpenVidu token available');
+      alert('상담 토큰이 없습니다. 다시 입장해주세요.');
+      return;
+    }
+
+    if (!userInfo) {
+      console.error('No user info available');
+      return;
+    }
+
     try {
       console.log('Initializing OpenVidu...');
       const openVidu = new OpenVidu();
@@ -519,18 +589,6 @@ const VideoConsultationPage: React.FC = () => {
       return false;
     }
   };
-
-  // 컴포넌트 마운트 시 미디어 권한 확인 및 사용자 정보 가져오기
-  useEffect(() => {
-    const initializeWithPermissions = async () => {
-      const hasPermissions = await checkMediaPermissions();
-      if (hasPermissions) {
-        fetchUserInfo();
-      }
-    };
-    
-    initializeWithPermissions();
-  }, []);
 
   const toggleScreenShare = async () => {
     if (!isScreenSharing && ov && session) {
