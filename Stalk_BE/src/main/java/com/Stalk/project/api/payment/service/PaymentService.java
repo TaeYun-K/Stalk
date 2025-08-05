@@ -251,15 +251,25 @@ public class PaymentService {
                 throw new BaseException(BaseResponseStatus.PAYMENT_ALREADY_PROCESSED);
             }
 
-            // 4. 토스페이먼츠에 취소 요청
+            // 4. 결제 상태별 처리 분기 ⭐ 핵심 수정 부분
             String paymentKey = consultation.getPaymentKey();
-            if (paymentKey == null) {
-                log.error("결제키가 없음: orderId={}", orderId);
-                throw new BaseException(BaseResponseStatus.PAYMENT_NOT_FOUND);
-            }
+            TossPaymentResponseDto cancelResult = null;
 
-            // 토스페이먼츠 취소 API 호출 (기존 메서드 활용)
-            TossPaymentResponseDto cancelResult = requestPaymentCancel(paymentKey, requestDto, consultation.getAmount());
+            if (paymentKey != null && !"PENDING".equals(consultation.getStatus())) {
+                // 4-1. 실제 결제 완료된 건: 토스페이먼츠 취소 API 호출
+                log.info("실제 결제 취소 요청: orderId={}, paymentKey={}", orderId, paymentKey);
+                cancelResult = requestPaymentCancel(paymentKey, requestDto, consultation.getAmount());
+            } else {
+                // 4-2. 결제 대기 상태 건: DB에서만 취소 처리
+                log.info("결제 대기 상태 취소: orderId={}, status={}", orderId, consultation.getStatus());
+                // 가상의 응답 객체 생성 (토스페이먼츠 호출 없이)
+                cancelResult = TossPaymentResponseDto.builder()
+                    .orderId(orderId)
+                    .status("CANCELED")
+                    .canceledAt(LocalDateTime.now().toString())
+                    .cancelAmount(consultation.getAmount())
+                    .build();
+            }
 
             // 5. DB 업데이트 (consultation_sessions 테이블)
             ConsultationSessionUpdateDto updateDto = ConsultationSessionUpdateDto.builder()
@@ -272,7 +282,7 @@ public class PaymentService {
 
             consultationMapper.updateConsultationStatus(updateDto);
 
-            log.info("결제 취소 완료: orderId={}, userId={}, tossStatus={}",
+            log.info("결제 취소 완료: orderId={}, userId={}, finalStatus={}",
                 orderId, currentUserId, cancelResult.getStatus());
 
             // 6. 응답 생성
