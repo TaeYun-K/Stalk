@@ -9,7 +9,12 @@ import profileFox from '@/assets/images/profiles/Profile_fox.svg';
 import profilePanda from '@/assets/images/profiles/Profile_panda.svg';
 import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
 import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
+import certificationExample from '@/assets/images/dummy/certification_example.svg';
 import ConsultationService from '@/services/consultationService';
+import AuthService from '@/services/authService';
+import ScheduleService from '@/services/scheduleService';
+import AdvisorService from '@/services/advisorService';
+import { ApprovalHistoryResponse, CertificateApprovalRequest } from '@/types';
 
 interface ConsultationItem {
   id: string;
@@ -20,6 +25,17 @@ interface ConsultationItem {
   videoConsultation: string;
   action: string;
 }
+
+// 백엔드 API 응답 타입 정의
+interface UserProfileResponse {
+  userId: string;
+  name: string;
+  contact: string;
+  email: string;
+  profileImage: string;
+  role: 'USER' | 'ADVISOR' | 'ADMIN';
+}
+
 
 
 const MyPage = () => {
@@ -36,6 +52,77 @@ const MyPage = () => {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  // API 관련 상태
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfileResponse | null>(null);
+
+  // 사용자 정보 로드
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // 로그인 상태가 아니면 로드하지 않음
+        if (!AuthService.isLoggedIn()) {
+          setError('로그인이 필요합니다.');
+          return;
+        }
+        
+        const userProfileData = await AuthService.getUserProfile();
+        
+        if (!userProfileData) {
+          throw new Error('사용자 정보를 불러올 수 없습니다.');
+        }
+        
+        // 백엔드 응답 구조에 맞게 데이터 설정
+        const profileData: UserProfileResponse = {
+          userId: userProfileData.userId || '',
+          name: userProfileData.name || '',
+          contact: userProfileData.contact || '',
+          email: userProfileData.email || '',
+          profileImage: userProfileData.profileImage || 'default',
+          role: userProfileData.role || 'USER'
+        };
+        
+        setUserProfile(profileData);
+        
+        // 폼 데이터 업데이트
+        setEditInfoForm({
+          name: profileData.name,
+          contact: profileData.contact,
+          email: profileData.email
+        });
+        
+        // 프로필 폼 업데이트
+        setProfileForm(prev => ({
+          ...prev,
+          nickname: profileData.name,
+          selectedAvatar: profileData.profileImage || 'fox'
+        }));
+        
+      } catch (err) {
+        console.error('사용자 정보 로드 실패:', err);
+        const errorMessage = err instanceof Error ? err.message : '사용자 정보를 불러올 수 없습니다.';
+        setError(errorMessage);
+        
+        // 네트워크 에러인 경우에만 기본값 설정
+        if (err instanceof Error && err.message.includes('network')) {
+          setEditInfoForm({
+            name: userInfo?.userName || '',
+            contact: '',
+            email: ''
+          });
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserInfo();
+  }, [userInfo]);
   
   // 스케줄 관리 상태들
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -45,8 +132,46 @@ const MyPage = () => {
   // 상담일지 관련 상태
   const [selectedConsultation, setSelectedConsultation] = useState<ConsultationItem | null>(null);
   
-  // 사용자 역할에 따른 전문가 여부 확인
-  const isExpert = userInfo?.role === 'ADVISOR';
+  // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
+  const isExpert = userProfile?.role === 'ADVISOR';
+  
+  // 날짜 선택 시 기존 스케줄 데이터 로드
+  useEffect(() => {
+    if (selectedScheduleDate && isExpert) {
+      const loadExistingSchedule = async () => {
+        try {
+          const dateStr = selectedScheduleDate.toISOString().split('T')[0];
+          const blockedTimes = await ScheduleService.getBlockedTimes(dateStr);
+          
+          // 차단된 시간을 운영 시간으로 변환 (차단되지 않은 시간 = 운영 시간)
+          const allHours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+          const operatingHours = allHours.filter(hour => !blockedTimes.includes(hour));
+          
+          const dateKey = formatDateKey(selectedScheduleDate);
+          setScheduleData(prev => ({
+            ...prev,
+            [dateKey]: {
+              operating: operatingHours,
+              isRestDay: false // 휴무일은 별도 처리 필요
+            }
+          }));
+        } catch (error) {
+          console.error('기존 스케줄 로드 실패:', error);
+          // 에러 시 기본 운영 시간으로 초기화 (9시~20시)
+          const dateKey = formatDateKey(selectedScheduleDate);
+          setScheduleData(prev => ({
+            ...prev,
+            [dateKey]: {
+              operating: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'],
+              isRestDay: false
+            }
+          }));
+        }
+      };
+      
+      loadExistingSchedule();
+    }
+  }, [selectedScheduleDate, isExpert]);
   
   // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -63,9 +188,9 @@ const MyPage = () => {
   });
   
   const [editInfoForm, setEditInfoForm] = useState({
-    name: userInfo?.userName || '',
-    contact: '010-0000-0000', // 기본값 설정
-    email: 'ssafy@samsung.com' // 기본값 설정
+    name: '',
+    contact: '',
+    email: ''
   });
   
   const [profileForm, setProfileForm] = useState({
@@ -104,6 +229,16 @@ const MyPage = () => {
         time: '17:00',
         content: '입문 투자 상담',
         expert: '김범주',
+        videoConsultation: '상담 입장',
+        action: '취소 요청'
+      },
+
+      {
+        id: '2',   
+        date: '2025. 08. 04.',
+        time: '17:00',
+        content: 'AMD 30만원 가자',
+        expert: '김태윤',
         videoConsultation: '상담 입장',
         action: '취소 요청'
       }
@@ -182,6 +317,15 @@ const MyPage = () => {
     return selectedAvatar ? selectedAvatar.image : profileDefault;
   };
 
+  // 백엔드에서 받은 프로필 이미지 표시
+  const getProfileImage = () => {
+    if (userProfile?.profileImage) {
+      const avatar = avatarOptions.find(avatar => avatar.id === userProfile.profileImage);
+      return avatar ? avatar.image : profileDefault;
+    }
+    return getSelectedProfileImage();
+  };
+
   // 스케줄 관리 관련 함수들
   const operatingHours = [
     '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', 
@@ -243,9 +387,33 @@ const MyPage = () => {
     });
   };
 
-  const saveSchedule = () => {
-    // 여기서 실제 API 호출하여 스케줄 저장
-    alert('스케줄이 저장되었습니다.');
+  const saveSchedule = async () => {
+    if (!selectedScheduleDate) {
+      alert('날짜를 선택해주세요.');
+      return;
+    }
+    
+    try {
+      const dateKey = formatDateKey(selectedScheduleDate);
+      const schedule = scheduleData[dateKey];
+      
+      if (!schedule) {
+        alert('저장할 스케줄이 없습니다.');
+        return;
+      }
+      
+      // 운영 시간을 차단 시간으로 변환 (운영하지 않는 시간 = 차단 시간)
+      const allHours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+      const blockedTimes = allHours.filter(hour => !schedule.operating.includes(hour));
+      
+      const dateStr = selectedScheduleDate.toISOString().split('T')[0];
+      await ScheduleService.updateBlockedTimes(dateStr, blockedTimes);
+      
+      alert('스케줄이 저장되었습니다.');
+    } catch (error) {
+      console.error('스케줄 저장 실패:', error);
+      alert('스케줄 저장에 실패했습니다.');
+    }
   };
 
   // 상담일지 관련 함수들
@@ -260,17 +428,31 @@ const MyPage = () => {
   };
 
   // 상담 입장 처리
+  const auth = useAuth();
+  
   const handleEnterConsultation = async (consultationItem: ConsultationItem) => {
     try {
       const consultationId = consultationItem.id;
+      
+      // JWT 토큰 확인 로그
+      console.log('🔑 상담방 입장 시도 - consultationId:', consultationId);
+      const currentToken = auth.getAccessToken();
+      console.log('🔑 현재 JWT 토큰 상태:', currentToken ? '있음' : '없음');
+      if (currentToken) {
+        console.log('🔑 JWT 토큰 길이:', currentToken.length);
+        console.log('🔑 JWT 토큰 전체:', currentToken);
+      } else {
+        console.error('❌ JWT 토큰이 없습니다!');
+      }
 
-      const sessionData = await ConsultationService.createSessionToken(consultationId);
+      const { sessionId, token } = await ConsultationService.createSessionToken(consultationId, auth);
+
       navigate( // parameter 여러개 넘기기
-        `/video-consultation/${sessionData.sessionId}`,
+        `/video-consultation/${sessionId}`,
         {
           state: {
-            sessionId : sessionData.sessionId,
-            connectionUrl: sessionData.token,
+            sessionId : sessionId,
+            connectionUrl: token,
             consultationId
           }
         }
@@ -343,6 +525,63 @@ const MyPage = () => {
     return days;
   };
 
+  const [certificates, setCertificates] = useState<ApprovalHistoryResponse[]>([]);
+  const [certLoading, setCertLoading] = useState(true);
+  const [showCertModal, setShowCertModal] = useState(false);
+  const [certForm, setCertForm] = useState<CertificateApprovalRequest>({
+    certificateName: '',
+    certificateFileSn: '',
+    birth: '',
+    certificateFileNumber: ''
+  });
+  const [certSubmitting, setCertSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (userProfile?.role === 'ADVISOR') {
+      setCertLoading(true);
+      AdvisorService.getApprovalHistory()
+        .then((res) => {
+          setCertificates(res.content.filter((c) => c.status === 'APPROVED'));
+        })
+        .finally(() => setCertLoading(false));
+    }
+  }, [userProfile]);
+
+  // 자격증 이름을 한글로 변환하는 함수
+  const getCertificateDisplayName = (certificateName: string): string => {
+    const certificateMap: { [key: string]: string } = {
+      'financial_advisor': '금융투자상담사',
+      'securities_analyst': '증권분석사',
+      'cfa': 'CFA',
+      'cpa': 'CPA'
+    };
+    return certificateMap[certificateName] || certificateName;
+  };
+
+  const handleCertSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCertSubmitting(true);
+    
+    try {
+      await AdvisorService.requestCertificateApproval(certForm);
+      alert('자격증 승인 요청이 접수되었습니다.');
+      setShowCertModal(false);
+      setCertForm({
+        certificateName: '',
+        certificateFileSn: '',
+        birth: '',
+        certificateFileNumber: ''
+      });
+      // 자격증 목록 새로고침
+      const res = await AdvisorService.getApprovalHistory();
+      setCertificates(res.content.filter((c) => c.status === 'APPROVED'));
+      } catch {
+    alert('자격증 승인 요청에 실패했습니다.');
+  } finally {
+      setCertSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <NewNavbar 
@@ -384,51 +623,102 @@ const MyPage = () => {
                       <button 
                         onClick={() => setShowPasswordModal(true)}
                         className="text-blue-600 hover:text-blue-700 font-medium"
+                        disabled={isLoading}
                       >
                         비밀번호 변경
                       </button>
                       <button 
-                        onClick={() => setShowEditInfoModal(true)}
+                        onClick={() => {
+                          // 현재 로드된 사용자 정보로 모달 폼 초기화
+                          setEditInfoForm({
+                            name: editInfoForm.name,
+                            contact: editInfoForm.contact,
+                            email: editInfoForm.email
+                          });
+                          setShowEditInfoModal(true);
+                        }}
                         className="text-blue-600 hover:text-blue-700 font-medium"
+                        disabled={isLoading}
                       >
                         정보 수정
                       </button>
                     </div>
                   </div>
                   
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">아이디</span>
-                      <span className="text-gray-900 font-medium">{userInfo?.userId || 'N/A'}</span>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600">사용자 정보를 불러오는 중...</span>
                     </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">이름</span>
-                      <span className="text-gray-900 font-medium">{userInfo?.userName || 'N/A'}</span>
+                  ) : error ? (
+                    <div className="text-center py-8">
+                      <div className="text-red-600 mb-2">⚠️ {error}</div>
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="text-blue-600 hover:text-blue-700 text-sm"
+                      >
+                        다시 시도
+                      </button>
                     </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">휴대폰 번호</span>
-                      <span className="text-gray-900 font-medium">{editInfoForm.contact}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-gray-600">이메일 주소</span>
-                      <span className="text-gray-900 font-medium">{editInfoForm.email}</span>
-                    </div>
-                    {isExpert && (
-                      <div className="flex justify-between items-center py-3">
-                        <span className="text-gray-600">전문 자격 증명</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-gray-900 font-medium">투자자산운용사</span>
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-blue-600 text-sm font-medium">승인</span>
-                          <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">아이디</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.userId || userInfo?.userId || 'N/A'}</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">이름</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.name || editInfoForm.name || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">휴대폰 번호</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.contact || editInfoForm.contact || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">이메일 주소</span>
+                        <span className="text-gray-900 font-medium">{userProfile?.email || editInfoForm.email || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-600">역할</span>
+                        <span className="text-gray-900 font-medium">
+                          {userProfile?.role === 'USER' ? '일반 사용자' : 
+                           userProfile?.role === 'ADVISOR' ? '전문가' : 
+                           userProfile?.role === 'ADMIN' ? '관리자' : 'N/A'}
+                        </span>
+                      </div>
+                      {isExpert && (
+                        <div className="flex flex-col gap-2 py-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600">전문 자격 증명</span>
+                            <button
+                              onClick={() => setShowCertModal(true)}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                            >
+                              자격증 추가
+                            </button>
+                          </div>
+                          {certLoading ? (
+                            <span className="text-gray-400 text-sm">로딩 중...</span>
+                          ) : certificates.length === 0 ? (
+                            <span className="text-gray-400 text-sm">인증된 자격증이 없습니다.</span>
+                          ) : (
+                            certificates.map((cert) => (
+                              <div key={cert.requestId} className="flex items-center justify-end space-x-2">
+                                <span className="text-gray-900 font-medium">{getCertificateDisplayName(cert.certificateName)}</span>
+                                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-blue-600 text-sm font-medium">승인</span>
+                                <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 커뮤니티 프로필 Section */}
@@ -446,7 +736,7 @@ const MyPage = () => {
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 rounded-full flex items-center justify-center">
                       <img 
-                        src={getSelectedProfileImage()} 
+                        src={getProfileImage()} 
                         alt="profile" 
                         className="w-10 h-10 rounded-full"
                       />
@@ -539,7 +829,7 @@ const MyPage = () => {
                           {consultationTab === '상담 완료' && (
                             <td className="px-4 py-3">
                               <button 
-                                onClick={() => handleEnterConsultation(item)}
+                                onClick={() => handleConsultationDiaryClick(item)}
                                 className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
                               >
                                 상담일지
@@ -1180,6 +1470,120 @@ const MyPage = () => {
                   className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
                   등록하기
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 자격증 추가 모달 */}
+      {showCertModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-8 max-w-4xl w-full shadow-lg">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">전문 자격 인증</h3>
+              <button
+                onClick={() => setShowCertModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleCertSubmit}>
+              {/* Certificate Example Image */}
+              <div className="mb-6">
+                <img 
+                  src={certificationExample} 
+                  alt="Certificate Example" 
+                  className="w-full max-w-2xl mx-auto"
+                />
+              </div>
+
+              {/* Instructions */}
+              <div className="w-full pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
+                <ul className="text-left text-sm text-gray-700 space-y-3 py-3">
+                  <li>• 위 합격증 원본대조 번호 입력 방식을 보고 아래 창에 입력해주세요.</li>
+                  <li>• 입력 시 하이픈('-') 없이 숫자만 입력하시기 바랍니다.</li>
+                </ul>
+              </div>
+
+              {/* 자격증 폼 */}
+              <div className="w-full flex flex-row gap-4 mb-6">
+                {/* Select */}
+                <div className='w-1/4 flex flex-col gap-3'>
+                  <h3 className="text-left pl-5">전문 자격명</h3>
+                
+                  <div className='w-full'>
+                    <select
+                      name="certificateName"
+                      value={certForm.certificateName}
+                      onChange={(e) => setCertForm({ ...certForm, certificateName: e.target.value })}
+                      className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">전문 자격을 선택하세요</option>
+                      <option value="financial_advisor">금융투자상담사</option>
+                      <option value="securities_analyst">증권분석사</option>
+                      <option value="cfa">CFA</option>
+                      <option value="cpa">CPA</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Input Fields */}
+                <div className='w-3/4 flex flex-col gap-3'>
+                  <h3 className='text-left pl-5'>인증번호 입력</h3>
+                  <div className='grid grid-cols-3 gap-4'>
+                    {/* Input 1 */}
+                    <div className="flex flex-col">
+                      <input
+                        type="text"
+                        value={certForm.certificateFileSn}
+                        onChange={(e) => setCertForm({ ...certForm, certificateFileSn: e.target.value })}
+                        placeholder="('-') 없이 숫자만 입력"
+                        maxLength={8}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">중앙에 위치한 합격증 번호 (8자리)</p>
+                    </div>
+
+                    {/* Input 2 */}
+                    <div className="flex flex-col">
+                      <input
+                        type="text"
+                        value={certForm.birth}
+                        onChange={(e) => setCertForm({ ...certForm, birth: e.target.value })}
+                        placeholder="YYYYMMDD"
+                        maxLength={8}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">생년월일 (YYYYMMDD)</p>
+                    </div>
+
+                    {/* Input 3 */}
+                    <div className="flex flex-col">
+                      <input
+                        type="text"
+                        value={certForm.certificateFileNumber}
+                        onChange={(e) => setCertForm({ ...certForm, certificateFileNumber: e.target.value })}
+                        placeholder="6자리 입력"
+                        maxLength={6}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">발급번호 마지막 6자리</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  disabled={certSubmitting}
+                >
+                  {certSubmitting ? '등록 중...' : '등록하기'}
                 </button>
               </div>
             </form>
