@@ -42,13 +42,35 @@ public class ConsultationSessionService {
     return session.createConnection(props).getToken();
   }
 
+
+
   /**
    * consulttationId에 해당하는 방을 생성하고, token 발급
    */
   public SessionTokenResponseDto createSessionAndGetToken(String consultationId)
       throws OpenViduJavaClientException, OpenViduHttpException {
+
+    // 1) sessionMap에서 기존 세션 가져오기 (있을 경우)
+    Session session = sessionMap.get(consultationId);
+
+    // 2) 세션 유효성 확인 (서버에 아직 살아있는지)
+    if (session != null) {
+      openVidu.fetch(); // OpenVidu 상태 최신화
+
+      boolean isValid = openVidu.getActiveSessions().stream()
+          .anyMatch(s -> s.getSessionId().equals(session.getSessionId()));
+
+      if (!isValid) {
+        log.warn("기존 세션이 OpenVidu에서 만료됨. 새로 생성합니다. consultationId={}, expiredSessionId={}", consultationId, session.getSessionId());
+        sessionMap.remove(consultationId);
+        createdAtMap.remove(consultationId);
+        // 세션 만료된 경우 → 재귀 호출로 새로 생성
+        return createSessionAndGetToken(consultationId);
+      }
+    }
+
     // 1) 세션 get-or-create
-    Session session = sessionMap.computeIfAbsent(consultationId, id -> {
+    session = sessionMap.computeIfAbsent(consultationId, id -> {
       try {
         Session newSession = openVidu.createSession();
         createdAtMap.put(id, Instant.now());
@@ -82,6 +104,7 @@ public class ConsultationSessionService {
         token,
         createdAt);
   }
+
 
   /**
    * 신규 조회 메서드
