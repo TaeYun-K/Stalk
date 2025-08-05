@@ -258,24 +258,19 @@ const VideoConsultationPage: React.FC = () => {
   
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
-          console.log('Stream created:', event.stream.streamId);
           const subscriber = session.subscribe(event.stream, undefined);
           
-          // 구독자 스트림이 준비되면 비디오 요소에 연결
+          setSubscribers(prev => {
+            const newSubscribers = [...prev, subscriber];
+            setTimeout(() => {
+              attachSubscriberVideo(subscriber, newSubscribers.length - 1); // optional
+            }, 100);
+            return newSubscribers;
+          });
+
+          // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
             console.log('Subscriber stream playing:', subscriber.stream.streamId);
-            setSubscribers(prev => {
-              const newSubscribers = [...prev, subscriber];
-              // 비디오 요소 연결을 다음 렌더링 사이클에서 실행
-              setTimeout(() => {
-                attachSubscriberVideo(subscriber, newSubscribers.length - 1);
-              }, 100);
-              return newSubscribers;
-            });
-          });
-  
-          subscriber.on('videoElementCreated', () => {
-            console.log('Subscriber video element created');
           });
         });
         
