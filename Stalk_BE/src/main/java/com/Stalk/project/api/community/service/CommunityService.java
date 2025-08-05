@@ -9,6 +9,7 @@ import com.Stalk.project.api.community.dto.in.CommunityPostDetailRequestDto;
 import com.Stalk.project.api.community.dto.in.CommunityPostListRequestDto;
 import com.Stalk.project.api.community.dto.in.CommunityPostUpdateRequestDto;
 import com.Stalk.project.api.community.dto.in.PostCategory;
+import com.Stalk.project.api.community.dto.out.CommentNotificationInfoDto;
 import com.Stalk.project.api.community.dto.out.CommunityCommentCreateResponseDto;
 import com.Stalk.project.api.community.dto.out.CommunityCommentDeleteResponseDto;
 import com.Stalk.project.api.community.dto.out.CommunityCommentDto;
@@ -22,6 +23,7 @@ import com.Stalk.project.api.community.dto.out.CommunityPostSummaryDto;
 import com.Stalk.project.api.community.dto.out.CommunityPostUpdateResponseDto;
 import com.Stalk.project.api.community.dto.out.WritePermissionResponseDto;
 import com.Stalk.project.global.exception.BaseException;
+import com.Stalk.project.global.notification.event.CommentCreatedEvent;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 
@@ -31,6 +33,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +48,7 @@ import java.util.stream.Collectors;
 public class CommunityService {
 
   private final CommunityMapper communityMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   /**
    * 커뮤니티 글 목록 조회 (인증 불필요)
@@ -380,28 +384,48 @@ public class CommunityService {
    */
   public CommunityCommentCreateResponseDto createComment(Long postId, Long currentUserId,
       CommunityCommentCreateRequestDto requestDto) {
+
     // 1. 글 존재 여부 확인
     if (!communityMapper.existsPostById(postId)) {
       throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
     }
 
     // 2. 댓글 생성
+    Long commentId;
     try {
       communityMapper.createComment(postId, currentUserId, requestDto.getContent());
-      Long commentId = communityMapper.getLastInsertedCommentId();
-
-      return CommunityCommentCreateResponseDto.builder()
-          .commentId(commentId)
-          .createdAt(LocalDateTime.now()
-              .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+09:00'")))
-          .message("댓글이 성공적으로 작성되었습니다.")
-          .build();
-
+      commentId = communityMapper.getLastInsertedCommentId();
     } catch (Exception e) {
       throw new BaseException(BaseResponseStatus.COMMUNITY_COMMENT_CREATE_FAILED);
     }
-  }
 
+    // 3. 댓글 작성 후 이벤트 발행을 위한 정보 조회
+    CommentNotificationInfoDto notificationInfo =
+        communityMapper.findCommentNotificationInfo(postId, currentUserId);
+
+    if (notificationInfo != null) {
+      // CommentCreatedEvent 발행
+      CommentCreatedEvent event = new CommentCreatedEvent(
+          postId,                                      // 글 ID
+          commentId,                                   // 댓글 ID (방금 생성된)
+          currentUserId,                               // 댓글 작성자 ID
+          notificationInfo.getCommentAuthorName(),     // 댓글 작성자 닉네임
+          requestDto.getContent(),                     // 댓글 내용
+          notificationInfo.getPostAuthorId(),          // 글 작성자 ID (알람 수신자)
+          notificationInfo.getPostTitle()              // 글 제목
+      );
+
+      eventPublisher.publishEvent(event);
+    }
+
+    // 4. 응답 반환
+    return CommunityCommentCreateResponseDto.builder()
+        .commentId(commentId)
+        .createdAt(LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+09:00'")))
+        .message("댓글이 성공적으로 작성되었습니다.")
+        .build();
+  }
   /**
    * 댓글 목록 조회 (더보기용) - 인증 불필요
    */

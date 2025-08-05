@@ -156,8 +156,9 @@ public class AdvisorService {
           .build();
     }
 
-    // 4. 어드바이저 존재 및 승인 여부 확인
-    if (!advisorMapper.isApprovedAdvisor(advisorId)) {
+    // 4. 어드바이저 존재 및 승인 여부 확인 (기존 메서드 활용)
+    AdvisorDetailResponseDto advisor = advisorMapper.findAdvisorDetailById(advisorId);
+    if (advisor == null) {
       throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
     }
 

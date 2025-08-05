@@ -40,7 +40,7 @@ const LoginPage = () => {
       
       // 사용자 프로필 정보 가져오기
       const userProfile = await AuthService.getUserProfile();
-      console.log('로그인 후 userProfile:', userProfile);
+      
       
       // AuthContext에 로그인 상태 업데이트
       const userInfoToSet = {
@@ -48,7 +48,7 @@ const LoginPage = () => {
         userName: userProfile.name,
         role: userProfile.role as 'USER' | 'ADVISOR' | 'ADMIN'
       };
-      console.log('AuthContext에 설정할 userInfo:', userInfoToSet);
+      
       
       // AuthContext 상태 설정
       login(userInfoToSet);
@@ -57,12 +57,12 @@ const LoginPage = () => {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // 로그인 성공 시 역할에 따라 다른 페이지로 이동
-      console.log('Role 체크:', userProfile.role);
+      
       if (userProfile.role === 'ADMIN') {
-        console.log('관리자로 확인됨, /admin으로 이동');
+      
         navigate('/admin', { replace: true });
       } else {
-        console.log('일반 사용자로 확인됨, /로 이동');
+      
         navigate('/', { replace: true });
       }
     } catch (error) {

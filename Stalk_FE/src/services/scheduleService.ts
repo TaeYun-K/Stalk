@@ -8,11 +8,12 @@ class ScheduleService {
     );
     
     if (!response.ok) {
-      throw new Error('차단 시간 조회 실패');
+      const errorData = await response.json();
+      throw new Error(errorData.message || '차단 시간 조회 실패');
     }
     
     const data = await response.json();
-    return data.result.blockedTimes;
+    return data.result.blockedTimeSlots; // 백엔드 응답 필드명에 맞춤
   }
 
   // 차단 시간 업데이트
@@ -21,12 +22,16 @@ class ScheduleService {
       `/api/advisors/blocked-times?date=${date}`,
       {
         method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ blockedTimes })
       }
     );
     
     if (!response.ok) {
-      throw new Error('차단 시간 업데이트 실패');
+      const errorData = await response.json();
+      throw new Error(errorData.message || '차단 시간 업데이트 실패');
     }
   }
 }
