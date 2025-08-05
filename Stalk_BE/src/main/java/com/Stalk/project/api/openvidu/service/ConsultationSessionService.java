@@ -3,6 +3,7 @@ package com.Stalk.project.api.openvidu.service;
 import com.Stalk.project.api.openvidu.mapper.ConsultationSessionMapper;
 import com.Stalk.project.api.openvidu.dto.out.SessionTokenResponseDto;
 import io.openvidu.java.client.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -11,9 +12,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
-
-@Service
 @Slf4j
+@Service
+@RequiredArgsConstructor
 public class ConsultationSessionService {
 
   private final OpenVidu openVidu;
@@ -23,11 +24,7 @@ public class ConsultationSessionService {
   private final Map<String, Session> sessionMap = new ConcurrentHashMap<>();
   private final Map<String, Instant> createdAtMap = new ConcurrentHashMap<>();
 
-  public ConsultationSessionService(OpenVidu openVidu) {
-    this.openVidu = openVidu;
-  }
-
-  private ConsultationSessionMapper consultationSessionMapper;
+  private final ConsultationSessionMapper consultationSessionMapper;
 
   /**
    * 토큰 발급 메서드
