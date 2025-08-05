@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import CommunityService, { CommunityPostDetailDto, PostCategory } from '@/services/communityService';
+import CommunityService from '@/services/communityService';
+import { CommunityPostDetailDto, PostCategory } from '@/types';
+import AuthService from '@/services/authService';
 
 const PostDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -8,6 +10,23 @@ const PostDetailPage: React.FC = () => {
   const [post, setPost] = useState<CommunityPostDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // 현재 사용자 정보 로드
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        if (AuthService.isLoggedIn()) {
+          const userProfile = await AuthService.getUserProfile();
+          setCurrentUser(userProfile);
+        }
+      } catch (error) {
+        console.error('사용자 정보 로드 실패:', error);
+      }
+    };
+    
+    loadCurrentUser();
+  }, []);
 
   useEffect(() => {
     if (postId) {
@@ -56,14 +75,14 @@ const PostDetailPage: React.FC = () => {
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case PostCategory.INVESTMENT_KNOWLEDGE:
-        return '투자지식in';
+      case PostCategory.QUESTION:
+        return '질문';
+      case PostCategory.TRADE_RECORD:
+        return '거래기록';
+      case PostCategory.STOCK_DISCUSSION:
+        return '주식토론';
       case PostCategory.MARKET_ANALYSIS:
         return '시장분석';
-      case PostCategory.PORTFOLIO:
-        return '포트폴리오';
-      case PostCategory.NEWS:
-        return '뉴스';
       default:
         return category;
     }
@@ -145,18 +164,23 @@ const PostDetailPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex space-x-2">
-                  <button
-                    onClick={handleEditPost}
-                    className="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm border border-blue-600 rounded hover:bg-blue-50"
-                  >
-                    수정
-                  </button>
-                  <button
-                    onClick={handleDeletePost}
-                    className="px-3 py-1 text-red-600 hover:text-red-800 text-sm border border-red-600 rounded hover:bg-red-50"
-                  >
-                    삭제
-                  </button>
+                  {/* 게시글 작성자이거나 관리자인 경우에만 수정/삭제 버튼 표시 */}
+                  {(currentUser && (currentUser.userId === post.authorName || currentUser.role === 'ADMIN')) && (
+                    <>
+                      <button
+                        onClick={handleEditPost}
+                        className="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm border border-blue-600 rounded hover:bg-blue-50"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={handleDeletePost}
+                        className="px-3 py-1 text-red-600 hover:text-red-800 text-sm border border-red-600 rounded hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{post.title}</h2>
