@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import tossLogoBlue from '@/assets/images/logos/Toss_logo_blue.svg';
 import checkIcon from '@/assets/images/icons/check_icon.svg';
@@ -6,6 +6,10 @@ import sidebarSlideupIcon from '@/assets/images/icons/sidebar_slideup_icon.svg';
 import likeClickIcon from '@/assets/images/icons/like_click_icon.svg';
 import sidebarOpenCloseIcon from '@/assets/images/icons/sidebar_openclose_icon.svg';
 import { useWatchlist } from '@/context/WatchlistContext';
+import NotificationService from '@/services/notificationService';
+import ReservationService from '@/services/reservationService';
+import CommunityService from '@/services/communityService';
+import AuthService from '@/services/authService';
 
 interface MenuItem {
   id: string;
@@ -15,10 +19,33 @@ interface MenuItem {
 }
 
 interface Notification {
-  id: string;
-  timestamp: string;
-  type: 'cancel' | 'complete';
+  notificationId: number;
+  type: string;
+  title: string;
   message: string;
+  relatedId?: number;
+  isRead: boolean;
+  createdAt: string;
+}
+
+interface Reservation {
+  reservationId: number;
+  consultationDate: string;
+  consultationTime: string;
+  requestMessage?: string;
+  advisorName: string;
+  advisorUserId: number;
+  profileImageUrl?: string;
+  status: string;
+  createdAt: string;
+}
+
+interface KnowledgePost {
+  postId: number;
+  title: string;
+  viewCount: number;
+  commentCount: number;
+  createdAt: string;
 }
 
 const Sidebar: React.FC = () => {
@@ -26,20 +53,10 @@ const Sidebar: React.FC = () => {
   const { watchlist, removeFromWatchlist } = useWatchlist();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
   const [selectedMenu, setSelectedMenu] = useState<string>('notifications');
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      timestamp: '2025.08.01 11:00',
-      type: 'cancel',
-      message: '김범주 전문가님의 요청으로 2025년 08월 14일 14시에 예약된 상담이 취소되었습니다.'
-    },
-    {
-      id: '2',
-      timestamp: '2025.08.01 10:05',
-      type: 'complete',
-      message: '김범주 전문가님에게 2025년 08월 14일 14시에 상담 예약이 완료되었습니다.'
-    }
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [knowledgePosts, setKnowledgePosts] = useState<KnowledgePost[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const menuItems: MenuItem[] = [
     {
@@ -74,14 +91,88 @@ const Sidebar: React.FC = () => {
     }
   ];
 
+  // 알림 데이터 로드
+  const loadNotifications = async () => {
+    if (!AuthService.isLoggedIn()) return;
+    
+    try {
+      setLoading(true);
+      const response = await NotificationService.getNotifications(1, 10);
+      setNotifications(response.content);
+    } catch (error) {
+      console.error('알림 로드 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 예약 내역 데이터 로드
+  const loadReservations = async () => {
+    if (!AuthService.isLoggedIn()) return;
+    
+    try {
+      setLoading(true);
+      const response = await ReservationService.getReservations(1, 20);
+      const sortedReservations = ReservationService.sortReservations(response.content);
+      setReservations(sortedReservations);
+    } catch (error) {
+      console.error('예약 내역 로드 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 투자 지식iN 데이터 로드
+  const loadKnowledgePosts = async () => {
+    if (!AuthService.isLoggedIn()) return;
+    
+    try {
+      setLoading(true);
+      const response = await CommunityService.getMyPosts('KNOWLEDGE', 1, 10);
+      setKnowledgePosts(response.content);
+    } catch (error) {
+      console.error('투자 지식iN 로드 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 알림 읽음 처리
+  const handleMarkAsRead = async (notificationId: number) => {
+    try {
+      await NotificationService.markAsRead(notificationId);
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.notificationId === notificationId 
+            ? { ...notification, isRead: true }
+            : notification
+        )
+      );
+    } catch (error) {
+      console.error('읽음 처리 실패:', error);
+    }
+  };
+
+  // 메뉴 클릭 시 데이터 로드
   const handleMenuClick = (menuId: string) => {
     if (selectedMenu === menuId && !isCollapsed) {
-      // 이미 활성화된 메뉴를 다시 클릭하면 비활성화
       setIsCollapsed(true);
     } else {
-      // 다른 메뉴를 클릭하거나 비활성화 상태에서 클릭하면 활성화
       setSelectedMenu(menuId);
       setIsCollapsed(false);
+      
+      // 메뉴별 데이터 로드
+      switch (menuId) {
+        case 'notifications':
+          loadNotifications();
+          break;
+        case 'reservations':
+          loadReservations();
+          break;
+        case 'knowledge-board':
+          loadKnowledgePosts();
+          break;
+      }
     }
   };
 
@@ -90,6 +181,7 @@ const Sidebar: React.FC = () => {
       // 사이드바가 닫혀있으면 알림으로 열기
       setSelectedMenu('notifications');
       setIsCollapsed(false);
+      loadNotifications(); // 알림 데이터 로드
     } else {
       // 사이드바가 열려있으면 닫기
       setIsCollapsed(true);
@@ -113,31 +205,50 @@ const Sidebar: React.FC = () => {
         return (
           <div className="p-6">
             <div className="space-y-6">
-              {notifications.map((notification, index) => (
-                <div key={notification.id}>
-                  <div className="flex items-start space-x-4">
-                    <img src={checkIcon} alt="check" className="w-6 h-6" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center text-left text-sm text-gray-500 mb-2">
-                        <span>{notification.timestamp}</span>
-                        <button
-                          className="w-6 h-6 flex items-center justify-center bg-transparent hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-700 transition-colors ml-2"
-                          onClick={() => setNotifications(notifications.filter(n => n.id !== notification.id))}
-                          aria-label="알림 삭제"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <div className="text-left text-gray-900 leading-relaxed">
-                        {notification.message}
+              {loading ? (
+                <div className="text-center py-4 text-gray-500">로딩 중...</div>
+              ) : notifications.length > 0 ? (
+                notifications.map((notification, index) => (
+                  <div key={notification.notificationId}>
+                    <div className="flex items-start space-x-4">
+                      <img src={checkIcon} alt="check" className="w-6 h-6" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center text-left text-sm text-gray-500 mb-2">
+                          <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                          <div className="flex items-center space-x-2">
+                            {!notification.isRead && (
+                              <button
+                                className="text-xs text-blue-500 hover:text-blue-700"
+                                onClick={() => handleMarkAsRead(notification.notificationId)}
+                              >
+                                읽음
+                              </button>
+                            )}
+                            <button
+                              className="w-6 h-6 flex items-center justify-center bg-transparent hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-700 transition-colors ml-2"
+                              onClick={() => setNotifications(notifications.filter(n => n.notificationId !== notification.notificationId))}
+                              aria-label="알림 삭제"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-left text-gray-900 leading-relaxed">
+                          {notification.message}
+                        </div>
                       </div>
                     </div>
+                    {index < notifications.length - 1 && (
+                      <div className="border-t border-gray-200 mt-6 pt-6"></div>
+                    )}
                   </div>
-                  {index < notifications.length - 1 && (
-                    <div className="border-t border-gray-200 mt-6 pt-6"></div>
-                  )}
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-lg mb-2">알림이 없습니다</div>
+                  <div className="text-sm">새로운 알림이 오면 여기에 표시됩니다</div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         );
@@ -173,7 +284,6 @@ const Sidebar: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {/* 관심종목이 없을 때 표시할 메시지 */}
               {watchlist.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <div className="text-lg mb-2">관심종목이 없습니다</div>
@@ -207,6 +317,10 @@ const Sidebar: React.FC = () => {
                   <div className="text-sm text-red-500">-2.1%</div>
                 </div>
               </div>
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-lg mb-2">보유종목 기능 준비 중</div>
+                <div className="text-sm">상품조회 페이지에서 추가할 수 있습니다</div>
+              </div>
             </div>
           </div>
         );
@@ -214,30 +328,70 @@ const Sidebar: React.FC = () => {
         return (
           <div className="p-6">
             <div className="space-y-4">
-              <div className="border border-gray-200 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold text-gray-900">김범주 전문가</div>
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">예정</span>
+              {loading ? (
+                <div className="text-center py-4 text-gray-500">로딩 중...</div>
+              ) : reservations.length > 0 ? (
+                reservations.map((reservation) => (
+                  <div key={reservation.reservationId} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="font-semibold text-gray-900">{reservation.advisorName}</div>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        reservation.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                        reservation.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
+                        reservation.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {reservation.status === 'PENDING' ? '대기중' :
+                         reservation.status === 'CONFIRMED' ? '확정' :
+                         reservation.status === 'COMPLETED' ? '완료' : '취소'}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600 mb-2">
+                      {reservation.consultationDate} {reservation.consultationTime}
+                    </div>
+                    {reservation.requestMessage && (
+                      <div className="text-sm text-gray-500">
+                        {reservation.requestMessage}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-lg mb-2">예약 내역이 없습니다</div>
+                  <div className="text-sm">전문가와 상담을 예약해보세요</div>
                 </div>
-                <div className="text-left text-sm text-gray-600 mb-1">2025.08.15 14:00</div>
-                <div className="text-left text-sm text-gray-500">투자 포트폴리오 상담</div>
-              </div>
-              <div className="border border-gray-200 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold text-gray-900">이수진 전문가</div>
-                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">완료</span>
+              )}
+            </div>
+          </div>
+        );
+      case 'knowledge-board':
+        return (
+          <div className="p-6">
+            <div className="space-y-4">
+              {loading ? (
+                <div className="text-center py-4 text-gray-500">로딩 중...</div>
+              ) : knowledgePosts.length > 0 ? (
+                knowledgePosts.map((post) => (
+                  <div key={post.postId} className="bg-white border rounded-lg p-4 shadow-sm">
+                    <div className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                      {post.title}
+                    </div>
+                    <div className="flex justify-between items-center text-sm text-gray-500">
+                      <div className="flex items-center space-x-4">
+                        <span>👁️ {post.viewCount}</span>
+                        <span>💬 {post.commentCount}</span>
+                      </div>
+                      <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-lg mb-2">작성한 투자 지식이 없습니다</div>
+                  <div className="text-sm">투자 지식을 공유해보세요</div>
                 </div>
-                <div className="text-left text-sm text-gray-600 mb-1">2025.08.01 10:00</div>
-                <div className="text-left text-sm text-gray-500">주식 투자 기초 상담</div>
-              </div>
-              <div className="border border-gray-200 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold text-gray-900">박민수 전문가</div>
-                  <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">취소</span>
-                </div>
-                <div className="text-left text-sm text-gray-600 mb-1">2025.07.28 16:00</div>
-                <div className="text-left text-sm text-gray-500">부동산 투자 상담</div>
-              </div>
+              )}
             </div>
           </div>
         );
@@ -251,9 +405,10 @@ const Sidebar: React.FC = () => {
   };
 
   // Push content style for body and navbar
-  React.useEffect(() => {
+  useEffect(() => {
     const navbar = document.querySelector('nav');
     
+    // 초기 렌더링 시에도 collapsed 상태에 맞는 margin 설정
     if (!isCollapsed) {
       document.body.style.marginRight = '384px'; // 64px (collapsed sidebar) + 320px (panel width: w-80)
       document.body.style.transition = 'margin-right 0.3s ease';
@@ -280,8 +435,46 @@ const Sidebar: React.FC = () => {
     };
   }, [isCollapsed]);
 
+  // 컴포넌트 마운트 시 초기 margin 설정
+  useEffect(() => {
+    const navbar = document.querySelector('nav');
+    
+    // 사이드바가 collapsed 상태일 때의 초기 margin 설정
+    document.body.style.marginRight = '64px';
+    document.body.style.transition = 'margin-right 0.3s ease';
+    if (navbar) {
+      navbar.style.marginRight = '64px';
+      navbar.style.transition = 'margin-right 0.3s ease';
+    }
+
+    // 컴포넌트 언마운트 시 cleanup
+    return () => {
+      document.body.style.marginRight = '0';
+      document.body.style.transition = '';
+      if (navbar) {
+        navbar.style.marginRight = '0';
+        navbar.style.transition = '';
+      }
+    };
+  }, []); // 빈 의존성 배열로 마운트 시에만 실행
+
+  // 페이지 이동 시 navbar margin 재설정
+  useEffect(() => {
+    const navbar = document.querySelector('nav');
+    if (navbar) {
+      // 현재 collapsed 상태에 맞는 margin 설정
+      if (!isCollapsed) {
+        navbar.style.marginRight = '384px';
+        navbar.style.transition = 'margin-right 0.3s ease';
+      } else {
+        navbar.style.marginRight = '64px';
+        navbar.style.transition = 'margin-right 0.3s ease';
+      }
+    }
+  }); // 의존성 배열 없이 모든 렌더링에서 실행
+
   // 외부 클릭 감지하여 사이드바 닫기
-  React.useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       

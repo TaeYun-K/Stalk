@@ -333,6 +333,38 @@ class CommunityService {
       throw error;
     }
   }
+
+  // 본인 작성 글 조회 (투자 지식iN용)
+  static async getMyPosts(category: string = 'KNOWLEDGE', pageNo: number = 1, pageSize: number = 10): Promise<{ content: CommunityPostSummaryDto[] }> {
+    try {
+      const queryParams = new URLSearchParams({
+        category: category,
+        pageNo: pageNo.toString(),
+        pageSize: pageSize.toString(),
+        authorId: 'me' // 본인 작성 글만 조회
+      });
+
+      const response = await AuthService.authenticatedRequest(
+        `/api/community/posts?${queryParams}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.result;
+    } catch (error) {
+      console.error('Error fetching my posts:', error);
+      throw error;
+    }
+  }
 }
 
 export default CommunityService; 

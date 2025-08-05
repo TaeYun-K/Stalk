@@ -10,7 +10,7 @@ import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isLoggedIn, logout, isLoggingOut } = useAuth();
+  const { isLoggedIn, logout, isLoggingOut, userInfo } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -19,6 +19,8 @@ const Navbar: React.FC = () => {
   
   // mypage에서는 상담내역 드롭다운 숨기기
   const isMyPage = location.pathname === '/mypage';
+  // 관리자 권한 확인
+  const isAdmin = userInfo?.role === 'ADMIN';
 
   // 사용자 프로필 이미지 가져오기
   const fetchUserProfileImage = async () => {
@@ -69,7 +71,7 @@ const Navbar: React.FC = () => {
   // 로그인 상태는 AuthContext에서 관리
 
   return (
-    <nav className="bg-white fixed top-0 left-0 right-0 z-50">
+    <nav className="bg-white fixed top-0 left-0 right-0 z-[60]">
       <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16">
       <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
@@ -246,6 +248,20 @@ const Navbar: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>상담 내역</span>
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          navigate('/admin');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-blue-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a1 1 0 001 1h16a1 1 0 001-1V7M3 7l9-4 9 4" />
+                        </svg>
+                        <span>관리자 페이지</span>
                       </button>
                     )}
                     <div className="border-t border-gray-200 my-1"></div>

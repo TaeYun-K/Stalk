@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isLoggedIn, logout } = useAuth();
+  const { isLoggedIn, logout, userInfo } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -21,6 +21,8 @@ const HomePageNavbar: React.FC = () => {
   
   // mypage에서는 상담내역 드롭다운 숨기기
   const isMyPage = location.pathname === '/mypage';
+  // 관리자 권한 확인
+  const isAdmin = userInfo?.role === 'ADMIN';
 
   // 사용자 프로필 이미지 가져오기
   const fetchUserProfileImage = async () => {
@@ -98,7 +100,7 @@ const HomePageNavbar: React.FC = () => {
   }, [isLoggedIn]);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-10 ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-[60] ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
       <div className="sm:px-10 lg:px-16">
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
@@ -129,10 +131,14 @@ const HomePageNavbar: React.FC = () => {
             </button>
             <button 
               onClick={() => navigate('/mypage?tab=내 상담 내역')}
-              className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
+              className={`hover:font-semibold font-medium text-lg transition-all duration-300 relative group ${
+                isNavBarScrolled ? 'text-gray-600 hover:text-blue-600' : 'text-white hover:text-blue-200'
+              }`}
             >
               상담내역
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
+              <span className={`absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
+                isNavBarScrolled ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-white'
+              }`}></span>
             </button>
             <div 
               className="relative group"
@@ -252,6 +258,21 @@ const HomePageNavbar: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>상담 내역</span>
+                      </button>
+                    )}
+                    {/* (ADMIN만 보이는 관리자 페이지 버튼) */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          navigate('/admin');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-blue-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a1 1 0 001 1h16a1 1 0 001-1V7M3 7l9-4 9 4" />
+                        </svg>
+                        <span>관리자 페이지</span>
                       </button>
                     )}
                     <button
