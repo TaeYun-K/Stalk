@@ -263,17 +263,21 @@ const VideoConsultationPage: React.FC = () => {
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscribing to new stream:', event.stream.streamId);
 
-          subscriber.on('videoElementCreated', (e) => {
-            const videoEl = e.element as HTMLVideoElement;
-            videoEl.muted = false;
-            videoEl.playsInline = true;
+          // subscriber.on('videoElementCreated', (e) => {
+          //   const videoEl = e.element as HTMLVideoElement;
+          //   videoEl.muted = false;
+          //   videoEl.playsInline = true;
 
-            // mediaStream이 준비된 후, subscriber를 상태에 추가
-            subscriber.on('streamPlaying', () => {
-              console.log('▶️ streamPlaying for', subscriber.stream.streamId);
-              setSubscribers(prev => [...prev, subscriber]);
-            });
-          });
+          //   // mediaStream이 준비된 후, subscriber를 상태에 추가
+          //   subscriber.on('streamPlaying', () => {
+          //     console.log('▶️ streamPlaying for', subscriber.stream.streamId);
+          //     setSubscribers(prev => [...prev, subscriber]);
+          //   });
+          // });
+
+
+          // 대신 바로 구독자 상태에 추가
+          setSubscribers(prev => [...prev, subscriber]);
 
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
