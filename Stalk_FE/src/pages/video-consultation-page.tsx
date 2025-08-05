@@ -268,10 +268,13 @@ const VideoConsultationPage: React.FC = () => {
   
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
-          const subscriber = session.subscribe(event.stream, undefined);
+          console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
+
+          // 빈 문자열을 전달 - OpenVidu가 자동으로 video 엘리먼트 생성
+          const subscriber = session.subscribe(event.stream, '');
           console.log('Subscribing to new stream:', event.stream.streamId);
 
-          // 즉시 상태 업데이트 (이 부분이 중요!)
+          // 즉시 상태 업데이트 
           setSubscribers(prev => [...prev, subscriber]);
 
           subscriber.on('videoElementCreated', (event) => {
