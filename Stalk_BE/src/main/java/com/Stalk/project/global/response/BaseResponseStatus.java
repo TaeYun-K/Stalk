@@ -213,7 +213,8 @@ public enum BaseResponseStatus {
   PAYMENT_CANCEL_FAILED(HttpStatus.BAD_REQUEST, false, 1903, "결제 취소에 실패했습니다."),
   PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1904, "결제 정보를 찾을 수 없습니다."),
   INVALID_PAYMENT_AMOUNT(HttpStatus.BAD_REQUEST, false, 1905, "유효하지 않은 결제 금액입니다."),
-  PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, false, 1906, "이미 처리된 결제입니다.");
+  PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, false, 1906, "이미 처리된 결제입니다."),
+  PAYMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1907, "결제 접근 권한이 없습니다."); // 추가
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;

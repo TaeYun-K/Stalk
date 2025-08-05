@@ -1,6 +1,9 @@
 package com.Stalk.project.api.payment.service;
 
+import com.Stalk.project.api.payment.dao.ConsultationMapper;
+import com.Stalk.project.api.payment.dto.in.ConsultationSessionUpdateDto;
 import com.Stalk.project.api.payment.dto.in.PaymentCancelRequestDto;
+import com.Stalk.project.api.payment.dto.out.ConsultationSession;
 import com.Stalk.project.api.payment.dto.out.PaymentCancelResponseDto;
 import com.Stalk.project.global.config.TossPaymentConfig;
 import com.Stalk.project.api.payment.dto.PaymentReservationDto;
@@ -12,6 +15,7 @@ import com.Stalk.project.api.payment.dto.out.TossPaymentResponseDto;
 import com.Stalk.project.api.reservation.dao.ReservationMapper;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +35,7 @@ public class PaymentService {
     private final TossPaymentConfig tossPaymentConfig;
     private final RestTemplate restTemplate;
     private final ReservationMapper reservationMapper;
+    private final ConsultationMapper consultationMapper;
 
     /**
      * 결제 준비 - 주문번호 생성 및 결제 정보 준비
@@ -219,59 +224,71 @@ public class PaymentService {
         }
     }
 
-    /**
-     * 결제 취소 처리
-     */
-    @Transactional
-    public PaymentCancelResponseDto cancelPayment(String orderId, PaymentCancelRequestDto requestDto) {
+    public PaymentCancelResponseDto cancelPayment(String orderId, PaymentCancelRequestDto requestDto, Long currentUserId) {
+
+        log.info("결제 취소 처리 시작: orderId={}, userId={}, reason={}",
+            orderId, currentUserId, requestDto.getCancelReason());
+
         try {
-            log.info("결제 취소 요청 시작: orderId={}, reason={}", orderId, requestDto.getCancelReason());
-            
-            // 1. 예약 정보 조회
-            PaymentReservationDto reservation = reservationMapper.findReservationByOrderId(orderId);
-            if (reservation == null) {
-                throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
+            // 1. orderId로 결제 정보 조회 (consultation_sessions 테이블에서)
+            ConsultationSession consultation = consultationMapper.findByOrderId(orderId);
+
+            if (consultation == null) {
+                log.warn("결제 정보를 찾을 수 없음: orderId={}", orderId);
+                throw new BaseException(BaseResponseStatus.PAYMENT_NOT_FOUND);
             }
-            
-            // 2. 결제 상태 확인 (PAID 상태만 취소 가능)
-            if (!"PAID".equals(reservation.getPaymentStatus())) {
+
+            // 2. 권한 검증: 본인이 결제한 건만 취소 가능
+            if (!consultation.getUserId().equals(currentUserId)) {
+                log.warn("결제 취소 권한 없음: orderId={}, 결제자={}, 요청자={}",
+                    orderId, consultation.getUserId(), currentUserId);
+                throw new BaseException(BaseResponseStatus.PAYMENT_ACCESS_DENIED);
+            }
+
+            // 3. 결제 상태 확인 (이미 취소된 건은 취소 불가)
+            if ("CANCELED".equals(consultation.getStatus())) {
+                log.warn("이미 취소된 결제: orderId={}", orderId);
                 throw new BaseException(BaseResponseStatus.PAYMENT_ALREADY_PROCESSED);
             }
-            
-            // 3. 토스페이먼츠에 결제 취소 요청
-            TossPaymentResponseDto tossResponse = requestPaymentCancel(
-                reservation.getPaymentKey(), 
-                requestDto, 
-                reservation.getAmount()
-            );
-            
-            log.info("토스페이먼츠 결제 취소 응답: status={}, canceledAt={}", 
-                tossResponse.getStatus(), tossResponse.getApprovedAt());
-            
-            // 4. 취소 성공 시 DB 업데이트
-            if ("CANCELED".equals(tossResponse.getStatus()) || "PARTIAL_CANCELED".equals(tossResponse.getStatus())) {
-                updatePaymentCancellation(orderId, requestDto, tossResponse);
-                log.info("결제 취소 성공 - DB 업데이트 완료: orderId={}", orderId);
-            } else {
-                log.warn("결제 취소 실패: status={}", tossResponse.getStatus());
-                throw new BaseException(BaseResponseStatus.PAYMENT_CANCEL_FAILED);
+
+            // 4. 토스페이먼츠에 취소 요청
+            String paymentKey = consultation.getPaymentKey();
+            if (paymentKey == null) {
+                log.error("결제키가 없음: orderId={}", orderId);
+                throw new BaseException(BaseResponseStatus.PAYMENT_NOT_FOUND);
             }
-            
+
+            // 토스페이먼츠 취소 API 호출 (기존 메서드 활용)
+            TossPaymentResponseDto cancelResult = requestPaymentCancel(paymentKey, requestDto, consultation.getAmount());
+
+            // 5. DB 업데이트 (consultation_sessions 테이블)
+            ConsultationSessionUpdateDto updateDto = ConsultationSessionUpdateDto.builder()
+                .orderId(orderId)
+                .status("CANCELED")
+                .cancelReason(requestDto.getCancelReason())
+                .canceledAt(LocalDateTime.now())
+                .canceledBy(currentUserId)
+                .build();
+
+            consultationMapper.updateConsultationStatus(updateDto);
+
+            log.info("결제 취소 완료: orderId={}, userId={}, tossStatus={}",
+                orderId, currentUserId, cancelResult.getStatus());
+
+            // 6. 응답 생성
             return PaymentCancelResponseDto.builder()
-                    .orderId(orderId)
-                    .paymentKey(reservation.getPaymentKey())
-                    .cancelStatus(tossResponse.getStatus())
-                    .cancelAmount(requestDto.getCancelAmount() != null ? requestDto.getCancelAmount() : reservation.getAmount())
-                    .cancelReason(requestDto.getCancelReason())
-                    .canceledAt(tossResponse.getApprovedAt())
-                    .message("결제가 성공적으로 취소되었습니다.")
-                    .build();
-            
+                .orderId(orderId)
+                .cancelStatus(cancelResult.getStatus())
+                .canceledAt(cancelResult.getCanceledAt())
+                .cancelAmount(cancelResult.getCancelAmount())
+                .cancelReason(requestDto.getCancelReason())
+                .build();
+
+        } catch (BaseException e) {
+            // BaseException은 그대로 던지기
+            throw e;
         } catch (Exception e) {
-            log.error("결제 취소 중 오류 발생: orderId={}", orderId, e);
-            if (e instanceof BaseException) {
-                throw e;
-            }
+            log.error("결제 취소 중 예상치 못한 오류: orderId={}, userId={}", orderId, currentUserId, e);
             throw new BaseException(BaseResponseStatus.PAYMENT_CANCEL_FAILED);
         }
     }
@@ -293,22 +310,21 @@ public class PaymentService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", tossPaymentConfig.getAuthorizationHeader());
-        
+
         // 토스 API 요청 데이터 생성
         TossPaymentCancelRequestDto tossRequest = TossPaymentCancelRequestDto.builder()
-                .cancelReason(requestDto.getCancelReason())
-                .cancelAmount(requestDto.getCancelAmount()) // null이면 전액 취소
-                .refundableAmount(requestDto.getRefundableAmount())
-                .build();
-        
+            .cancelReason(requestDto.getCancelReason())
+            .cancelAmount(requestDto.getCancelAmount() != null ? requestDto.getCancelAmount() : originalAmount) // null이면 전액 취소
+            .build();
+
         // 요청 URL: https://api.tosspayments.com/v1/payments/{paymentKey}/cancel
         String cancelUrl = TossPaymentConfig.CANCEL_URL + paymentKey + "/cancel";
-        
+
         log.info("토스페이먼츠 취소 API 호출 - URL: {}, paymentKey: {}", cancelUrl, paymentKey);
-        
+
         // 요청 엔티티 생성
         HttpEntity<TossPaymentCancelRequestDto> entity = new HttpEntity<>(tossRequest, headers);
-        
+
         try {
             // API 호출
             ResponseEntity<TossPaymentResponseDto> response = restTemplate.exchange(
@@ -317,15 +333,15 @@ public class PaymentService {
                 entity,
                 TossPaymentResponseDto.class
             );
-            
+
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 return response.getBody();
             } else {
-                log.error("토스페이먼츠 취소 API 응답 오류: status={}, body={}", 
+                log.error("토스페이먼츠 취소 API 응답 오류: status={}, body={}",
                     response.getStatusCode(), response.getBody());
                 throw new BaseException(BaseResponseStatus.PAYMENT_CANCEL_FAILED);
             }
-            
+
         } catch (Exception e) {
             log.error("토스페이먼츠 취소 API 호출 실패", e);
             throw new BaseException(BaseResponseStatus.PAYMENT_CANCEL_FAILED);

@@ -20,19 +20,21 @@ public class TossPaymentResponseDto {
     private String method;           // 결제수단
     private String requestedAt;      // 결제 요청 시간
     private String approvedAt;       // 결제 승인 시간
-    
+    private String canceledAt;       // 결제 취소 시간 ⭐ 새로 추가
+    private Integer cancelAmount;    // 취소 금액 ⭐ 새로 추가
+
     // 카드 정보
     private Card card;
-    
-    // 계좌이체 정보  
+
+    // 계좌이체 정보
     private Transfer transfer;
-    
+
     // 간편결제 정보
     private EasyPay easyPay;
-    
+
     // 영수증 정보
     private Receipt receipt;
-    
+
     @Getter
     @Builder
     @NoArgsConstructor
@@ -49,16 +51,16 @@ public class TossPaymentResponseDto {
         private Boolean isInterestFree; // 무이자 여부
         private String interestPayer; // 무이자 제공주체
     }
-    
+
     @Getter
-    @Builder  
+    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Transfer {
         private String bankCode;     // 은행 코드
         private String settlementStatus; // 정산 상태
     }
-    
+
     @Getter
     @Builder
     @NoArgsConstructor
@@ -68,7 +70,7 @@ public class TossPaymentResponseDto {
         private Integer amount;      // 간편결제 금액
         private Integer discountAmount; // 간편결제 할인금액
     }
-    
+
     @Getter
     @Builder
     @NoArgsConstructor

@@ -7,6 +7,8 @@ import com.Stalk.project.api.payment.dto.out.PaymentPrepareResponseDto;
 import com.Stalk.project.api.payment.dto.out.TossPaymentResponseDto;
 import com.Stalk.project.api.payment.service.PaymentService;
 import com.Stalk.project.global.response.BaseResponse;
+import com.Stalk.project.global.response.BaseResponseStatus;
+import com.Stalk.project.global.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import com.Stalk.project.api.payment.dto.in.PaymentCancelRequestDto;
 import com.Stalk.project.api.payment.dto.out.PaymentCancelResponseDto;
@@ -32,62 +34,70 @@ public class PaymentController {
     }
 
     /**
-     * 결제 준비 API - 실제 DB 연동
+     * 결제 준비 API - JWT 토큰 인증 + USER 권한 체크
      */
     @PostMapping("/prepare")
     public BaseResponse<PaymentPrepareResponseDto> preparePayment(
-            @RequestBody PaymentPrepareRequestDto requestDto) {
-        
-        log.info("결제 준비 요청: advisorId={}, date={}, time={}", 
+        @RequestBody PaymentPrepareRequestDto requestDto) {
+
+        log.info("결제 준비 요청: advisorId={}, date={}, time={}",
             requestDto.getAdvisorId(), requestDto.getConsultationDate(), requestDto.getConsultationTime());
-        
-        // 현재 사용자 ID (임시로 1001 사용, 실제로는 SecurityUtil에서 가져오기)
-        Long currentUserId = 1001L; // TODO: SecurityUtil.getCurrentUserPrimaryId()
-        
+
+        // 1. 일반 사용자(USER) 권한 체크
+        if (!SecurityUtil.isCurrentUserRegularUser()) {
+            log.warn("결제 준비 권한 없음: 일반 사용자만 결제 가능");
+            return new BaseResponse<>(BaseResponseStatus.PAYMENT_ACCESS_DENIED);
+        }
+
+        // 2. 현재 사용자 ID 가져오기
+        Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
+        log.info("결제 요청 사용자: userId={}", currentUserId);
+
         try {
             // PaymentService의 preparePayment 호출 (DB에 예약 생성)
             PaymentPrepareResponseDto response = paymentService.preparePayment(requestDto, currentUserId);
-            
-            log.info("결제 준비 응답: orderId={}, amount={}", 
+
+            log.info("결제 준비 응답: orderId={}, amount={}",
                 response.getOrderId(), response.getAmount());
-            
+
             return new BaseResponse<>(response);
-            
+
         } catch (Exception e) {
-            log.error("결제 준비 중 오류: {}", e.getMessage(), e);
+            log.error("결제 준비 중 오류: userId={}, error={}", currentUserId, e.getMessage(), e);
             throw e;
         }
     }
 
     /**
      * 결제 성공 콜백 - 실제 결제 승인 처리
+     * 토스페이먼츠에서 호출하므로 토큰 인증 불필요
      */
     @GetMapping("/toss/success")
     public String paymentSuccess(
-            @RequestParam String paymentKey,
-            @RequestParam String orderId,
-            @RequestParam Integer amount) {
-        
-        log.info("결제 성공 콜백: paymentKey={}, orderId={}, amount={}", 
+        @RequestParam String paymentKey,
+        @RequestParam String orderId,
+        @RequestParam Integer amount) {
+
+        log.info("결제 성공 콜백: paymentKey={}, orderId={}, amount={}",
             paymentKey, orderId, amount);
-        
+
         try {
             // 토스페이먼츠에 결제 승인 요청
             PaymentConfirmRequestDto confirmRequest = PaymentConfirmRequestDto.builder()
-                    .paymentKey(paymentKey)
-                    .orderId(orderId)
-                    .amount(amount)
-                    .build();
-            
+                .paymentKey(paymentKey)
+                .orderId(orderId)
+                .amount(amount)
+                .build();
+
             TossPaymentResponseDto tossResponse = paymentService.confirmPayment(confirmRequest);
-            
+
             // 결제 승인 성공
             String paymentMethod = getPaymentMethodDisplay(tossResponse);
             String approvedAt = tossResponse.getApprovedAt();
-            
-            log.info("결제 승인 완료: orderId={}, status={}, method={}", 
+
+            log.info("결제 승인 완료: orderId={}, status={}, method={}",
                 orderId, tossResponse.getStatus(), paymentMethod);
-            
+
             // 성공 페이지 반환 (더 자세한 정보 포함)
             return String.format("""
                 <html>
@@ -120,10 +130,10 @@ public class PaymentController {
                 </body>
                 </html>
                 """, orderId, paymentKey, amount, paymentMethod, tossResponse.getStatus(), approvedAt);
-                
+
         } catch (Exception e) {
             log.error("결제 승인 처리 중 오류: orderId={}", orderId, e);
-            
+
             // 실패 페이지로 리다이렉트
             return String.format("""
                 <html>
@@ -145,7 +155,7 @@ public class PaymentController {
     private String getPaymentMethodDisplay(TossPaymentResponseDto response) {
         String method = response.getMethod();
         if (method == null) return "알 수 없음";
-        
+
         return switch (method) {
             case "카드" -> {
                 if (response.getCard() != null) {
@@ -165,16 +175,17 @@ public class PaymentController {
     }
 
     /**
-     * 결제 실패 콜백 (임시)
+     * 결제 실패 콜백
+     * 토스페이먼츠에서 호출하므로 토큰 인증 불필요
      */
     @GetMapping("/toss/fail")
     public String paymentFail(
-            @RequestParam String code,
-            @RequestParam String message,
-            @RequestParam String orderId) {
-        
+        @RequestParam String code,
+        @RequestParam String message,
+        @RequestParam String orderId) {
+
         log.warn("결제 실패 콜백: code={}, message={}, orderId={}", code, message, orderId);
-        
+
         // 임시로 간단한 실패 페이지 반환
         return String.format("""
             <html>
@@ -191,25 +202,36 @@ public class PaymentController {
     }
 
     /**
-     * 결제 취소 API
+     * 결제 취소 API - JWT 토큰 인증 + USER 권한 체크
      */
     @PostMapping("/cancel/{orderId}")
     public BaseResponse<PaymentCancelResponseDto> cancelPayment(
-            @PathVariable String orderId,
-            @RequestBody PaymentCancelRequestDto requestDto) {
-        
+        @PathVariable String orderId,
+        @RequestBody PaymentCancelRequestDto requestDto) {
+
         log.info("결제 취소 요청: orderId={}, reason={}", orderId, requestDto.getCancelReason());
-        
+
+        // 1. 일반 사용자(USER) 권한 체크
+        if (!SecurityUtil.isCurrentUserRegularUser()) {
+            log.warn("결제 취소 권한 없음: 일반 사용자만 취소 가능");
+            return new BaseResponse<>(BaseResponseStatus.PAYMENT_ACCESS_DENIED);
+        }
+
+        // 2. 현재 사용자 ID 가져오기
+        Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
+        log.info("결제 취소 요청 사용자: userId={}", currentUserId);
+
         try {
-            PaymentCancelResponseDto response = paymentService.cancelPayment(orderId, requestDto);
-            
-            log.info("결제 취소 완료: orderId={}, cancelStatus={}", 
-                orderId, response.getCancelStatus());
-            
+            PaymentCancelResponseDto response = paymentService.cancelPayment(orderId, requestDto, currentUserId);
+
+            log.info("결제 취소 완료: orderId={}, cancelStatus={}, userId={}",
+                orderId, response.getCancelStatus(), currentUserId);
+
             return new BaseResponse<>(response);
-            
+
         } catch (Exception e) {
-            log.error("결제 취소 중 오류: orderId={}, error={}", orderId, e.getMessage());
+            log.error("결제 취소 중 오류: orderId={}, userId={}, error={}",
+                orderId, currentUserId, e.getMessage());
             throw e;
         }
     }
