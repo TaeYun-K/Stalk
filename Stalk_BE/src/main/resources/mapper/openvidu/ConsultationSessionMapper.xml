@@ -8,7 +8,7 @@
     <!-- 상담 sessionId 저장 -->
     <update id="updateSessionId">
         UPDATE consultation_sessions
-        SET sessionId = #{sessionId}
+        SET session_id = #{sessionId}
         WHERE id = #{consultationId}
     </update>
 
