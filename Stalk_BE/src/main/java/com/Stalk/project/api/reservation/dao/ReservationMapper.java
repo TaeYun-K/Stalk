@@ -1,5 +1,6 @@
 package com.Stalk.project.api.reservation.dao;
 
+import com.Stalk.project.api.reservation.dto.ReservationCancelCheckDto;
 import com.Stalk.project.api.reservation.dto.in.CancelReason;
 import com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.global.util.PageRequestDto;
@@ -26,13 +27,6 @@ public interface ReservationMapper {
       @Param("startTime") LocalTime startTime);
 
   /**
-   * 기존 예약 존재 여부 확인 ReservationService에서 isTimeAlreadyReserved() 로 호출 (시간 범위 체크)
-   */
-  Boolean isTimeAlreadyReserved(@Param("advisorUserId") Long advisorUserId,
-      @Param("date") LocalDate date,
-      @Param("startTime") LocalTime startTime);
-
-  /**
    * 상담 예약 생성 ReservationService에서 insertConsultationReservation() 로 호출
    */
   int insertConsultationReservation(@Param("userId") Long userId,
@@ -46,11 +40,6 @@ public interface ReservationMapper {
    * 마지막 생성된 예약 ID 조회
    */
   Long getLastInsertId();
-
-  /**
-   * 사용자 role 조회
-   */
-  String getUserRole(@Param("userId") Long userId);
 
   /**
    * 사용자 ID로 advisor_id 조회
@@ -84,13 +73,4 @@ public interface ReservationMapper {
       @Param("cancelReason") CancelReason cancelReason,
       @Param("cancelMemo") String cancelMemo,
       @Param("canceledAt") LocalDateTime canceledAt);
-
-  /**
-   * 알림 생성
-   */
-  int createNotification(@Param("userId") Long userId,
-      @Param("type") String type,
-      @Param("title") String title,
-      @Param("message") String message,
-      @Param("relatedId") Long relatedId);
 }
