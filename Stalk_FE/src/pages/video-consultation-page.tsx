@@ -285,8 +285,8 @@ const VideoConsultationPage: React.FC = () => {
 
     const token = AuthService.getAccessToken();
     try {
-      // 1) 백엔드에 세션 종료 DELETE 요청
-      await axios.delete(`/api/consultations/${consultationId}/session`, {
+      // 1) 백엔드에 세션 종료 POST 요청
+      await axios.post(`/api/consultations/${consultationId}/session/close`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
