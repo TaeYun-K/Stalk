@@ -272,28 +272,12 @@ const VideoConsultationPage: React.FC = () => {
           console.log('Subscribing to new stream:', event.stream.streamId);
 
           const raw = subscriber.stream.connection.data as string;
-          console.log('Subscriber connection data:', raw);
-
-          // subscriber.on('videoElementCreated', (e) => {
-          //   const videoEl = e.element as HTMLVideoElement;
-          //   videoEl.muted = false;
-          //   videoEl.playsInline = true;
-
-          //   // mediaStream이 준비된 후, subscriber를 상태에 추가
-          //   subscriber.on('streamPlaying', () => {
-          //     console.log('▶️ streamPlaying for', subscriber.stream.streamId);
-          //     setSubscribers(prev => [...prev, subscriber]);
-          //   });
-          // });
-
-
-          // 대신 바로 구독자 상태에 추가
-          setSubscribers(prev => [...prev, subscriber]);
-
+          console.log('Subscriber connection data:', raw);     
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
             console.log('Subscriber stream playing:', subscriber.stream.streamId);
+            setSubscribers(prev => [...prev, subscriber]);
           });
         });
         
@@ -582,16 +566,13 @@ const VideoConsultationPage: React.FC = () => {
 
   // 구독자 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
-    console.log('👀 Subscribers changed, count:', subscribers.length);
     subscribers.forEach((subscriber, index) => {
-      const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
-      if (videoElement && subscriber.stream) {
-        const mediaStream = subscriber.stream.getMediaStream();
-        if (mediaStream) {
-          videoElement.srcObject = mediaStream;
-          videoElement.play().catch(console.error);
-          console.log(`📺 attached subscriber video ${index}`);
-        }
+      // mediaStream이 준비되지 않은 경우 방지
+      const mediaStream = subscriber.stream.getMediaStream();
+      if (mediaStream && mediaStream.getVideoTracks().length > 0) {
+        attachSubscriberVideo(subscriber, index);
+      } else {
+        console.warn(`⏳ Stream not ready for subscriber ${index}`);
       }
     });
   }, [subscribers]);
