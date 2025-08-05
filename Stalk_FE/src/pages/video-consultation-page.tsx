@@ -282,9 +282,15 @@ const VideoConsultationPage: React.FC = () => {
   };
 
   const leaveSession = async (): Promise<void> => {
+
+    const token = AuthService.getAccessToken();
     try {
       // 1) 백엔드에 세션 종료 DELETE 요청
-      await axios.delete(`/api/consultations/${consultationId}/session`);
+      await axios.delete(`/api/consultations/${consultationId}/session`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
     } catch (error) {
       console.error('상담 종료 API 실패:', error);
     } finally {

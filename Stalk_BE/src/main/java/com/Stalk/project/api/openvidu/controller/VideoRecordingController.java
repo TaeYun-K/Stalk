@@ -8,9 +8,11 @@ import io.openvidu.java.client.Recording;
 import io.openvidu.java.client.RecordingProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/recordings")
 @RequiredArgsConstructor
@@ -36,8 +38,9 @@ public class VideoRecordingController {
 
             return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
         } catch (Exception e) {
+            log.error("🔴 녹화 시작 실패: {}", e.getMessage(), e); // ✅ 로그 추가
             return ResponseEntity.internalServerError()
-                .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
+                    .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
