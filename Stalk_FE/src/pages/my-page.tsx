@@ -12,6 +12,7 @@ import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
 import ConsultationService from '@/services/consultationService';
 import AuthService from '@/services/authService';
 import ScheduleService from '@/services/scheduleService';
+import { ConsultationDiaryResponse } from '@/types';
 
 interface ConsultationItem {
   id: string;
@@ -126,6 +127,9 @@ const MyPage = () => {
   
   // 상담일지 관련 상태
   const [selectedConsultation, setSelectedConsultation] = useState<ConsultationItem | null>(null);
+  const [consultationDiary, setConsultationDiary] = useState<ConsultationDiaryResponse | null>(null);
+  const [isLoadingDiary, setIsLoadingDiary] = useState(false);
+  const [diaryError, setDiaryError] = useState<string | null>(null);
   
   // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
   const isExpert = userProfile?.role === 'ADVISOR';
@@ -412,13 +416,28 @@ const MyPage = () => {
   };
 
   // 상담일지 관련 함수들
-  const handleConsultationDiaryClick = (consultation: ConsultationItem) => {
-    setSelectedConsultation(consultation);
-    setActiveTab('상담일지');
+  const handleConsultationDiaryClick = async (consultation: ConsultationItem) => {
+    try {
+      setIsLoadingDiary(true);
+      setDiaryError(null);
+      setSelectedConsultation(consultation);
+      setActiveTab('상담일지');
+      
+      // 상담일지 데이터 로드
+      const diaryData = await ConsultationService.getConsultationDiary(consultation.id);
+      setConsultationDiary(diaryData);
+    } catch (error) {
+      console.error('상담일지 로드 실패:', error);
+      setDiaryError(error instanceof Error ? error.message : '상담일지를 불러올 수 없습니다.');
+    } finally {
+      setIsLoadingDiary(false);
+    }
   };
 
   const handleCloseDiary = () => {
     setSelectedConsultation(null);
+    setConsultationDiary(null);
+    setDiaryError(null);
     setActiveTab('내 상담 내역');
   };
 
@@ -985,49 +1004,115 @@ const MyPage = () => {
                   </button>
                 </div>
 
-                {/* 비디오 플레이어 */}
-                <div className="mb-6">
-                  <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-4">
-                    <div className="flex items-center justify-center w-full h-full">
-                      <button className="bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center transition-colors">
-                        <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z"/>
-                        </svg>
-                      </button>
-                    </div>
-                    
-                    {/* 비디오 컨트롤 */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
-                      <div className="flex items-center space-x-4">
-                        <button className="text-white">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z"/>
-                          </svg>
-                        </button>
-                        <div className="flex-1 bg-gray-600 rounded-full h-1">
-                          <div className="bg-white rounded-full h-1 w-0"></div>
+                {isLoadingDiary ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-gray-600">상담일지를 불러오는 중...</span>
+                  </div>
+                ) : diaryError ? (
+                  <div className="text-center py-12">
+                    <div className="text-red-600 mb-4">⚠️ {diaryError}</div>
+                    <button 
+                      onClick={() => handleConsultationDiaryClick(selectedConsultation)}
+                      className="text-blue-600 hover:text-blue-700 text-sm"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                ) : consultationDiary ? (
+                  <>
+                    {/* 녹화 목록 */}
+                    {consultationDiary.recordings.length > 0 ? (
+                      <div className="mb-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">📹 상담 녹화 영상</h3>
+                        <div className="space-y-4">
+                          {consultationDiary.recordings.map((recording, index) => (
+                            <div key={recording.id} className="border border-gray-200 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-medium text-gray-900">녹화 #{index + 1}</h4>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  recording.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                  recording.status === 'RECORDING' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {recording.status === 'COMPLETED' ? '완료' :
+                                   recording.status === 'RECORDING' ? '녹화중' : recording.status}
+                                </span>
+                              </div>
+                              
+                              {/* 비디오 플레이어 */}
+                              <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-3">
+                                {recording.url ? (
+                                  <video 
+                                    controls 
+                                    className="w-full h-full rounded-lg"
+                                    src={recording.url}
+                                  >
+                                    브라우저가 비디오를 지원하지 않습니다.
+                                  </video>
+                                ) : (
+                                  <div className="flex items-center justify-center w-full h-full">
+                                    <button className="bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center transition-colors">
+                                      <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 녹화 정보 */}
+                              <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                                <div>
+                                  <span className="font-medium">시작 시간:</span>
+                                  <span className="ml-2">{new Date(recording.startTime).toLocaleString('ko-KR')}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium">종료 시간:</span>
+                                  <span className="ml-2">{recording.endTime ? new Date(recording.endTime).toLocaleString('ko-KR') : '진행중'}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium">세션 ID:</span>
+                                  <span className="ml-2 font-mono text-xs">{recording.sessionId}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium">녹화 ID:</span>
+                                  <span className="ml-2 font-mono text-xs">{recording.recordingId}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <span className="text-white text-sm">0:00:00 / 1:00:00</span>
-                        <button className="text-white">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                          </svg>
-                        </button>
+                      </div>
+                    ) : (
+                      <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-center">
+                          <div className="text-yellow-600 text-xl mr-3">📹</div>
+                          <div>
+                            <h3 className="font-semibold text-yellow-800 mb-1">녹화 영상이 없습니다</h3>
+                            <p className="text-yellow-700 text-sm">
+                              이 상담의 녹화 영상이 아직 준비되지 않았거나 녹화가 진행되지 않았습니다.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 상담 정보 */}
+                    <div className="flex items-center space-x-6 text-sm text-gray-600 mb-4">
+                      <div className="flex items-center">
+                        <span className="font-medium">📅 상담일시:</span>
+                        <span className="ml-2">{consultationDiary.consultationInfo.date} {consultationDiary.consultationInfo.time}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="font-medium">👨‍💼 전문가:</span>
+                        <span className="ml-2">{consultationDiary.consultationInfo.expert}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="font-medium">📋 상담 내용:</span>
+                        <span className="ml-2">{consultationDiary.consultationInfo.content}</span>
                       </div>
                     </div>
-                  </div>
-
-                  {/* 상담 정보 */}
-                  <div className="flex items-center space-x-6 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center">
-                      <span className="font-medium">📅 상담일시:</span>
-                      <span className="ml-2">2025년 08월 21일(월) 오후 3시</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium">👨‍💼 참여자:</span>
-                      <span className="ml-2">김윤수 투자운용전문가</span>
-                    </div>
-                  </div>
 
                   {/* AI 안내 */}
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -1087,7 +1172,8 @@ const MyPage = () => {
                       </ul>
                     </div>
                   </div>
-                </div>
+                </>
+                ) : null}
 
                 {/* 푸터 */}
                 <div className="border-t pt-6">
