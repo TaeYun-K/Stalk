@@ -20,6 +20,7 @@ import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
+import { User } from "@/types";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -27,7 +28,6 @@ interface LocationState {
   sessionId: string;        // OpenVidu 세션 ID
   userRole?: 'ADVISOR' | 'USER';  // 사용자 역할 추가
 }
-
 
 
 interface StockData {
@@ -65,7 +65,7 @@ const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
-  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId, userRole } = (state as LocationState) || {};
+  const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
 
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
@@ -106,13 +106,14 @@ const VideoConsultationPage: React.FC = () => {
       console.error('Error parsing subscriber data:', error);
     }
     // 기본값: 구독자는 반대 역할
-    return userRole === 'ADVISOR' ? 'USER' : 'ADVISOR';
+    return userInfo?.role === 'ADVISOR' ? 'USER' : 'ADVISOR';
   };
 
   const getParticipantName = (subscriber: Subscriber): string => {
     try {
       if (subscriber.stream.connection.data) {
         const data = JSON.parse(subscriber.stream.connection.data);
+        console.log('Parsed subscriber data:', data);
         return data.userData || data.name || '참가자';
       }
     } catch (error) {
@@ -141,7 +142,7 @@ const VideoConsultationPage: React.FC = () => {
     // 실패 시에도 기본 구조는 설정 (OpenVidu 초기화를 위해)
     setUserInfo({
       name: '', // 빈 문자열로 설정하여 기본값 로직이 작동하도록
-      role: userRole || 'USER',
+      role: userInfo?.role || 'USER',
       userId: '0',
       contact: '',
       email: '',
@@ -157,7 +158,7 @@ const VideoConsultationPage: React.FC = () => {
   console.log('Component mounted, checking conditions for initialization...');
   console.log('ovToken exists:', !!ovToken);
   console.log('consultationId:', consultationId);
-  console.log('userRole:', userRole);
+  console.log('userRole:', userInfo?.role);
 
   // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
   if (ovToken && consultationId) {
@@ -295,8 +296,8 @@ const VideoConsultationPage: React.FC = () => {
   
         // 사용자 정보를 포함한 연결 데이터 준비
         const connectionData = {
-          role: userRole || 'USER',
-          userData: userInfo?.name || (userRole === 'ADVISOR' ? '김전문가' : '김의뢰인'),
+          role: userInfo?.role || 'USER',
+          userData: userInfo?.name || ('익명'),
           userId: userInfo?.userId || '0'
         };
   
@@ -634,7 +635,7 @@ const VideoConsultationPage: React.FC = () => {
     }
 
     // 이름이 없을 경우에만 역할 기반 기본값 사용
-    return userRole === 'ADVISOR' ? '전문가' : '의뢰인';
+    return userInfo?.role === 'ADVISOR' ? '전문가' : '의뢰인';
   };
 
   // 녹화 시작
@@ -792,7 +793,7 @@ const VideoConsultationPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                    <span className="text-sm font-medium">{getRoleDisplayName(userRole === 'ADVISOR' ? 'USER' : 'ADVISOR')} 대기 중</span>
+                    <span className="text-sm font-medium">{getRoleDisplayName(userInfo?.role === 'ADVISOR' ? 'USER' : 'ADVISOR')} 대기 중</span>
                   </div>
                 </div>
               )}
@@ -838,7 +839,7 @@ const VideoConsultationPage: React.FC = () => {
                   )}
                 </div>
                 <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName(userRole || 'USER')})</span>
+                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName(userInfo?.role || 'USER')})</span>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-2">
                   <div
@@ -1018,7 +1019,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userRole || 'USER')})
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userInfo?.role || 'USER')})
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
@@ -1077,7 +1078,7 @@ const VideoConsultationPage: React.FC = () => {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">{getCurrentUserDisplayName()}</p>
-                        <p className="text-xs text-gray-400">{getRoleDisplayName(userRole || 'USER')}</p>
+                        <p className="text-xs text-gray-400">{getRoleDisplayName( (userInfo?.role  || 'USER') as 'ADVISOR' | 'USER')}</p>
                       </div>
                       <div className="flex space-x-1">
                         <div
