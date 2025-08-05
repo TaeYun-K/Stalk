@@ -97,6 +97,7 @@ const ExpertDetailPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showReservationModal, setShowReservationModal] = useState<boolean>(false);
+  const [displayedReviews, setDisplayedReviews] = useState<number>(3);
   
   // API 상태 관리
   const [loading, setLoading] = useState(true);
@@ -388,6 +389,10 @@ const ExpertDetailPage: React.FC = () => {
     });
   };
 
+  const handleLoadMoreReviews = () => {
+    setDisplayedReviews(prev => prev + 3);
+  };
+
   // 달력 렌더링
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth);
@@ -591,11 +596,11 @@ const ExpertDetailPage: React.FC = () => {
             {/* Reviews */}
             <section className="mt-8">
               <div className="flex flex-row items-end space-x-3 mb-4">
-                <h2 className="text-left text-2xl font-bold text-gray-900">리뷰</h2>
+                <h2 className="text-left text-2xl font-bold text-gray-900">상담 후기</h2>
                 <h3 className="text-left text-gray-500 text-sm">Reviews</h3>
               </div>
               <div className="space-y-6">
-                {reviews.map((review) => (
+                {reviews.slice(0, displayedReviews).map((review) => (
                   <div key={review.id} className="py-6">
                     <div className="flex items-center mb-3">
                       <img src={review.avatar} alt={`${review.username}의 프로필 사진`} className='w-10 h-10 rounded-full'/>
@@ -608,9 +613,14 @@ const ExpertDetailPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <button className="mt-4 text-gray-600 bg-gray-200 py-3 px-6 rounded-full hover:text-blue-700 hover:bg-blue-200 hover:font-semibold font-medium">
-                더보기
-              </button>
+              {displayedReviews < reviews.length && (
+                <button 
+                  onClick={handleLoadMoreReviews}
+                  className="mt-4 text-gray-600 bg-gray-100 py-3 px-6 rounded-full hover:text-gray-700 hover:bg-gray-200 hover:font-semibold font-medium transition-colors"
+                >
+                  더보기
+                </button>
+              )}
             </section>
           </div>
 

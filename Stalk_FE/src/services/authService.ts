@@ -194,9 +194,9 @@ class AuthService {
       headers: {
         ...options.headers,
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        // FormData인 경우 Content-Type을 설정하지 않음 (브라우저가 자동 설정)
+        ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       },
-      // credentials: 'include' 제거
     };
 
     console.log('Request URL:', url);
@@ -219,6 +219,8 @@ class AuthService {
       config.headers = {
         ...config.headers,
         'Authorization': `Bearer ${newToken}`,
+        // FormData인 경우 Content-Type을 설정하지 않음
+        ...(!(config.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       };
 
       return fetch(url, config);
