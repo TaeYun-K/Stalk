@@ -25,7 +25,15 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
+/*
+ * 해당 클래스가 Spring의 설정 파일임을 나타냄
+ * Spring 컨테이너는 이 클래스를 스캔하여 @Bean으로 정의된 객체들을 생성하고 관리
+ */
 @Configuration
+/*
+ * Spring Security의 웹 보안 기능을 활성화
+ * 해당 어노테이션을 추가하면 기본적인 보안 필터 체인이 자동으로 등록
+ */
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
@@ -140,8 +148,8 @@ public class SecurityConfig {
             // 회원, 로그인 관련 API - 인증 없이 열어둘 엔드포인트
             .requestMatchers("/api/auth/**").permitAll()
 
-            .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval").permitAll()
-            .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").denyAll()
+            .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval").denyAll()
+            .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").permitAll()
 
             // 커뮤니티 글 목록 및 단일 글 조회
             .requestMatchers(HttpMethod.GET, "/api/community/posts/**").permitAll()
@@ -157,7 +165,10 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/community/**").authenticated()
-            
+
+            // KRX 주식 데이터
+            .requestMatchers(HttpMethod.GET, "/api/public/krx/**").permitAll()
+
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()
         )
