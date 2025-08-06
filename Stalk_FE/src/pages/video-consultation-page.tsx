@@ -263,6 +263,7 @@ const VideoConsultationPage: React.FC = () => {
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
           const subscriber = session.subscribe(event.stream, undefined);
+          console.log('Subscriber 스트림:', subscriber.stream.getMediaStream());
 
           setSubscribers((prev) => {
             const newSubscribers = [...prev, subscriber];
@@ -367,30 +368,26 @@ const VideoConsultationPage: React.FC = () => {
 
   // 4. 구독자 비디오 연결 함수
   const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
-    // 메인 비디오 연결
     const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
-    if (videoElement && subscriber.stream) {
-      const mediaStream = subscriber.stream.getMediaStream();
-      if (mediaStream) {
-        videoElement.srcObject = mediaStream;
-        videoElement.play().catch(console.error);
-        console.log(`Subscriber video ${index} attached`);
-      } else {
-        console.warn('No media stream available for subscriber video');
-      }
+    if (!videoElement) {
+      console.warn(`Video element subscriber-video-${index} not found`);
+      return;
     }
-    // 미니 비디오 연결
-    const miniVideoElement = document.getElementById(`subscriber-mini-video-${index}`) as HTMLVideoElement;
-    if (miniVideoElement && subscriber.stream) {
-      const mediaStream = subscriber.stream.getMediaStream();
-      if (mediaStream) {
-        miniVideoElement.srcObject = mediaStream;
-        miniVideoElement.play().catch(console.error);
-        console.log(`Subscriber mini video ${index} attached`);
-      }
-      else{
-        console.warn('No media stream available for subscriber mini video');
-      }
+    if (videoElement.srcObject) {
+      console.log(`Video element subscriber-video-${index} already has a stream`);
+      return;
+    }
+    const mediaStream = subscriber.stream.getMediaStream();
+    if (mediaStream) {
+      videoElement.srcObject = mediaStream;
+      videoElement.playsInline = true;
+      videoElement.muted = false;
+      videoElement.play().catch((error) => {
+        console.error(`Error playing subscriber video ${index}:`, error);
+      });
+      console.log(`Subscriber video ${index} attached`);
+    } else {
+      console.warn(`No media stream for subscriber ${index}`);
     }
   };
 
@@ -747,7 +744,10 @@ const VideoConsultationPage: React.FC = () => {
                 subscribers.map((subscriber, index) => (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full flex-1">
-                      <div 
+                      <video
+                        autoPlay
+                        playsInline 
+                        muted={false}
                         id={`subscriber-video-${index}`}
                         className="w-full h-full object-cover rounded-2xl"
                       />
