@@ -761,10 +761,8 @@ const VideoConsultationPage: React.FC = () => {
                 subscribers.map((subscriber, index) => (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full">
-                      <video
+                      <div 
                         id={`subscriber-video-${index}`}
-                        autoPlay
-                        playsInline
                         className="w-full h-full object-cover rounded-2xl"
                       />
                     </div>
@@ -967,10 +965,8 @@ const VideoConsultationPage: React.FC = () => {
                       {subscribers.map((subscriber, index) => (
                         <div key={index} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <div className="w-full h-full">
-                            <video
+                            <div
                               id={`subscriber-mini-video-${index}`}
-                              autoPlay
-                              playsInline
                               className="w-full h-full object-cover rounded-lg"
                             />
                           </div>
@@ -1034,7 +1030,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userInfo?.role || 'USER')})
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName( (userInfo?.role  || 'USER') as 'ADVISOR' | 'USER')})
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
