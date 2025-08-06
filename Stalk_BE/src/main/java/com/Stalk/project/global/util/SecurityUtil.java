@@ -137,7 +137,7 @@ public class SecurityUtil {
             return null;
         }
 
-        User user = userLoginMapper.findByUserId(userId);
+        User user = userLoginMapper.findByActiveUserId(userId);
         if (user == null) {
             return null;
         }
@@ -152,7 +152,7 @@ public class SecurityUtil {
      */
     public static Long getCurrentUserPrimaryIdRequired() {
         String userId = getCurrentUserIdRequired(); // JWT에서 가져온 user_id
-        User user = userLoginMapper.findByUserId(userId);
+        User user = userLoginMapper.findByActiveUserId(userId);
         if (user == null) {
             throw new RuntimeException("사용자를 찾을 수 없습니다: " + userId);
         }

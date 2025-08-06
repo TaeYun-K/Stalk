@@ -3,10 +3,9 @@ import {
   Publisher,
   Session,
   Subscriber,
-  Stream
 } from "openvidu-browser";
-import React, { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
 
@@ -19,8 +18,10 @@ import participantsIcon from "@/assets/images/icons/consultation/participants.sv
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
 import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
-import { StockChart, StockSearch } from "@/components/stock";
-import { User } from "@/types";
+import StockChart from "@/components/chart/stock-chart";
+import StockSearch from "@/components/chart/stock-search";
+import Stream from "stream";
+import { stat } from "fs";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -55,7 +56,7 @@ type HoveredButton =
 const DEFAULT_VIDEO_CONFIG = {
   resolution: "1280x720",
   frameRate: 30,
-  insertMode: "APPEND" as const,
+  insertMode: "APPEND",
   mirror: true,
 };
 
@@ -63,8 +64,6 @@ const TIMER_INTERVAL_MS = 1000;
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
-  const [streams, setStreams] = useState<Stream[]>([]);
-  const subscribersRef = useRef<Subscriber[]>([]);
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
@@ -74,6 +73,8 @@ const VideoConsultationPage: React.FC = () => {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [ov, setOv] = useState<OpenVidu | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
+
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
@@ -102,7 +103,6 @@ const VideoConsultationPage: React.FC = () => {
       if (subscriber.stream.connection.data) {
         const raw = subscriber.stream.connection.data;
         const data = JSON.parse(raw.split('%/%')[0]);
-        console.log('Parsed subscriber data:', data);
         return data.role || 'USER';
       }
     } catch (error) {
@@ -117,7 +117,6 @@ const VideoConsultationPage: React.FC = () => {
       if (subscriber.stream.connection.data) {
         const raw = subscriber.stream.connection.data;
         const data = JSON.parse(raw.split('%/%')[0]);
-        console.log('Parsed subscriber data:', data);
         return data.userData || data.name || '참가자';
       }
     } catch (error) {
@@ -224,54 +223,6 @@ const VideoConsultationPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-  subscribers.forEach((subscriber, index) => {
-    attachSubscriberVideo(subscriber, index);
-  });
-}, [subscribers]);
-
-
-  // STEP 1: streamCreated 이벤트에서 스트림만 저장
-  useEffect(() => {
-    if (!session) return;       
-    const handler = (event: any) => {
-      console.log('🔴 streamCreated:', event.stream.streamId);
-      setStreams((prev) => [...prev, event.stream]);
-    };
-    session.on('streamCreated', handler);
-    return () => {
-      session.off('streamCreated', handler);
-    };
-  }, [session]);
-
-  // STEP 2: streams 배열이 변할 때마다, 렌더된 컨테이너가 있는지 보고 subscribe
-  useEffect(() => {
-    if (!session) return;       
-    streams.forEach((stream, idx) => {
-      // 이미 구독한 건 건너뛰기
-      if (subscribersRef.current[idx]) return;
-
-      const containerId = `subscriber-video-${idx}`;
-      console.log('👉 subscribing to', stream.streamId, 'in', containerId);
-      const subscriber = session.subscribe(stream, containerId);
-
-      // 이벤트 바로 등록
-      subscriber.on('videoElementCreated', ({ element }) => {
-        console.log('📺 videoElementCreated for idx', idx);
-        element.playsInline = true;
-        element.muted = false;
-        element.play().catch(console.error);
-      });
-      subscriber.on('streamPlaying', () => {
-        console.log('▶️ streamPlaying for', stream.streamId);
-      });
-
-      // ref 와 state 동기 업데이트
-      subscribersRef.current[idx] = subscriber;
-      setSubscribers([...subscribersRef.current]);
-    });
-  }, [streams, session]);
-
   const getDuration = (): string => {
     const diff = Math.floor(
       (currentTime.getTime() - consultationStartTime.getTime()) / 1000
@@ -313,29 +264,31 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
-          const idx = subscribersRef.current.length;
-        
-          // 구독자 컨테이너로 DOM 생성
-          const containerId = `subscriber-video-${idx}`;
-          const subscriber = session.subscribe(event.stream, containerId);
-          console.log('Subscribing to new stream:', event.stream.streamId);
+          const subscriber = session.subscribe(event.stream, undefined);
+          console.log('Subscriber 스트림:', subscriber.stream.getMediaStream());
 
-          subscriber.on('videoElementCreated', ({element}) => {
-            console.log('📺 subscriber videoElementCreated', idx);
-            element.playsInline = true; // 모바일에서도 자동 재생 가능하도록 설정
-            element.muted = false; // 자동 재생을 위해 음소거 설정
-            element.play().catch(console.error);
-            console.log('✅ 비디오 엘리먼트 설정 완료');
-          });
-        
-          // 구독자 목록에 추가
-          subscribersRef.current.push(subscriber);
-          setSubscribers([...subscribersRef.current]);
+          setSubscribers((prev) => {
+            const newSubscribers = [...prev, subscriber];
 
-          // 이후에 발생할 수 있는 이벤트만 로그로 남김
-          subscriber.on('streamPlaying', () => {
-            console.log('▶️ streamPlaying for', subscriber.stream.streamId);
+            // 비디오 연결은 상태 업데이트 이후로 미루기
+            setTimeout(() => {
+              attachSubscriberVideo(subscriber, newSubscribers.length - 1);
+            }, 100);
+            
+            return newSubscribers;
           });
+        });
+
+        session.on('streamPropertyChanged', (event) => {
+          const connectionId = event.stream.connection.connectionId;
+
+          setSubscriberStatusMap(prev => ({
+            ...prev,
+            [connectionId]: {
+              ...prev[connectionId],
+              [event.changedProperty === 'audioActive' ? 'audio' : 'video']: event.newValue,
+            },
+          }));
         });
         
         session.on('streamDestroyed', (event) => {
@@ -379,7 +332,7 @@ const VideoConsultationPage: React.FC = () => {
       const publisher = await openVidu.initPublisherAsync(undefined, {
         audioSource: undefined,
         videoSource: undefined,
-        publishAudio: true,
+        publishAudio: false,
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
@@ -399,7 +352,7 @@ const VideoConsultationPage: React.FC = () => {
       await session.publish(publisher);
       setPublisher(publisher);
       setIsVideoEnabled(true);
-      setIsAudioEnabled(true);
+      setIsAudioEnabled(false); // 초기 상태는 오디오 비활성화
       
       console.log('Publisher created and published');
       
@@ -429,30 +382,26 @@ const VideoConsultationPage: React.FC = () => {
 
   // 4. 구독자 비디오 연결 함수
   const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
-    // 메인 비디오 연결
     const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
-    if (videoElement && subscriber.stream) {
-      const mediaStream = subscriber.stream.getMediaStream();
-      if (mediaStream) {
-        videoElement.srcObject = mediaStream;
-        videoElement.play().catch(console.error);
-        console.log(`Subscriber video ${index} attached`);
-      } else {
-        console.warn('No media stream available for subscriber video');
-      }
+    if (!videoElement) {
+      console.warn(`Video element subscriber-video-${index} not found`);
+      return;
     }
-    // 미니 비디오 연결
-    const miniVideoElement = document.getElementById(`subscriber-mini-video-${index}`) as HTMLVideoElement;
-    if (miniVideoElement && subscriber.stream) {
-      const mediaStream = subscriber.stream.getMediaStream();
-      if (mediaStream) {
-        miniVideoElement.srcObject = mediaStream;
-        miniVideoElement.play().catch(console.error);
-        console.log(`Subscriber mini video ${index} attached`);
-      }
-      else{
-        console.warn('No media stream available for subscriber mini video');
-      }
+    if (videoElement.srcObject) {
+      console.log(`Video element subscriber-video-${index} already has a stream`);
+      return;
+    }
+    const mediaStream = subscriber.stream.getMediaStream();
+    if (mediaStream) {
+      videoElement.srcObject = mediaStream;
+      videoElement.playsInline = true;
+      videoElement.muted = false;
+      videoElement.play().catch((error) => {
+        console.error(`Error playing subscriber video ${index}:`, error);
+      });
+      console.log(`Subscriber video ${index} attached`);
+    } else {
+      console.warn(`No media stream for subscriber ${index}`);
     }
   };
 
@@ -533,8 +482,8 @@ const VideoConsultationPage: React.FC = () => {
         }
       });
 
-      // 5) 상담 목록 화면으로 이동
-      navigate('/consultations');
+      // 5) 상태 초기화
+      navigate(`/mypage`);
     }
   };
 
@@ -552,7 +501,10 @@ const VideoConsultationPage: React.FC = () => {
       if (newVideoState) {
         // 비디오 켜기
         await publisher.publishVideo(true);
-        console.log('Video enabled');
+        
+          setTimeout(() => {
+          attachLocalVideo(publisher);
+        }, 100); // 100ms 후 시도
       } else {
         // 비디오 끄기
         await publisher.publishVideo(false);
@@ -595,18 +547,19 @@ const VideoConsultationPage: React.FC = () => {
 
   // 8. 컴포넌트 언마운트 시 리소스 정리
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      leaveSession();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
-      if (publisher) {
-        const pubStream = publisher.stream?.getMediaStream();
-        if (pubStream) {
-          pubStream.getTracks().forEach((track) => track.stop());
-        }
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      if (session) {
+        leaveSession();
       }
     };
-  }, []);
+  }, [session, consultationId, navigate]);
 
   // 로컬 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
@@ -621,18 +574,14 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [publisher]);
 
-  // 구독자 비디오 렌더링을 위한 useEffect 추가
+  //localStream이 변경될 때마다 로컬 비디오를 연결
   useEffect(() => {
-    subscribers.forEach((subscriber, index) => {
-      // mediaStream이 준비되지 않은 경우 방지
-      const mediaStream = subscriber.stream.getMediaStream();
-      if (mediaStream && mediaStream.getVideoTracks().length > 0) {
-        attachSubscriberVideo(subscriber, index);
-      } else {
-        console.warn(`⏳ Stream not ready for subscriber ${index}`);
-      }
-    });
-  }, [subscribers]);
+    if (publisher && isVideoEnabled) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100);
+    }
+  }, [showParticipantFaces, publisher, isVideoEnabled]);
 
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
@@ -801,21 +750,44 @@ const VideoConsultationPage: React.FC = () => {
             <div className="h-full grid grid-cols-2 gap-4">
               {/* 구독자 비디오 렌더링 */}
               {subscribers.length > 0 ? (
-                subscribers.map((subscriber, index) => (
+                subscribers.map((subscriber, index) => {
+                  const name = getParticipantName(subscriber);
+                  const role = getParticipantRole(subscriber);
+                  const roleName = getRoleDisplayName(role);
+
+                  const connectionId = subscriber.stream.connection.connectionId;
+                  const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
+
+                  return (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
-                    <div className="w-full h-full">
-                      <div 
+                    <div className="w-full h-full flex-1">
+                      <video
+                        ref={(videoElement) => {
+                          if (videoElement && subscriber.stream) {
+                            const stream = subscriber.stream.getMediaStream();
+                            if (videoElement.srcObject !== stream) {
+                              videoElement.srcObject = stream;
+                              videoElement.play().catch(console.error);
+                              console.log(`▶️ 구독자 비디오 ${index} 최초 연결`);
+                            }
+                          }
+                        }}
+                        autoPlay
+                        playsInline 
+                        muted={false}
                         id={`subscriber-video-${index}`}
                         className="w-full h-full object-cover rounded-2xl"
                       />
                     </div>
                     <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
                       <span className="text-sm font-medium">
-                        {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
+                        {name} ({roleName})
                       </span>
                     </div>
+
+
                     <div className="absolute bottom-4 right-4 flex space-x-2">
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
@@ -828,7 +800,7 @@ const VideoConsultationPage: React.FC = () => {
                           />
                         </svg>
                       </div>
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
@@ -839,7 +811,8 @@ const VideoConsultationPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               ) : (
                 // 구독자가 없을 때 기본 표시
                 <div className="bg-gray-800 rounded-2xl overflow-hidden relative group">
@@ -1005,19 +978,38 @@ const VideoConsultationPage: React.FC = () => {
                   <div className="flex items-center justify-between p-4 h-full">
                     <div className="flex items-center space-x-4 overflow-x-auto flex-1">
                       {/* 구독자 비디오 미니뷰 */}
-                      {subscribers.map((subscriber, index) => (
-                        <div key={index} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
-                          <div className="w-full h-full">
-                            <div
-                              id={`subscriber-mini-video-${index}`}
-                              className="w-full h-full object-cover rounded-lg"
-                            />
-                          </div>
+                      {subscribers.map((subscriber) => {
+                      const name = getParticipantName(subscriber);
+                      const role = getParticipantRole(subscriber);
+                      const roleName = getRoleDisplayName(role);
+
+                      const connectionId = subscriber.stream.connection.connectionId;
+                      const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
+
+                      return (
+                        <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                          <video
+                            ref={(videoElement) => {
+                              if (videoElement && subscriber.stream) {
+                                const stream = subscriber.stream.getMediaStream();
+                                if (videoElement.srcObject !== stream) {
+                                  videoElement.srcObject = stream;
+                                  videoElement.play().catch(console.error);
+                                  console.log(`▶️ 구독자 비디오 최초 연결`);
+                                }
+                              }
+                            }}
+                            id={`subscriber-mini-video-${subscriber.stream.streamId}`}
+                            autoPlay
+                            playsInline
+                            muted={false}
+                            className="w-full h-full object-cover rounded-lg"
+                          />
                           <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                            {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
+                            {name} ({roleName})
                           </div>
                           <div className="absolute top-2 right-2 flex space-x-1">
-                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <div className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                               <svg
                                 className="w-2.5 h-2.5"
                                 fill="currentColor"
@@ -1030,7 +1022,7 @@ const VideoConsultationPage: React.FC = () => {
                                 />
                               </svg>
                             </div>
-                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <div className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                               <svg
                                 className="w-2.5 h-2.5"
                                 fill="currentColor"
@@ -1041,7 +1033,7 @@ const VideoConsultationPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      )})}
 
                       <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                         {(publisher || localStream) &&

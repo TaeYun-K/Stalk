@@ -1,5 +1,13 @@
 package com.Stalk.project.api.user.service;
 
+import static com.Stalk.project.global.response.BaseResponseStatus.ALREADY_DEACTIVATED_USER;
+import static com.Stalk.project.global.response.BaseResponseStatus.USER_DEACTIVATION_FAILED;
+import static com.Stalk.project.global.response.BaseResponseStatus.USER_NOT_FOUND;
+
+import com.Stalk.project.api.login.service.AuthService;
+import com.Stalk.project.api.signup.entity.User;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,12 +17,14 @@ import com.Stalk.project.api.user.dto.out.UserUpdateResponseDto;
 import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
   private final UserProfileMapper userProfileMapper;
+  private final AuthService authService;
 
   public UserProfileResponseDto getUserProfile(Long userId) {
     // 기존 메서드 유지
@@ -99,5 +109,38 @@ public class UserService {
         .updatedName(hasNameUpdate ? requestDto.getName().trim() : null)
         .updatedContact(hasContactUpdate ? formattedContact : null) // 응답에도 하이픈 포함된 형태
         .build();
+  }
+
+  /**
+   * 사용자 계정을 비활성화(소프트 삭제)합니다.
+   * @param userId 비활성화할 사용자의 ID
+   */
+  @Transactional
+  public void deactivateUser(Long userId, HttpServletRequest request, HttpServletResponse response) {
+    // 1. 사용자 존재 및 활성 상태 확인
+    User user = userProfileMapper.findUserById(userId);
+    if (user == null) {
+      throw new BaseException(USER_NOT_FOUND);
+    }
+    if (!user.getIsActive()) {
+      throw new BaseException(ALREADY_DEACTIVATED_USER);
+    }
+
+    // 역할(Role)에 따른 탈퇴 전처리 로직
+    // ADVISOR 또는 USER 역할에 따라 예정된 예약이 있는지 확인하고 처리.
+    // if ("ADVISOR".equals(user.getRole()) || "USER".equals(user.getRole())) {
+    //     if (reservationDao.hasUpcomingReservations(userId)) {
+    //         throw new BaseException(CANNOT_DEACTIVATE_WITH_RESERVATIONS);
+    //     }
+    // }
+
+    // 사용자 정보 비활성화 (Soft Delete)
+    Long updatedRows = userProfileMapper.deactivateUser(userId);
+    if (updatedRows == 0) {
+      // 업데이트가 실패한 경우 (이미 비활성화되었거나 사용자가 없는 경우 등)
+      throw new BaseException(USER_DEACTIVATION_FAILED);
+    }
+    // 토큰 로그아웃(블랙리스트) 처리
+    authService.invalidateTokens(request, response);
   }
 }
