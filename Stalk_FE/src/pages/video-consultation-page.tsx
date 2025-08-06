@@ -3,6 +3,7 @@ import {
   Publisher,
   Session,
   Subscriber,
+  Stream
 } from "openvidu-browser";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
@@ -63,6 +64,7 @@ const TIMER_INTERVAL_MS = 1000;
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
+  const [streams, setStreams] = useState<Stream[]>([]);
   const subscribersRef = useRef<Subscriber[]>([]);
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
@@ -228,6 +230,48 @@ const VideoConsultationPage: React.FC = () => {
     attachSubscriberVideo(subscriber, index);
   });
 }, [subscribers]);
+
+
+  // STEP 1: streamCreated 이벤트에서 스트림만 저장
+  useEffect(() => {
+    if (!session) return;       
+    const handler = (event: any) => {
+      console.log('🔴 streamCreated:', event.stream.streamId);
+      setStreams((prev) => [...prev, event.stream]);
+    };
+    session.on('streamCreated', handler);
+    return () => {
+      session.off('streamCreated', handler);
+    };
+  }, [session]);
+
+  // STEP 2: streams 배열이 변할 때마다, 렌더된 컨테이너가 있는지 보고 subscribe
+  useEffect(() => {
+    if (!session) return;       
+    streams.forEach((stream, idx) => {
+      // 이미 구독한 건 건너뛰기
+      if (subscribersRef.current[idx]) return;
+
+      const containerId = `subscriber-video-${idx}`;
+      console.log('👉 subscribing to', stream.streamId, 'in', containerId);
+      const subscriber = session.subscribe(stream, containerId);
+
+      // 이벤트 바로 등록
+      subscriber.on('videoElementCreated', ({ element }) => {
+        console.log('📺 videoElementCreated for idx', idx);
+        element.playsInline = true;
+        element.muted = false;
+        element.play().catch(console.error);
+      });
+      subscriber.on('streamPlaying', () => {
+        console.log('▶️ streamPlaying for', stream.streamId);
+      });
+
+      // ref 와 state 동기 업데이트
+      subscribersRef.current[idx] = subscriber;
+      setSubscribers([...subscribersRef.current]);
+    });
+  }, [streams, session]);
 
   const getDuration = (): string => {
     const diff = Math.floor(
@@ -761,10 +805,8 @@ const VideoConsultationPage: React.FC = () => {
                 subscribers.map((subscriber, index) => (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full">
-                      <video
+                      <div 
                         id={`subscriber-video-${index}`}
-                        autoPlay
-                        playsInline
                         className="w-full h-full object-cover rounded-2xl"
                       />
                     </div>
@@ -967,10 +1009,8 @@ const VideoConsultationPage: React.FC = () => {
                       {subscribers.map((subscriber, index) => (
                         <div key={index} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <div className="w-full h-full">
-                            <video
+                            <div
                               id={`subscriber-mini-video-${index}`}
-                              autoPlay
-                              playsInline
                               className="w-full h-full object-cover rounded-lg"
                             />
                           </div>
@@ -1034,7 +1074,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userInfo?.role || 'USER')})
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName( (userInfo?.role  || 'USER') as 'ADVISOR' | 'USER')})
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
