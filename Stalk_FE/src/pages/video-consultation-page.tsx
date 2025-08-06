@@ -21,6 +21,7 @@ import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
 import Stream from "stream";
+import { stat } from "fs";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -72,6 +73,8 @@ const VideoConsultationPage: React.FC = () => {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [ov, setOv] = useState<OpenVidu | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
+
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
@@ -275,6 +278,18 @@ const VideoConsultationPage: React.FC = () => {
             return newSubscribers;
           });
         });
+
+        session.on('streamPropertyChanged', (event) => {
+          const connectionId = event.stream.connection.connectionId;
+
+          setSubscriberStatusMap(prev => ({
+            ...prev,
+            [connectionId]: {
+              ...prev[connectionId],
+              [event.changedProperty === 'audioActive' ? 'audio' : 'video']: event.newValue,
+            },
+          }));
+        });
         
         session.on('streamDestroyed', (event) => {
           console.log('Stream destroyed:', event.stream.streamId);
@@ -317,7 +332,7 @@ const VideoConsultationPage: React.FC = () => {
       const publisher = await openVidu.initPublisherAsync(undefined, {
         audioSource: undefined,
         videoSource: undefined,
-        publishAudio: true,
+        publishAudio: false,
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
@@ -337,7 +352,7 @@ const VideoConsultationPage: React.FC = () => {
       await session.publish(publisher);
       setPublisher(publisher);
       setIsVideoEnabled(true);
-      setIsAudioEnabled(true);
+      setIsAudioEnabled(false); // 초기 상태는 오디오 비활성화
       
       console.log('Publisher created and published');
       
@@ -745,6 +760,9 @@ const VideoConsultationPage: React.FC = () => {
                   const role = getParticipantRole(subscriber);
                   const roleName = getRoleDisplayName(role);
 
+                  const connectionId = subscriber.stream.connection.connectionId;
+                  const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: false };
+
                   return (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full flex-1">
@@ -771,8 +789,10 @@ const VideoConsultationPage: React.FC = () => {
                         {name} ({roleName})
                       </span>
                     </div>
+
+
                     <div className="absolute bottom-4 right-4 flex space-x-2">
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                      <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center" ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
@@ -785,7 +805,7 @@ const VideoConsultationPage: React.FC = () => {
                           />
                         </svg>
                       </div>
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                      <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center" ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
