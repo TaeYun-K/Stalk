@@ -56,27 +56,50 @@ export const useStockData = (
 
       const responseData = await response.json();
       
-      if (responseData.success && responseData.data) {
-        const stockInfo = responseData.data;
-        const price = parseFloat(stockInfo.closePrice) || 0;
-        const change = parseFloat(stockInfo.priceChange) || 0;
-        const changeRate = parseFloat(stockInfo.changeRate) || 0;
+      // Handle both wrapped {success, data} format and direct object format
+      let stockInfo;
+      if (responseData.success !== undefined) {
+        // Wrapped format
+        if (!responseData.success) {
+          throw new Error(responseData.message || '주식 데이터 로드 실패');
+        }
+        stockInfo = responseData.data;
+      } else if (responseData.ISU_SRT_CD || responseData.ticker) {
+        // Direct KrxStockInfo object format
+        stockInfo = responseData;
+      }
+      
+      if (stockInfo) {
+        // Handle both field naming conventions
+        const closePrice = stockInfo.closePrice || stockInfo.TDD_CLSPRC || stockInfo.ISU_CLSPRC || '0';
+        const priceChange = stockInfo.priceChange || stockInfo.CMPPREVDD_PRC || '0';
+        const changeRateStr = stockInfo.changeRate || stockInfo.FLUC_RT || '0';
+        const volumeStr = stockInfo.volume || stockInfo.ACC_TRDVOL || '0';
+        const marketCapStr = stockInfo.marketCap || stockInfo.MKTCAP || '0';
+        const stockName = stockInfo.name || stockInfo.ISU_ABBRV || '';
+        const stockTicker = stockInfo.ticker || stockInfo.ISU_SRT_CD || ticker;
+        
+        const price = parseFloat(closePrice.toString().replace(/,/g, '')) || 0;
+        const change = parseFloat(priceChange.toString().replace(/,/g, '')) || 0;
+        const changeRate = parseFloat(changeRateStr.toString().replace(/,/g, '')) || 0;
 
         setData({
-          ticker: stockInfo.ticker,
-          name: stockInfo.name,
-          marketType: marketType,
+          ticker: stockTicker,
+          name: stockName,
+          marketType: ticker.startsWith('900') || ticker.startsWith('300') ? 'KOSDAQ' : 'KOSPI',
           price: price,
           change: change,
           changeRate: changeRate,
-          volume: stockInfo.volume || '0',
-          marketCap: stockInfo.marketCap || '0',
+          volume: volumeStr,
+          marketCap: marketCapStr,
           high: price + Math.abs(change),
           low: price - Math.abs(change),
           open: price - change,
           prevClose: price - change,
           lastUpdated: new Date()
         });
+      } else {
+        throw new Error('주식 데이터를 찾을 수 없습니다.');
       }
     } catch (err) {
       console.error('Error fetching stock data:', err);
@@ -121,41 +144,86 @@ export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketT
     setError(null);
 
     try {
-      let endpoint = '/api/krx/ranking/';
-      if (category === 'gainers') endpoint += 'gainers';
-      else if (category === 'losers') endpoint += 'losers';
-      else endpoint += 'volume';
+      let allStocks: any[] = [];
 
-      const response = await fetch(endpoint);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || '주식 목록 로드 실패');
-      }
-
-      const responseData = await response.json();
-      
-      if (responseData.success && responseData.data) {
-        let filteredStocks = responseData.data;
+      if (category === 'volume') {
+        // Use the combined volume endpoint
+        const response = await fetch('/api/krx/ranking/volume');
         
-        // Apply market filtering if specified
-        if (marketType && marketType !== '전체') {
-          filteredStocks = responseData.data.filter((stock: any) => {
-            const ticker = stock.ticker || '';
-            
-            if (marketType === 'kospi') {
-              // KOSPI stocks: regular 6-digit codes, typically 0-3 prefix
-              return !ticker.startsWith('9') && !ticker.startsWith('3');
-            } else if (marketType === 'kosdaq') {
-              // KOSDAQ stocks: typically start with 9 or 3
-              return ticker.startsWith('9') || ticker.startsWith('3');
-            }
-            return true;
-          });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || '거래량 순위 로드 실패');
         }
+
+        const responseData = await response.json();
+        if (responseData.success && responseData.data) {
+          allStocks = responseData.data;
+        }
+      } else {
+        // For gainers and losers, fetch from both KOSPI and KOSDAQ
+        const kospiEndpoint = category === 'gainers' 
+          ? '/api/krx/kospi/price-increase-ranking'
+          : '/api/krx/kospi/price-decrease-ranking';
         
-        setStocks(filteredStocks);
+        const kosdaqEndpoint = category === 'gainers'
+          ? '/api/krx/kosdaq/price-increase-ranking' 
+          : '/api/krx/kosdaq/price-decrease-ranking';
+
+        // Fetch both markets concurrently
+        const [kospiResponse, kosdaqResponse] = await Promise.all([
+          fetch(kospiEndpoint),
+          fetch(kosdaqEndpoint)
+        ]);
+
+        if (!kospiResponse.ok || !kosdaqResponse.ok) {
+          throw new Error('상승/하락률 순위 로드 실패');
+        }
+
+        const [kospiData, kosdaqData] = await Promise.all([
+          kospiResponse.json(),
+          kosdaqResponse.json()
+        ]);
+
+        // Combine both arrays
+        allStocks = [...kospiData, ...kosdaqData];
+
+        // Sort by change rate and re-rank
+        allStocks.sort((a, b) => {
+          const aRate = Math.abs(parseFloat(a.changeRate) || 0);
+          const bRate = Math.abs(parseFloat(b.changeRate) || 0);
+          return bRate - aRate;
+        });
+
+        // Update rankings and limit to top 50
+        allStocks = allStocks.slice(0, 50).map((stock, index) => ({
+          ...stock,
+          rank: index + 1
+        }));
       }
+      
+      // Apply market filtering if specified
+      if (marketType && marketType !== '전체') {
+        allStocks = allStocks.filter((stock: any) => {
+          const ticker = stock.ticker || '';
+          
+          if (marketType === 'kospi') {
+            // KOSPI stocks: regular 6-digit codes, typically 0-3 prefix
+            return !ticker.startsWith('9') && !ticker.startsWith('3');
+          } else if (marketType === 'kosdaq') {
+            // KOSDAQ stocks: typically start with 9 or 3
+            return ticker.startsWith('9') || ticker.startsWith('3');
+          }
+          return true;
+        });
+
+        // Re-rank after filtering
+        allStocks = allStocks.map((stock, index) => ({
+          ...stock,
+          rank: index + 1
+        }));
+      }
+      
+      setStocks(allStocks);
     } catch (err) {
       console.error('Error fetching stock list:', err);
       setError(err instanceof Error ? err.message : '주식 목록을 불러올 수 없습니다.');
@@ -230,7 +298,7 @@ export const useStockBasicInfo = (ticker: string | null) => {
     setError(null);
 
     try {
-      const response = await AuthService.authenticatedRequest(`/api/stalk/info/${ticker}`);
+      const response = await fetch(`/api/stalk/info/${ticker}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

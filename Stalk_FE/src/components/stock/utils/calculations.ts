@@ -5,6 +5,7 @@ export interface PriceData {
   close: number;
   high?: number;
   low?: number;
+  open?: number;
   volume?: number;
 }
 
@@ -195,4 +196,208 @@ export const formatVolume = (volume: number): string => {
     return `${(volume / 1000).toFixed(1)}K`;
   }
   return volume.toString();
+};
+
+// VWAP (Volume Weighted Average Price)
+export const calculateVWAP = (highs: number[], lows: number[], closes: number[], volumes: number[]) => {
+  const vwapValues: (number | null)[] = [];
+  let cumulativeTPV = 0; // Cumulative (Typical Price × Volume)
+  let cumulativeVolume = 0;
+  
+  for (let i = 0; i < closes.length; i++) {
+    const typicalPrice = (highs[i] + lows[i] + closes[i]) / 3;
+    cumulativeTPV += typicalPrice * volumes[i];
+    cumulativeVolume += volumes[i];
+    
+    if (cumulativeVolume === 0) {
+      vwapValues.push(null);
+    } else {
+      vwapValues.push(cumulativeTPV / cumulativeVolume);
+    }
+  }
+  
+  return vwapValues;
+};
+
+// ATR (Average True Range) - Volatility indicator
+export const calculateATR = (highs: number[], lows: number[], closes: number[], period: number = 14) => {
+  const trueRanges: number[] = [];
+  const atrValues: (number | null)[] = [];
+  
+  for (let i = 0; i < closes.length; i++) {
+    if (i === 0) {
+      trueRanges.push(highs[i] - lows[i]);
+    } else {
+      const highLow = highs[i] - lows[i];
+      const highClose = Math.abs(highs[i] - closes[i - 1]);
+      const lowClose = Math.abs(lows[i] - closes[i - 1]);
+      trueRanges.push(Math.max(highLow, highClose, lowClose));
+    }
+  }
+  
+  // Calculate ATR using EMA
+  for (let i = 0; i < trueRanges.length; i++) {
+    if (i < period - 1) {
+      atrValues.push(null);
+    } else if (i === period - 1) {
+      const sum = trueRanges.slice(0, period).reduce((a, b) => a + b, 0);
+      atrValues.push(sum / period);
+    } else {
+      const prevATR = atrValues[i - 1];
+      if (prevATR !== null) {
+        atrValues.push((prevATR * (period - 1) + trueRanges[i]) / period);
+      } else {
+        atrValues.push(null);
+      }
+    }
+  }
+  
+  return atrValues;
+};
+
+// Williams %R
+export const calculateWilliamsR = (highs: number[], lows: number[], closes: number[], period: number = 14) => {
+  const values: (number | null)[] = [];
+  
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      values.push(null);
+    } else {
+      const periodHighs = highs.slice(i - period + 1, i + 1);
+      const periodLows = lows.slice(i - period + 1, i + 1);
+      const highestHigh = Math.max(...periodHighs);
+      const lowestLow = Math.min(...periodLows);
+      
+      if (highestHigh === lowestLow) {
+        values.push(-50); // Middle value when no range
+      } else {
+        const williams = ((highestHigh - closes[i]) / (highestHigh - lowestLow)) * -100;
+        values.push(williams);
+      }
+    }
+  }
+  
+  return values;
+};
+
+// Stochastic Oscillator
+export const calculateStochastic = (highs: number[], lows: number[], closes: number[], period: number = 14, smoothK: number = 3, smoothD: number = 3) => {
+  const kValues: (number | null)[] = [];
+  const dValues: (number | null)[] = [];
+  
+  // Calculate %K
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      kValues.push(null);
+    } else {
+      const periodHighs = highs.slice(i - period + 1, i + 1);
+      const periodLows = lows.slice(i - period + 1, i + 1);
+      const highestHigh = Math.max(...periodHighs);
+      const lowestLow = Math.min(...periodLows);
+      
+      if (highestHigh - lowestLow === 0) {
+        kValues.push(50); // Default to 50 if no range
+      } else {
+        const k = ((closes[i] - lowestLow) / (highestHigh - lowestLow)) * 100;
+        kValues.push(k);
+      }
+    }
+  }
+  
+  // Smooth %K
+  const smoothedK = calculateMA(kValues.filter(v => v !== null) as number[], smoothK);
+  
+  // Calculate %D (MA of %K)
+  const dValuesRaw = calculateMA(smoothedK.filter(v => v !== null) as number[], smoothD);
+  
+  return {
+    k: smoothedK,
+    d: dValuesRaw
+  };
+};
+
+// Heikin-Ashi calculation
+export const calculateHeikinAshi = (opens: number[], highs: number[], lows: number[], closes: number[]) => {
+  const haData: any[] = [];
+  
+  for (let i = 0; i < closes.length; i++) {
+    let haClose = (opens[i] + highs[i] + lows[i] + closes[i]) / 4;
+    let haOpen;
+    
+    if (i === 0) {
+      haOpen = (opens[i] + closes[i]) / 2;
+    } else {
+      haOpen = (haData[i - 1].o + haData[i - 1].c) / 2;
+    }
+    
+    const haHigh = Math.max(highs[i], haOpen, haClose);
+    const haLow = Math.min(lows[i], haOpen, haClose);
+    
+    haData.push({
+      o: haOpen,
+      h: haHigh,
+      l: haLow,
+      c: haClose
+    });
+  }
+  
+  return haData;
+};
+
+// Ichimoku Cloud
+export const calculateIchimoku = (highs: number[], lows: number[], period1: number = 9, period2: number = 26, period3: number = 52) => {
+  const tenkan: (number | null)[] = [];
+  const kijun: (number | null)[] = [];
+  const senkouA: (number | null)[] = [];
+  const senkouB: (number | null)[] = [];
+  const chikou: number[] = [];
+  
+  for (let i = 0; i < highs.length; i++) {
+    // Tenkan-sen (Conversion Line)
+    if (i < period1 - 1) {
+      tenkan.push(null);
+    } else {
+      const periodHighs = highs.slice(i - period1 + 1, i + 1);
+      const periodLows = lows.slice(i - period1 + 1, i + 1);
+      tenkan.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+    }
+    
+    // Kijun-sen (Base Line)
+    if (i < period2 - 1) {
+      kijun.push(null);
+    } else {
+      const periodHighs = highs.slice(i - period2 + 1, i + 1);
+      const periodLows = lows.slice(i - period2 + 1, i + 1);
+      kijun.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+    }
+    
+    // Senkou Span A (Leading Span A)
+    if (tenkan[i] !== null && kijun[i] !== null) {
+      senkouA.push((tenkan[i]! + kijun[i]!) / 2);
+    } else {
+      senkouA.push(null);
+    }
+    
+    // Senkou Span B (Leading Span B)
+    if (i < period3 - 1) {
+      senkouB.push(null);
+    } else {
+      const periodHighs = highs.slice(i - period3 + 1, i + 1);
+      const periodLows = lows.slice(i - period3 + 1, i + 1);
+      senkouB.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+    }
+  }
+  
+  // Chikou Span (Lagging Span) - close price shifted back
+  for (let i = 0; i < highs.length; i++) {
+    chikou.push(lows[i]); // Using close price, shifted back period2 periods
+  }
+  
+  return {
+    tenkan,
+    kijun,
+    senkouA,
+    senkouB,
+    chikou
+  };
 };

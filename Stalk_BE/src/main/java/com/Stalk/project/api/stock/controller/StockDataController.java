@@ -40,17 +40,18 @@ public class StockDataController {
                 return ResponseEntity.ok(response);
             }
             
-            // Generate realistic historical data points based on current real price
-            List<Map<String, Object>> currentData = generateDailyData(stockCode, currentPrice, Math.abs(period));
+            // Return only current price data - no mock data generation
+            Map<String, Object> currentData = new HashMap<>();
+            currentData.put("price", currentPrice);
+            currentData.put("date", LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")));
             
             response.put("success", true);
             response.put("data", currentData);
             response.put("stockCode", stockCode);
             response.put("period", period);
-            response.put("aggregationType", "current");
-            response.put("message", "Showing realistic data based on current real price. Historical data not yet implemented.");
+            response.put("message", "Only current price available. Historical data requires real KRX API implementation.");
             
-            logger.info("Stock API: Returning {} data points for stock: {}", currentData.size(), stockCode);
+            logger.info("Stock API: Returning current price data for stock: {}", stockCode);
             
             return ResponseEntity.ok(response);
             
@@ -89,45 +90,4 @@ public class StockDataController {
         return 0;
     }
     
-    /**
-     * Generate daily historical data based on current real price
-     */
-    private List<Map<String, Object>> generateDailyData(String stockCode, double currentPrice, int days) {
-        List<Map<String, Object>> data = new ArrayList<>();
-        Random random = new Random(stockCode.hashCode());
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-        
-        double price = currentPrice;
-        
-        // Generate at least 20 data points for a proper chart
-        int minPoints = Math.max(days, 20);
-        int daysBack = 0;
-        
-        while (data.size() < minPoints && daysBack < 100) {
-            LocalDate date = LocalDate.now().minusDays(daysBack);
-            
-            // Skip weekends
-            if (date.getDayOfWeek().getValue() < 6) {
-                Map<String, Object> dayData = new HashMap<>();
-                dayData.put("date", date.format(formatter));
-                dayData.put("close", Math.round(price));
-                
-                long baseVolume = 1000000 + random.nextInt(5000000);
-                dayData.put("volume", baseVolume);
-                
-                data.add(0, dayData); // Add to beginning (oldest first)
-                
-                // Generate price for previous day
-                double changePercent = (random.nextDouble() - 0.5) * 0.06; // ±3% daily change
-                price = price / (1 + changePercent);
-            }
-            
-            daysBack++;
-        }
-        
-        logger.info("Generated {} data points for {} ending at real price {}", 
-                   data.size(), stockCode, currentPrice);
-        
-        return data;
-    }
 }
