@@ -157,6 +157,13 @@ public enum BaseResponseStatus {
   USER_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1504, "사용자 정보 수정에 실패했습니다."),
   INVALID_PHONE_FORMAT(HttpStatus.BAD_REQUEST, false, 1505, "전화번호는 010으로 시작하는 11자리 숫자여야 합니다."),
 
+
+  // ===== 회원 탈퇴 관련 에러 코드 (1510번대) =====
+  ALREADY_DEACTIVATED_USER(HttpStatus.BAD_REQUEST, false, 1511, "이미 탈퇴 처리된 회원입니다."),
+  USER_DEACTIVATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1512, "회원 탈퇴 처리에 실패했습니다."),
+  CANNOT_DEACTIVATE_WITH_RESERVATIONS(HttpStatus.CONFLICT, false, 1513, "진행중인 예약이 있어 탈퇴할 수 없습니다. 예약을 먼저 처리해주세요."),
+
+
   /**
    * Openvidu Session 관련 에러
    */
