@@ -482,8 +482,8 @@ const VideoConsultationPage: React.FC = () => {
         }
       });
 
-      // 5) 상담 목록 화면으로 이동
-      navigate('/consultations');
+      // 5) 상태 초기화
+      navigate(`/mypage`);
     }
   };
 
@@ -501,8 +501,8 @@ const VideoConsultationPage: React.FC = () => {
       if (newVideoState) {
         // 비디오 켜기
         await publisher.publishVideo(true);
-
-        setTimeout(() => {
+        
+          setTimeout(() => {
           attachLocalVideo(publisher);
         }, 100); // 100ms 후 시도
       } else {
