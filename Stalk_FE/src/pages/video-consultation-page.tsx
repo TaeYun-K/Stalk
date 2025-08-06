@@ -20,6 +20,7 @@ import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
+import Stream from "stream";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -739,19 +740,18 @@ const VideoConsultationPage: React.FC = () => {
             <div className="h-full grid grid-cols-2 gap-4">
               {/* 구독자 비디오 렌더링 */}
               {subscribers.length > 0 ? (
-                subscribers.map((subscriber, index) => {
-                  const name = getParticipantName(subscriber);
-                  const role = getParticipantRole(subscriber);
-                  const roleName = getRoleDisplayName(role);
-
-                  return (
+                subscribers.map((subscriber, index) => (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full flex-1">
                       <video
                         ref={(videoElement) => {
                           if (videoElement && subscriber.stream) {
-                            videoElement.srcObject = subscriber.stream.getMediaStream();
-                            videoElement.play().catch(console.error);
+                            const stream = subscriber.stream.getMediaStream();
+                            if (videoElement.srcObject !== stream) {
+                              videoElement.srcObject = stream;
+                              videoElement.play().catch(console.error);
+                              console.log(`▶️ 구독자 비디오 ${index} 최초 연결`);
+                            }
                           }
                         }}
                         autoPlay
@@ -763,7 +763,7 @@ const VideoConsultationPage: React.FC = () => {
                     </div>
                     <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
                       <span className="text-sm font-medium">
-                        {name} ({roleName})
+                        {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
                       </span>
                     </div>
                     <div className="absolute bottom-4 right-4 flex space-x-2">
@@ -791,8 +791,7 @@ const VideoConsultationPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  );
-                })
+                ))
               ) : (
                 // 구독자가 없을 때 기본 표시
                 <div className="bg-gray-800 rounded-2xl overflow-hidden relative group">
