@@ -125,6 +125,16 @@ public class SecurityConfig {
             .accessDeniedHandler(jwtAccessDeniedHandler) // 인가 실패 시 jwtAccessDeniedHandler가 동작
         )
         // HTTP 요청에 대한 접근 권한을 설정
+        /*
+         *  | 코드                            | 의미
+            | ------------------------------ | --------------------------------------
+            | `.permitAll()`                 | 누구나 접근 가능 (비로그인 포함)
+            | `.authenticated()`             | 로그인한 사용자만 접근 가능
+            | `.hasRole("ADMIN")`            | `ROLE_ADMIN` 권한을 가진 사용자만 접근 가능
+            | `.hasAnyRole("ADMIN", "USER")` | `ADMIN` 또는 `USER` 권한 모두 허용
+            | `.denyAll()`                   | 모든 사용자에게 차단
+
+         */
         .authorizeHttpRequests(authz -> authz
             // Swagger UI 와 API docs 허용
             .requestMatchers(
