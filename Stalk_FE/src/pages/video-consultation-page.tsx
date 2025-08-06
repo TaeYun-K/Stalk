@@ -574,22 +574,14 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [publisher]);
 
-  // // 구독자 비디오 렌더링을 위한 useEffect 추가
-  // useEffect(() => {
-  //   subscribers.forEach((subscriber, index) => {
-  //     const container = document.getElementById(`subscriber-video-${index}`);
-  //     const videoElement = subscriber.videos[0]?.video;
-
-  //       if (container && videoElement && !container.querySelector('video')) {
-  //         // 기존 비디오가 없으면 추가
-  //         container.appendChild(videoElement);
-  //         videoElement.playsInline = true;
-  //         videoElement.muted = false;
-  //         videoElement.play().catch(console.error);
-  //         console.log(`✅ Manually attached video for subscriber ${index}`);
-  //       }
-  //     });
-  // }, [subscribers]);
+  //localStream이 변경될 때마다 로컬 비디오를 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100);
+    }
+  }, [showParticipantFaces, publisher, isVideoEnabled]);
 
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
@@ -986,9 +978,27 @@ const VideoConsultationPage: React.FC = () => {
                   <div className="flex items-center justify-between p-4 h-full">
                     <div className="flex items-center space-x-4 overflow-x-auto flex-1">
                       {/* 구독자 비디오 미니뷰 */}
-                      {subscribers.map((subscriber) => (
+                      {subscribers.map((subscriber) => {
+                      const name = getParticipantName(subscriber);
+                      const role = getParticipantRole(subscriber);
+                      const roleName = getRoleDisplayName(role);
+
+                      const connectionId = subscriber.stream.connection.connectionId;
+                      const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
+
+                      return (
                         <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <video
+                            ref={(videoElement) => {
+                              if (videoElement && subscriber.stream) {
+                                const stream = subscriber.stream.getMediaStream();
+                                if (videoElement.srcObject !== stream) {
+                                  videoElement.srcObject = stream;
+                                  videoElement.play().catch(console.error);
+                                  console.log(`▶️ 구독자 비디오 최초 연결`);
+                                }
+                              }
+                            }}
                             id={`subscriber-mini-video-${subscriber.stream.streamId}`}
                             autoPlay
                             playsInline
@@ -996,10 +1006,10 @@ const VideoConsultationPage: React.FC = () => {
                             className="w-full h-full object-cover rounded-lg"
                           />
                           <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                            {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
+                            {name} ({roleName})
                           </div>
                           <div className="absolute top-2 right-2 flex space-x-1">
-                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <div className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                               <svg
                                 className="w-2.5 h-2.5"
                                 fill="currentColor"
@@ -1012,7 +1022,7 @@ const VideoConsultationPage: React.FC = () => {
                                 />
                               </svg>
                             </div>
-                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <div className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                               <svg
                                 className="w-2.5 h-2.5"
                                 fill="currentColor"
@@ -1023,7 +1033,7 @@ const VideoConsultationPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      )})}
 
                       <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                         {(publisher || localStream) &&
