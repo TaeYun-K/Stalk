@@ -297,6 +297,10 @@ const VideoConsultationPage: React.FC = () => {
           subscriber.on('streamPlaying', () => {
             console.log('▶️ streamPlaying for', subscriber.stream.streamId);
           });
+
+          const stream = subscriber.stream.getMediaStream();
+          console.log('🧪 videoTracks:', stream.getVideoTracks());
+          console.log('🧪 audioTracks:', stream.getAudioTracks());
         });
         
         session.on('streamDestroyed', (event) => {
