@@ -225,11 +225,21 @@ const VideoConsultationPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+
   useEffect(() => {
-  subscribers.forEach((subscriber, index) => {
-    attachSubscriberVideo(subscriber, index);
+  subscribers.forEach((subscriber, idx) => {
+    // 1) 컨테이너가 렌더링되었는지
+    const container = document.getElementById(`subscriber-video-${idx}`);
+    // 2) 미디어 스트림이 준비되었는지
+    const mediaStream = subscriber.stream.getMediaStream();
+    // 3) 아직 이 컨테이너에 <video>가 붙지 않았는지
+    const hasVideoTag = container?.querySelector('video');
+
+    if (container && mediaStream && !hasVideoTag) {
+      attachSubscriberVideo(subscriber, idx);
+    }
   });
-}, [subscribers]);
+  }, [subscribers]);
 
 
   // STEP 1: streamCreated 이벤트에서 스트림만 저장
