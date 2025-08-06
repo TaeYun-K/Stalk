@@ -3,10 +3,9 @@ import {
   Publisher,
   Session,
   Subscriber,
-  Stream
 } from "openvidu-browser";
-import React, { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
 
@@ -21,7 +20,6 @@ import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import StockChart from "@/components/chart/stock-chart";
 import StockSearch from "@/components/chart/stock-search";
-import { User } from "@/types";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -56,7 +54,7 @@ type HoveredButton =
 const DEFAULT_VIDEO_CONFIG = {
   resolution: "1280x720",
   frameRate: 30,
-  insertMode: "APPEND" as const,
+  insertMode: "APPEND",
   mirror: true,
 };
 
@@ -264,39 +262,8 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
-
           const subscriber = session.subscribe(event.stream, undefined);
-
-          // 2. 이벤트 등록은 state 변경 전에 반드시 먼저
-          subscriber.on('videoElementCreated', (event) => {
-            console.log('📹 videoElementCreated 이벤트 발생:');
-            const videoElement = event.element;
-            videoElement.playsInline = true;
-            videoElement.autoplay = true;
-            videoElement.muted = false; // 구독자 비디오는 음소거 해제
-            videoElement.className = 'w-full h-full object-cover rounded-2xl';
-
-            // 3. 정확한 인덱스를 prev 기반으로 추정
-            setSubscribers((prev) => {
-              const index = prev.length;
-              const container = document.getElementById(`subscriber-video-${index}`);
-              if (container && !container.querySelector('video')) {
-                container.appendChild(videoElement);
-                videoElement.play().catch(console.error);
-                console.log(`✅ Video element attached to container ${index}`);
-              } else {
-                console.warn('⚠️ No container found or video already attached');
-              }
-
-              return [...prev, subscriber];
-            });
-          });
-
-      
-          // 이후에 발생할 수 있는 이벤트만 로그로 남김
-          subscriber.on('streamPlaying', () => {
-            console.log('▶️ streamPlaying for', subscriber.stream.streamId);
-          });
+          setSubscribers((prev) => [...prev, subscriber]);
         });
         
         session.on('streamDestroyed', (event) => {
