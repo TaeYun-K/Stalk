@@ -252,9 +252,8 @@ const VideoConsultationPage: React.FC = () => {
       // 이미 구독한 건 건너뛰기
       if (subscribersRef.current[idx]) return;
 
-      const containerId = `subscriber-container-${idx}`;
+      const containerId = `subscriber-video-${idx}`;
       console.log('👉 subscribing to', stream.streamId, 'in', containerId);
-      
       const subscriber = session.subscribe(stream, containerId);
 
       // 이벤트 바로 등록
