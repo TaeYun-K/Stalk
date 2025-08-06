@@ -1,8 +1,10 @@
 package com.Stalk.project.api.reservation.controller;
 
 import com.Stalk.project.api.reservation.dto.in.ConsultationReservationRequestDto;
+import com.Stalk.project.api.reservation.dto.in.PaymentReservationRequestDto;
 import com.Stalk.project.api.reservation.dto.in.ReservationCancelRequestDto;
 import com.Stalk.project.api.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.api.reservation.dto.out.PaymentReservationResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.api.reservation.service.ReservationService;
@@ -11,6 +13,7 @@ import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.PageRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,22 +29,6 @@ public class ReservationController {
 
     private final ReservationService reservationService;
 
-    /**
-     * 상담 예약 생성 API (SecurityUtil 기반)
-     */
-    @PostMapping("/advisors/consult/reservations")
-    @Operation(summary = "상담 예약 생성", description = "전문가와의 상담 예약을 생성합니다.")
-    public BaseResponse<ConsultationReservationResponseDto> createConsultationReservation(
-        @Valid @RequestBody ConsultationReservationRequestDto requestDto) {
-
-        log.info("상담 예약 생성 요청: advisorUserId={}, date={}, time={}",
-            requestDto.getAdvisorUserId(), requestDto.getDate(), requestDto.getTime());
-
-        ConsultationReservationResponseDto response =
-            reservationService.createConsultationReservation(requestDto);
-
-        return new BaseResponse<>(response);
-    }
 
     /**
      * 예약 내역 조회 API (SecurityUtil 기반)
@@ -76,6 +63,21 @@ public class ReservationController {
         ReservationCancelResponseDto response =
             reservationService.cancelReservation(reservationId, requestDto);
 
+        return new BaseResponse<>(response);
+    }
+
+    /**
+     * 결제를 포함한 상담 예약 생성
+     */
+    @PostMapping("/reservations/with-payment")
+    @Operation(summary = "결제를 포함한 상담 예약 생성", description = "전문가와의 상담 예약을 생성하고 토스페이먼츠 결제 정보를 반환합니다.")
+    @ApiResponse(responseCode = "200", description = "예약 생성 성공")
+    @ApiResponse(responseCode = "400", description = "잘못된 요청")
+    @ApiResponse(responseCode = "403", description = "권한 없음")
+    public BaseResponse<PaymentReservationResponseDto> createReservationWithPayment(
+        @Valid @RequestBody PaymentReservationRequestDto requestDto) {
+
+        PaymentReservationResponseDto response = reservationService.createReservationWithPayment(requestDto);
         return new BaseResponse<>(response);
     }
 }

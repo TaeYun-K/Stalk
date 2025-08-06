@@ -373,4 +373,73 @@ public class PaymentService {
             throw new BaseException(BaseResponseStatus.PAYMENT_CANCEL_FAILED);
         }
     }
+
+    /**
+     * 결제 준비 - 어드바이저별 상담료 적용
+     */
+    @Transactional
+    public PaymentPrepareResponseDto preparePaymentWithAdvisorFee(
+        PaymentPrepareRequestDto requestDto, Long currentUserId, Integer consultationFee) {
+
+        log.info("어드바이저별 상담료 결제 준비 시작: userId={}, advisorId={}, fee={}",
+            currentUserId, requestDto.getAdvisorId(), consultationFee);
+
+        // 1. 어드바이저 존재 여부 확인
+        if (!reservationMapper.isApprovedAdvisor(requestDto.getAdvisorId())) {
+            throw new BaseException(BaseResponseStatus.ADVISOR_NOT_FOUND);
+        }
+
+        // 2. 예약 시간 중복 체크
+        int conflictCount = reservationMapper.checkReservationConflict(
+            requestDto.getAdvisorId(),
+            requestDto.getConsultationDate(),
+            requestDto.getConsultationTime()
+        );
+
+        if (conflictCount > 0) {
+            throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
+        }
+
+        // 3. 주문번호 생성
+        String orderId = tossPaymentConfig.generateOrderId(currentUserId, requestDto.getAdvisorId());
+
+        // 4. 어드바이저 및 사용자 정보 조회
+        String advisorName = reservationMapper.getAdvisorNameById(requestDto.getAdvisorId());
+        UserInfoDto userInfo = reservationMapper.getUserInfoById(currentUserId);
+
+        // 5. 주문명 생성
+        String orderName = String.format("%s 전문가 상담 예약 (%s %s)",
+            advisorName, requestDto.getConsultationDate(), requestDto.getConsultationTime());
+
+        // 6. 예약 정보를 PENDING 상태로 DB에 저장 (어드바이저별 상담료 적용)
+        PaymentReservationDto reservationDto = PaymentReservationDto.builder()
+            .userId(currentUserId)
+            .advisorId(requestDto.getAdvisorId())
+            .date(requestDto.getConsultationDate())
+            .startTime(requestDto.getConsultationTime())
+            .endTime(calculateEndTime(requestDto.getConsultationTime()))
+            .requestMessage(requestDto.getRequestMessage())
+            .orderId(orderId)
+            .amount(consultationFee) // ⭐ 핵심: 어드바이저별 상담료 사용
+            .paymentStatus("PENDING")
+            .status("PENDING")
+            .build();
+
+        reservationMapper.createPendingReservation(reservationDto);
+
+        log.info("결제 대기 예약 생성 완료: reservationId={}, orderId={}, amount={}",
+            reservationDto.getId(), orderId, consultationFee);
+
+        return PaymentPrepareResponseDto.builder()
+            .orderId(orderId)
+            .orderName(orderName)
+            .amount(consultationFee) // ⭐ 핵심: 어드바이저별 상담료 사용
+            .customerName(userInfo.getName())
+            .customerEmail(userInfo.getEmail())
+            .successUrl(tossPaymentConfig.getSuccessUrl())
+            .failUrl(tossPaymentConfig.getFailUrl())
+            .clientKey(tossPaymentConfig.getTestClientApiKey())
+            .reservationId(reservationDto.getId()) // ⭐ 추가: 예약 ID 반환
+            .build();
+    }
 }
