@@ -4,7 +4,7 @@ import {
   Session,
   Subscriber,
 } from "openvidu-browser";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
@@ -63,6 +63,7 @@ const TIMER_INTERVAL_MS = 1000;
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
+  const subscribersRef = useRef<Subscriber[]>([]);
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
@@ -269,23 +270,24 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
-
-          // 빈 문자열을 전달 - OpenVidu가 자동으로 video 엘리먼트 생성
-          const subscriber = session.subscribe(event.stream, '');
+          const idx = subscribersRef.current.length;
+        
+          // 구독자 컨테이너로 DOM 생성
+          const containerId = `subscriber-video-${idx}`;
+          const subscriber = session.subscribe(event.stream, containerId);
           console.log('Subscribing to new stream:', event.stream.streamId);
 
-          subscriber.on('videoElementCreated', (event) => {
-            console.log('📺 subscriber videoElementCreated');
-
-            const videoElement = event.element as HTMLVideoElement;
-            videoElement.playsInline = true; // 모바일에서도 자동 재생 가능하도록 설정
-            videoElement.muted = false; // 자동 재생을 위해 음소거 설정
-
+          subscriber.on('videoElementCreated', ({element}) => {
+            console.log('📺 subscriber videoElementCreated', idx);
+            element.playsInline = true; // 모바일에서도 자동 재생 가능하도록 설정
+            element.muted = false; // 자동 재생을 위해 음소거 설정
+            element.play().catch(console.error);
             console.log('✅ 비디오 엘리먼트 설정 완료');
           });
         
           // 구독자 목록에 추가
-          setSubscribers(prev => [...prev, subscriber]);
+          subscribersRef.current.push(subscriber);
+          setSubscribers([...subscribersRef.current]);
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
@@ -759,10 +761,8 @@ const VideoConsultationPage: React.FC = () => {
                 subscribers.map((subscriber, index) => (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full">
-                      <video
+                      <div 
                         id={`subscriber-video-${index}`}
-                        autoPlay
-                        playsInline
                         className="w-full h-full object-cover rounded-2xl"
                       />
                     </div>
@@ -965,10 +965,8 @@ const VideoConsultationPage: React.FC = () => {
                       {subscribers.map((subscriber, index) => (
                         <div key={index} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <div className="w-full h-full">
-                            <video
+                            <div
                               id={`subscriber-mini-video-${index}`}
-                              autoPlay
-                              playsInline
                               className="w-full h-full object-cover rounded-lg"
                             />
                           </div>
@@ -1032,7 +1030,7 @@ const VideoConsultationPage: React.FC = () => {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
-                          {getCurrentUserDisplayName()} ({getRoleDisplayName(userInfo?.role || 'USER')})
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName( (userInfo?.role  || 'USER') as 'ADVISOR' | 'USER')})
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
