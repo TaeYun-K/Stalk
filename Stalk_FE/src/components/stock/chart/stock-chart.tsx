@@ -199,8 +199,8 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
-      const marketType = selectedStock?.ticker?.startsWith('A') ? 'KOSDAQ' : 'KOSPI';
-      const ticker = selectedStock?.ticker?.replace(/^A/, '') || '';
+      const marketType = selectedStock?.ticker?.startsWith('9') || selectedStock?.ticker?.startsWith('3') ? 'KOSDAQ' : 'KOSPI';
+      const ticker = selectedStock?.ticker || '';
       
       console.log(`StockChart - API 요청: /api/public/krx/stock/${ticker}?market=${marketType}&period=${period}`);
       
@@ -217,7 +217,22 @@ const StockChart: React.FC<StockChartProps> = ({
       console.log('StockChart - 차트 데이터 응답:', responseData);
 
       if (responseData.success && responseData.data) {
-        const data: ChartDataPoint[] = responseData.data;
+        // Handle both single data point and array
+        let data: ChartDataPoint[];
+        if (Array.isArray(responseData.data)) {
+          data = responseData.data;
+        } else {
+          // Convert single stock info to chart data point
+          const stockInfo = responseData.data;
+          data = [{
+            date: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
+            open: parseFloat((stockInfo.closePrice || stockInfo.TDD_CLSPRC || '0').toString().replace(/,/g, '')),
+            high: parseFloat((stockInfo.closePrice || stockInfo.TDD_CLSPRC || '0').toString().replace(/,/g, '')),
+            low: parseFloat((stockInfo.closePrice || stockInfo.TDD_CLSPRC || '0').toString().replace(/,/g, '')),
+            close: parseFloat((stockInfo.closePrice || stockInfo.TDD_CLSPRC || '0').toString().replace(/,/g, '')),
+            volume: parseInt((stockInfo.volume || stockInfo.ACC_TRDVOL || '0').toString().replace(/,/g, ''))
+          }];
+        }
         
         if (!data || data.length === 0) {
           console.error("StockChart - 데이터 포인트가 없음");
@@ -332,7 +347,7 @@ const StockChart: React.FC<StockChartProps> = ({
         console.log("StockChart - 차트 데이터 설정 완료");
       } else {
         console.error("StockChart - 응답 성공하지 않음:", responseData);
-        setError(responseData.error || '차트 데이터를 불러오는데 실패했습니다.');
+        setError(responseData.message || responseData.error || '차트 데이터를 불러오는데 실패했습니다.');
       }
     } catch (err) {
       console.error('StockChart - 차트 데이터 로드 오류:', err);

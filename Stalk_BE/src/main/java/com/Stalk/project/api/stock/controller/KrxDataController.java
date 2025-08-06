@@ -296,6 +296,101 @@ public class KrxDataController {
         }
     }
     
+    // ========== Public Endpoints for Frontend ==========
+    
+    /**
+     * Get combined volume ranking from both KOSPI and KOSDAQ
+     */
+    @GetMapping("/ranking/volume")
+    public ResponseEntity<Map<String, Object>> getCombinedVolumeRanking() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching combined volume ranking data");
+            
+            // Get volume rankings from both markets
+            List<KrxRankingStock> kospiVolume = krxApiService.getKospiVolumeRanking(25);
+            List<KrxRankingStock> kosdaqVolume = krxApiService.getKosdaqVolumeRanking(25);
+            
+            // Combine both lists
+            List<KrxRankingStock> allStocks = new java.util.ArrayList<>(kospiVolume);
+            allStocks.addAll(kosdaqVolume);
+            
+            // Sort by volume and limit to top 50
+            allStocks.sort((a, b) -> {
+                try {
+                    long volA = parseVolume(a.getVolume());
+                    long volB = parseVolume(b.getVolume());
+                    return Long.compare(volB, volA);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            if (allStocks.size() > 50) {
+                allStocks = allStocks.subList(0, 50);
+            }
+            
+            // Update rankings
+            for (int i = 0; i < allStocks.size(); i++) {
+                allStocks.get(i).setRank(i + 1);
+            }
+            
+            response.put("success", true);
+            response.put("data", allStocks);
+            response.put("message", "거래량 순위 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch volume ranking", e);
+            response.put("success", false);
+            response.put("message", "거래량 순위 조회 실패: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
+     * Get market indices (placeholder endpoint)
+     */
+    @GetMapping("/indices")
+    public ResponseEntity<Map<String, Object>> getMarketIndices() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching market indices data");
+            
+            // Return empty list for now
+            response.put("success", true);
+            response.put("data", new java.util.ArrayList<>());
+            response.put("message", "지수 정보 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch market indices", e);
+            response.put("success", false);
+            response.put("message", "지수 정보 조회 실패: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
+     * Helper method to parse volume string to long for sorting
+     */
+    private long parseVolume(String volume) {
+        if (volume == null || volume.trim().isEmpty()) {
+            return 0L;
+        }
+        
+        try {
+            // Remove commas and parse
+            String cleanVolume = volume.replace(",", "").trim();
+            return Long.parseLong(cleanVolume);
+        } catch (NumberFormatException e) {
+            logger.warn("Failed to parse volume: {}", volume);
+            return 0L;
+        }
+    }
+    
     /**
      * Diagnose KRX API connectivity and data issues
      */

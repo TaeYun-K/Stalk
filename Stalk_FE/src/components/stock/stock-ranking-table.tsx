@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 interface RankingStock {
   rank: number;
@@ -12,75 +12,41 @@ interface RankingStock {
 }
 
 interface StockRankingTableProps {
+  stocks: RankingStock[];
+  onStockClick: (stock: RankingStock) => void;
+  rankingType: 'volume' | 'gainers' | 'losers';
+  onRankingTypeChange: (type: 'volume' | 'gainers' | 'losers') => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  onSearchSubmit: (e: React.FormEvent) => void;
+  title: string;
+  marketType: '전체' | 'kospi' | 'kosdaq';
+  onMarketTypeChange: (market: '전체' | 'kospi' | 'kosdaq') => void;
   onStockSelect?: (stock: { ticker: string; name: string }) => void;
   darkMode?: boolean;
 }
 
 const StockRankingTable: React.FC<StockRankingTableProps> = ({
+  stocks,
+  onStockClick,
+  rankingType,
+  onRankingTypeChange,
+  searchQuery,
+  onSearchChange,
+  onSearchSubmit,
+  title,
+  marketType,
+  onMarketTypeChange,
   onStockSelect,
   darkMode = false
 }) => {
-  const [activeTab, setActiveTab] = useState<'gainers' | 'losers' | 'volume'>('gainers');
-  const [stocks, setStocks] = useState<RankingStock[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRankingData();
-  }, [activeTab]);
-
-  const fetchRankingData = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      let endpoint = '';
-      switch (activeTab) {
-        case 'gainers':
-          endpoint = '/api/public/krx/ranking/gainers';
-          break;
-        case 'losers':
-          endpoint = '/api/public/krx/ranking/losers';
-          break;
-        case 'volume':
-          endpoint = '/api/public/krx/ranking/volume';
-          break;
-      }
-
-      console.log(`주식 랭킹 데이터 요청: ${endpoint}`);
-      
-      const response = await fetch(endpoint);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || '랭킹 데이터 로드 실패');
-      }
-
-      const responseData = await response.json();
-      console.log('랭킹 데이터 응답:', responseData);
-
-      if (responseData.success && responseData.data) {
-        const rankingData = responseData.data.map((item: any, index: number) => ({
-          rank: index + 1,
-          ticker: item.ticker || item.code,
-          name: item.name,
-          price: item.price || item.close || 0,
-          change: item.change || 0,
-          changeRate: item.changeRate || item.change_rate || 0,
-          volume: item.volume || 0,
-          marketCap: item.marketCap
-        }));
-        
-        setStocks(rankingData.slice(0, 20)); // 상위 20개만 표시
-      } else {
-        setStocks([]);
-      }
-    } catch (err) {
-      console.error('랭킹 데이터 로드 오류:', err);
-      setError('랭킹 데이터를 불러올 수 없습니다.');
-      setStocks([]);
-    } finally {
-      setIsLoading(false);
+  const handleStockClick = (stock: RankingStock) => {
+    if (onStockClick) {
+      onStockClick(stock);
+    }
+    if (onStockSelect) {
+      onStockSelect({ ticker: stock.ticker, name: stock.name });
     }
   };
 
@@ -93,33 +59,65 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
     return num.toLocaleString();
   };
 
-  const handleStockClick = (stock: RankingStock) => {
-    if (onStockSelect) {
-      onStockSelect({ ticker: stock.ticker, name: stock.name });
-    }
-  };
-
   return (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm overflow-hidden`}>
+      {/* Header with Title and Market Filter */}
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            {title}
+          </h2>
+          
+          {/* Market Type Filter */}
+          <div className="flex space-x-2">
+            {(['전체', 'kospi', 'kosdaq'] as const).map((market) => (
+              <button
+                key={market}
+                onClick={() => onMarketTypeChange(market)}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  marketType === market
+                    ? 'bg-blue-600 text-white'
+                    : darkMode
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {market.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <form onSubmit={onSearchSubmit} className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="종목명 또는 종목코드 검색..."
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                darkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+              }`}
+            />
+            <button
+              type="submit"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              🔍
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Ranking Type Tabs */}
       <div className={`flex border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
         <button
-          onClick={() => setActiveTab('gainers')}
+          onClick={() => onRankingTypeChange('gainers')}
           className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-            activeTab === 'gainers'
-              ? darkMode 
-                ? 'bg-gray-700 text-blue-400 border-b-2 border-blue-400' 
-                : 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
-              : darkMode
-                ? 'text-gray-400 hover:text-gray-200'
-                : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          상승률 TOP
-        </button>
-        <button
-          onClick={() => setActiveTab('losers')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-            activeTab === 'losers'
+            rankingType === 'gainers'
               ? darkMode 
                 ? 'bg-gray-700 text-red-400 border-b-2 border-red-400' 
                 : 'bg-red-50 text-red-600 border-b-2 border-red-600'
@@ -128,12 +126,26 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
                 : 'text-gray-600 hover:text-gray-900'
           }`}
         >
+          상승률 TOP
+        </button>
+        <button
+          onClick={() => onRankingTypeChange('losers')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            rankingType === 'losers'
+              ? darkMode 
+                ? 'bg-gray-700 text-blue-400 border-b-2 border-blue-400' 
+                : 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+              : darkMode
+                ? 'text-gray-400 hover:text-gray-200'
+                : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
           하락률 TOP
         </button>
         <button
-          onClick={() => setActiveTab('volume')}
+          onClick={() => onRankingTypeChange('volume')}
           className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-            activeTab === 'volume'
+            rankingType === 'volume'
               ? darkMode 
                 ? 'bg-gray-700 text-green-400 border-b-2 border-green-400' 
                 : 'bg-green-50 text-green-600 border-b-2 border-green-600'
@@ -146,120 +158,93 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
         </button>
       </div>
 
+      {/* Table */}
       <div className="overflow-x-auto">
-        {isLoading ? (
-          <div className="p-8 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              데이터를 불러오는 중...
-            </p>
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center">
-            <p className="text-red-600 text-sm">{error}</p>
-            <button
-              onClick={fetchRankingData}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-            >
-              다시 시도
-            </button>
-          </div>
-        ) : stocks.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              표시할 데이터가 없습니다.
-            </p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className={darkMode ? 'bg-gray-900' : 'bg-gray-50'}>
-              <tr>
-                <th className={`px-4 py-2 text-left text-xs font-medium ${
-                  darkMode ? 'text-gray-400' : 'text-gray-500'
-                } uppercase tracking-wider`}>
-                  순위
-                </th>
-                <th className={`px-4 py-2 text-left text-xs font-medium ${
-                  darkMode ? 'text-gray-400' : 'text-gray-500'
-                } uppercase tracking-wider`}>
-                  종목명
-                </th>
-                <th className={`px-4 py-2 text-right text-xs font-medium ${
-                  darkMode ? 'text-gray-400' : 'text-gray-500'
-                } uppercase tracking-wider`}>
-                  현재가
-                </th>
-                <th className={`px-4 py-2 text-right text-xs font-medium ${
-                  darkMode ? 'text-gray-400' : 'text-gray-500'
-                } uppercase tracking-wider`}>
-                  전일비
-                </th>
-                <th className={`px-4 py-2 text-right text-xs font-medium ${
-                  darkMode ? 'text-gray-400' : 'text-gray-500'
-                } uppercase tracking-wider`}>
-                  등락률
-                </th>
-                <th className={`px-4 py-2 text-right text-xs font-medium ${
-                  darkMode ? 'text-gray-400' : 'text-gray-500'
-                } uppercase tracking-wider`}>
-                  거래량
-                </th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              {stocks.map((stock) => {
-                const isNegative = stock.changeRate < 0;
-                const changeColor = isNegative ? 'text-blue-600' : 'text-red-600';
-                const changeIcon = isNegative ? '▼' : stock.changeRate > 0 ? '▲' : '';
-                
-                return (
-                  <tr
-                    key={stock.ticker}
-                    onClick={() => handleStockClick(stock)}
-                    className={`cursor-pointer transition-colors ${
-                      darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <td className={`px-4 py-3 text-sm font-medium ${
-                      darkMode ? 'text-gray-300' : 'text-gray-900'
-                    }`}>
-                      {stock.rank}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className={`text-sm font-medium ${
-                        darkMode ? 'text-gray-200' : 'text-gray-900'
-                      }`}>
-                        {stock.name}
-                      </div>
-                      <div className={`text-xs ${
-                        darkMode ? 'text-gray-500' : 'text-gray-500'
-                      }`}>
+        <table className="w-full">
+          <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+            <tr>
+              <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                darkMode ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                순위
+              </th>
+              <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                darkMode ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                종목명
+              </th>
+              <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
+                darkMode ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                현재가
+              </th>
+              <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
+                darkMode ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                등락률
+              </th>
+              <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
+                darkMode ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                거래량
+              </th>
+            </tr>
+          </thead>
+          <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+            {stocks.map((stock) => {
+              const isNegative = stock.changeRate < 0;
+              const changeColor = isNegative ? 'text-blue-600' : 'text-red-600';
+              const changeIcon = isNegative ? '▼' : stock.changeRate > 0 ? '▲' : '';
+              
+              return (
+                <tr
+                  key={stock.ticker}
+                  onClick={() => handleStockClick(stock)}
+                  className={`cursor-pointer transition-colors ${
+                    darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <td className={`px-4 py-3 text-sm font-medium ${
+                    darkMode ? 'text-gray-300' : 'text-gray-900'
+                  }`}>
+                    {stock.rank}
+                  </td>
+                  <td className={`px-4 py-3 ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <div>
+                      <div className="text-sm font-medium">{stock.name}</div>
+                      <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                         {stock.ticker}
                       </div>
-                    </td>
-                    <td className={`px-4 py-3 text-right text-sm ${
-                      darkMode ? 'text-gray-200' : 'text-gray-900'
-                    }`}>
-                      {stock.price.toLocaleString()}
-                    </td>
-                    <td className={`px-4 py-3 text-right text-sm ${changeColor}`}>
-                      {changeIcon} {Math.abs(stock.change).toLocaleString()}
-                    </td>
-                    <td className={`px-4 py-3 text-right text-sm font-medium ${changeColor}`}>
-                      {stock.changeRate > 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
-                    </td>
-                    <td className={`px-4 py-3 text-right text-sm ${
-                      darkMode ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
-                      {formatNumber(stock.volume)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+                    </div>
+                  </td>
+                  <td className={`px-4 py-3 text-right text-sm ${
+                    darkMode ? 'text-gray-300' : 'text-gray-900'
+                  }`}>
+                    {stock.price.toLocaleString()}원
+                  </td>
+                  <td className={`px-4 py-3 text-right text-sm ${changeColor}`}>
+                    <div className="flex items-center justify-end space-x-1">
+                      <span>{changeIcon}</span>
+                      <span>{Math.abs(stock.changeRate).toFixed(2)}%</span>
+                    </div>
+                  </td>
+                  <td className={`px-4 py-3 text-right text-sm ${
+                    darkMode ? 'text-gray-300' : 'text-gray-900'
+                  }`}>
+                    {formatNumber(stock.volume)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+
+      {stocks.length === 0 && (
+        <div className={`p-8 text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          표시할 주식 데이터가 없습니다.
+        </div>
+      )}
     </div>
   );
 };

@@ -4,6 +4,14 @@ import AuthService from '../../services/authService';
 interface StockDetailHeaderProps {
   ticker: string;
   name: string;
+  price?: number;
+  change?: number;
+  changeRate?: number;
+  high?: number;
+  low?: number;
+  open?: number;
+  prevClose?: number;
+  volume?: string;
   onFavoriteToggle?: () => void;
   isFavorite?: boolean;
   darkMode?: boolean;
@@ -23,33 +31,54 @@ interface StockDetailData {
 const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
   ticker,
   name,
+  price,
+  change,
+  changeRate,
+  high,
+  low,
+  open,
+  prevClose,
+  volume,
   onFavoriteToggle,
   isFavorite = false,
   darkMode = false
 }) => {
   const [stockData, setStockData] = useState<StockDetailData>({
-    price: 0,
-    change: 0,
-    changeRate: 0,
-    high: 0,
-    low: 0,
-    open: 0,
-    prevClose: 0,
-    volume: '0'
+    price: price || 0,
+    change: change || 0,
+    changeRate: changeRate || 0,
+    high: high || 0,
+    low: low || 0,
+    open: open || 0,
+    prevClose: prevClose || 0,
+    volume: volume || '0'
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Update stock data when props change
   useEffect(() => {
-    if (ticker) {
+    if (price !== undefined) {
+      setStockData(prev => ({
+        ...prev,
+        price: price || 0,
+        change: change || 0,
+        changeRate: changeRate || 0,
+        high: high || prev.price,
+        low: low || prev.price,
+        open: open || prev.price,
+        prevClose: prevClose || prev.price,
+        volume: volume || '0'
+      }));
+    } else if (ticker) {
       fetchStockDetail();
     }
-  }, [ticker]);
+  }, [ticker, price, change, changeRate, high, low, open, prevClose, volume]);
 
   const fetchStockDetail = async () => {
     setIsLoading(true);
     try {
-      const marketType = ticker.startsWith('A') ? 'KOSDAQ' : 'KOSPI';
-      const cleanTicker = ticker.replace(/^A/, '');
+      const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
+      const cleanTicker = ticker;
       
       const response = await fetch(
         `/api/public/krx/stock/${cleanTicker}?market=${marketType}`
@@ -63,19 +92,22 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
       const responseData = await response.json();
       console.log('주식 상세 정보:', responseData);
 
-      if (responseData.success && responseData.data && responseData.data.length > 0) {
-        const latestData = responseData.data[responseData.data.length - 1];
-        const previousData = responseData.data[responseData.data.length - 2] || latestData;
+      if (responseData.success && responseData.data) {
+        // Handle single stock info response (not array)
+        const stockInfo = responseData.data;
+        const currentPrice = parseFloat(stockInfo.TDD_CLSPRC?.replace(/,/g, '') || stockInfo.closePrice?.replace(/,/g, '') || '0');
+        const priceChange = parseFloat(stockInfo.CMPPREVDD_PRC?.replace(/,/g, '') || stockInfo.priceChange?.replace(/,/g, '') || '0');
+        const changePct = parseFloat(stockInfo.FLUC_RT?.replace(/,/g, '') || stockInfo.changeRate?.replace(/,/g, '') || '0');
         
         setStockData({
-          price: latestData.close || 0,
-          change: latestData.close - previousData.close || 0,
-          changeRate: previousData.close ? ((latestData.close - previousData.close) / previousData.close * 100) : 0,
-          high: latestData.high || latestData.close,
-          low: latestData.low || latestData.close,
-          open: latestData.open || latestData.close,
-          prevClose: previousData.close || 0,
-          volume: formatVolume(latestData.volume || 0)
+          price: currentPrice,
+          change: priceChange,
+          changeRate: changePct,
+          high: currentPrice, // Using current price as fallback
+          low: currentPrice,
+          open: currentPrice,
+          prevClose: currentPrice - priceChange,
+          volume: formatVolume(parseInt(stockInfo.ACC_TRDVOL?.replace(/,/g, '') || stockInfo.volume?.replace(/,/g, '') || '0'))
         });
       }
     } catch (error) {

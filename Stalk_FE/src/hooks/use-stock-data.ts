@@ -44,7 +44,7 @@ export const useStockData = (
     setError(null);
 
     try {
-      const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KSQ' : 'STK';
+      const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
       const response = await fetch(
         `/api/public/krx/stock/${ticker}?market=${marketType}`
       );
@@ -65,7 +65,7 @@ export const useStockData = (
         setData({
           ticker: stockInfo.ticker,
           name: stockInfo.name,
-          marketType: marketType === 'STK' ? 'KOSPI' : 'KOSDAQ',
+          marketType: marketType,
           price: price,
           change: change,
           changeRate: changeRate,
@@ -111,7 +111,7 @@ export const useStockData = (
   };
 };
 
-export const useStockList = (category?: 'gainers' | 'losers' | 'volume') => {
+export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketType?: string) => {
   const [stocks, setStocks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +136,25 @@ export const useStockList = (category?: 'gainers' | 'losers' | 'volume') => {
       const responseData = await response.json();
       
       if (responseData.success && responseData.data) {
-        setStocks(responseData.data);
+        let filteredStocks = responseData.data;
+        
+        // Apply market filtering if specified
+        if (marketType && marketType !== '전체') {
+          filteredStocks = responseData.data.filter((stock: any) => {
+            const ticker = stock.ticker || '';
+            
+            if (marketType === 'kospi') {
+              // KOSPI stocks: regular 6-digit codes, typically 0-3 prefix
+              return !ticker.startsWith('9') && !ticker.startsWith('3');
+            } else if (marketType === 'kosdaq') {
+              // KOSDAQ stocks: typically start with 9 or 3
+              return ticker.startsWith('9') || ticker.startsWith('3');
+            }
+            return true;
+          });
+        }
+        
+        setStocks(filteredStocks);
       }
     } catch (err) {
       console.error('Error fetching stock list:', err);
@@ -144,11 +162,11 @@ export const useStockList = (category?: 'gainers' | 'losers' | 'volume') => {
     } finally {
       setIsLoading(false);
     }
-  }, [category]);
+  }, [category, marketType]);
 
   useEffect(() => {
     fetchStocks();
-  }, [category]);
+  }, [category, marketType]);
 
   return {
     stocks,

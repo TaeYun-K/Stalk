@@ -41,7 +41,7 @@ interface MarketIndex {
 
 type ViewMode = "detail" | "ranking";
 type TimeRange = "1d" | "1w" | "1m";
-type RankingType = "volume" | "rising" | "falling";
+type RankingType = "volume" | "gainers" | "losers";
 type MarketType = "전체" | "kospi" | "kosdaq";
 
 const ProductsPage = () => {
@@ -166,10 +166,10 @@ const ProductsPage = () => {
 
       try {
         // First try to get basic info from KRX
-        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KSQ' : 'STK';
+        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
+        const url = `${import.meta.env.VITE_API_URL}/api/public/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
 
 
         const response = await axios.get(url, {
@@ -179,11 +179,11 @@ const ProductsPage = () => {
           }
         });
 
-        if (response.data) {
-  
+        if (response.data && response.data.success && response.data.data) {
+          const stockData = response.data.data;
 
           // Check if we got data for the correct ticker
-          const returnedTicker = response.data.ISU_SRT_CD || response.data.ticker;
+          const returnedTicker = stockData.ticker || stockData.ISU_SRT_CD;
           if (returnedTicker !== selectedTicker) {
             console.error(`TICKER MISMATCH! Requested: ${selectedTicker}, Received: ${returnedTicker}`);
             console.error("This indicates a backend caching issue");
@@ -191,14 +191,14 @@ const ProductsPage = () => {
 
           // Map KRX API field names to our expected format
           const mappedData = {
-            ticker: response.data.ISU_SRT_CD || response.data.ticker,
-            name: response.data.ISU_ABBRV || response.data.name,
-            closePrice: (response.data.TDD_CLSPRC || response.data.closePrice || "0").toString().replace(/,/g, ''),
-            priceChange: (response.data.CMPPREVDD_PRC || response.data.priceChange || "0").toString().replace(/,/g, ''),
-            changeRate: (response.data.FLUC_RT || response.data.changeRate || "0").toString().replace(/,/g, ''),
-            volume: formatVolume(response.data.ACC_TRDVOL || response.data.volume || "0"),
-            tradeValue: response.data.ACC_TRDVAL || response.data.tradeValue,
-            marketCap: response.data.MKTCAP || response.data.marketCap,
+            ticker: stockData.ticker || stockData.ISU_SRT_CD,
+            name: stockData.name || stockData.ISU_ABBRV,
+            closePrice: (stockData.closePrice || stockData.TDD_CLSPRC || "0").toString().replace(/,/g, ''),
+            priceChange: (stockData.priceChange || stockData.CMPPREVDD_PRC || "0").toString().replace(/,/g, ''),
+            changeRate: (stockData.changeRate || stockData.FLUC_RT || "0").toString().replace(/,/g, ''),
+            volume: formatVolume(stockData.volume || stockData.ACC_TRDVOL || "0"),
+            tradeValue: stockData.tradeValue || stockData.ACC_TRDVAL,
+            marketCap: stockData.marketCap || stockData.MKTCAP,
           };
 
   
@@ -216,16 +216,16 @@ const ProductsPage = () => {
         console.error("Failed to fetch real-time price:", err);
       }
 
-      // Fallback: Try to get data from daily endpoint
+      // Fallback: Use our public KRX endpoint instead
       
       try {
-        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/stock/daily/${selectedTicker}?period=2`);
-        if (dailyResponse.data.success && dailyResponse.data.data.length > 0) {
-          const latestData = dailyResponse.data.data[0];
-          const prevData = dailyResponse.data.data[1] || latestData;
+        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/public/krx/stock/${selectedTicker}?market=${marketType}`);
+        if (dailyResponse.data.success && dailyResponse.data.data) {
+          const stockData = dailyResponse.data.data;
 
-          const change = latestData.close - prevData.close;
-          const changeRate = prevData.close > 0 ? ((change / prevData.close) * 100) : 0;
+          const price = parseFloat(stockData.closePrice?.replace(/,/g, '')) || 0;
+          const change = parseFloat(stockData.priceChange?.replace(/,/g, '')) || 0;
+          const changeRate = parseFloat(stockData.changeRate?.replace(/,/g, '')) || 0;
 
           // Try to get name from search
           let stockName = "";
@@ -256,11 +256,11 @@ const ProductsPage = () => {
 
           const fallbackData = {
             ticker: selectedTicker,
-            name: stockName,
-            closePrice: latestData.close.toString(),
+            name: stockData.name || stockName,
+            closePrice: price.toString(),
             priceChange: change.toString(),
             changeRate: changeRate.toFixed(2),
-            volume: formatVolume(latestData.volume.toString())
+            volume: formatVolume(stockData.volume || "0")
           };
 
 
@@ -359,9 +359,9 @@ const ProductsPage = () => {
     setRealtimePriceData({
       ticker: stock.ticker,
       name: stock.name,
-      closePrice: stock.price.toString(),
-      priceChange: stock.change.toString(),
-      changeRate: stock.changeRate.toString(),
+      closePrice: (stock.price || 0).toString(),
+      priceChange: (stock.change || 0).toString(),
+      changeRate: (stock.changeRate || 0).toString(),
       volume: stock.volume || "0"
     });
 
@@ -577,7 +577,7 @@ const ProductsPage = () => {
               ) : (
                 <StockRankingTable
                   stocks={rankingStocks}
-                  onStockClick={selectStock}
+                  onStockSelect={selectStock}
                   rankingType={rankingType}
                   onRankingTypeChange={handleRankingTypeChange}
                   searchQuery={searchQuery}
