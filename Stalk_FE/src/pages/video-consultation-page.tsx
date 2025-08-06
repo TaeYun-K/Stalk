@@ -937,14 +937,15 @@ const VideoConsultationPage: React.FC = () => {
                   <div className="flex items-center justify-between p-4 h-full">
                     <div className="flex items-center space-x-4 overflow-x-auto flex-1">
                       {/* 구독자 비디오 미니뷰 */}
-                      {subscribers.map((subscriber, index) => (
-                        <div key={index} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
-                          <div className="w-full h-full">
-                            <div
-                              id={`subscriber-mini-video-${index}`}
-                              className="w-full h-full object-cover rounded-lg"
-                            />
-                          </div>
+                      {subscribers.map((subscriber) => (
+                        <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                          <video
+                            id={`subscriber-mini-video-${subscriber.stream.streamId}`}
+                            autoPlay
+                            playsInline
+                            muted={false}
+                            className="w-full h-full object-cover rounded-lg"
+                          />
                           <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
                             {getParticipantName(subscriber)} ({getRoleDisplayName(getParticipantRole(subscriber))})
                           </div>
