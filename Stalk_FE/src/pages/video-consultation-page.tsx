@@ -745,6 +745,12 @@ const VideoConsultationPage: React.FC = () => {
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
                     <div className="w-full h-full flex-1">
                       <video
+                        ref={(videoElement) => {
+                          if (videoElement && subscriber.stream) {
+                            videoElement.srcObject = subscriber.stream.getMediaStream();
+                            videoElement.play().catch(console.error);
+                          }
+                        }}
                         autoPlay
                         playsInline 
                         muted={false}
