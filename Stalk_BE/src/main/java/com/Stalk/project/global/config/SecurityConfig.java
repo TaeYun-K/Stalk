@@ -35,7 +35,14 @@ import java.util.Arrays;
  * 해당 어노테이션을 추가하면 기본적인 보안 필터 체인이 자동으로 등록
  */
 @EnableWebSecurity
+/*
+ * PreAuthorize, @PostAuthorize 등 메소드 수준에서 보안을 적용할 수 있는 기능을 활성화
+ */
 @EnableMethodSecurity
+/*
+ * final 키워드가 붙은 필드들을 인자로 받는 생성자를 자동으로 생성해주는 Lombok 어노테이션
+ * 의존성 주입(DI) 간편하게 처리
+ */
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -74,8 +81,7 @@ public class SecurityConfig {
       AuthenticationConfiguration authenticationConfiguration) throws Exception {
     return authenticationConfiguration.getAuthenticationManager();
   }
-
-
+  
   @Bean
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
