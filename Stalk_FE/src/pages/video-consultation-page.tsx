@@ -761,7 +761,7 @@ const VideoConsultationPage: React.FC = () => {
                   const roleName = getRoleDisplayName(role);
 
                   const connectionId = subscriber.stream.connection.connectionId;
-                  const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: false };
+                  const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
 
                   return (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
@@ -792,7 +792,7 @@ const VideoConsultationPage: React.FC = () => {
 
 
                     <div className="absolute bottom-4 right-4 flex space-x-2">
-                      <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center" ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center" ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
@@ -805,7 +805,7 @@ const VideoConsultationPage: React.FC = () => {
                           />
                         </svg>
                       </div>
-                      <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center" ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center" ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
