@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.api.payment.dao.ConsultationMapper">
+
+  <!-- orderId로 결제 정보 조회 -->
+  <select id="findByOrderId"
+    parameterType="String"
+    resultType="com.Stalk.project.api.payment.dto.out.ConsultationSession">
+    SELECT
+      id,
+      user_id as userId,
+      advisor_id as advisorId,
+      order_id as orderId,
+      payment_key as paymentKey,
+      amount,
+      status,
+      date,
+      start_time as startTime,
+      cancel_reason as cancelReason,
+      canceled_at as canceledAt,
+      canceled_by as canceledBy
+    FROM consultation_sessions
+    WHERE order_id = #{orderId}
+  </select>
+
+  <!-- 결제 상태 업데이트 (취소 처리) -->
+  <update id="updateConsultationStatus"
+    parameterType="com.Stalk.project.api.payment.dto.in.ConsultationSessionUpdateDto">
+    UPDATE consultation_sessions
+    SET
+      status = #{status},
+      cancel_reason = #{cancelReason},
+      canceled_at = #{canceledAt},
+      canceled_by = #{canceledBy}
+    WHERE order_id = #{orderId}
+  </update>
+
+</mapper>

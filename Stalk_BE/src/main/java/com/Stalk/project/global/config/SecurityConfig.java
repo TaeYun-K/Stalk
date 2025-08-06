@@ -107,10 +107,33 @@ public class SecurityConfig {
                 "/swagger-ui.html",
                 "/webjars/**"
             ).permitAll()
-            // 인증 없이 열어둘 애플리케이션 엔드포인트 -> 추후 /api/auth/** 예정
+
+            // 정적 리소스 허용 (HTML, CSS, JS, 이미지 등)
+            .requestMatchers(
+                "/payment-test.html",
+                "/static/**",
+                "/css/**",
+                "/js/**",
+                "/images/**",
+                "/favicon.ico"
+            ).permitAll()
+
+            // 결제 관련 API - 보안상 안전한 엔드포인트만 허용
+            .requestMatchers(
+                "/api/payments/request",      // 결제 요청 (결제창 띄우기)
+                "/api/payments/*/status",     // 결제 상태 조회
+                "/api/payments/webhook"       // 토스페이먼츠 웹훅 (인증 없이 받아야 함)
+            ).permitAll()
+
+            // 기존 인증 없이 열어둘 엔드포인트
             .requestMatchers("/api/auth/**").permitAll()
+
+            // 나머지 API들 (어드바이저, 예약, 결제 승인/취소 등)
+            .requestMatchers("/api/**").authenticated()
+
             // 그 외 모든 요청은 인증 필요
-            .anyRequest().authenticated())
+            .anyRequest().authenticated()
+        )
         // JWT 필터를 UsernamePasswordAuthenticationFilter 전에 추가
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
