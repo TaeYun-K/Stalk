@@ -40,10 +40,10 @@ interface ApiResponse {
 const ExpertsPage = () => {
   const navigate = useNavigate();
   const { userInfo } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState('all');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('recent');
-  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,14 +91,64 @@ const ExpertsPage = () => {
   }, [navigate]);
 
   const filteredExperts = experts.filter(expert => {
-    const matchesCategory = selectedCategory === 'all' || expert.preferredStyle.toLowerCase() === selectedCategory;
     const matchesSearch = expert.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          expert.shortIntro.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
+    
+    // 카테고리 필터링 (다중 선택 지원)
+    let matchesCategories = true;
+    if (selectedCategories.length > 0) {
+      // 선택된 모든 카테고리를 만족해야 함 (AND 조건)
+      matchesCategories = selectedCategories.every(category => {
+        // 카테고리와 preferredStyle 매칭
+        const styleMatch = 
+          (category === '단기' && expert.preferredStyle === 'SHORT') ||
+          (category === '장기' && expert.preferredStyle === 'LONG');
+        
+        // 자격증 이름에서도 카테고리 검색
+        const certMatch = expert.certificates.some(cert => 
+          cert.certificateName.includes(category)
+        );
+        
+        if (styleMatch || certMatch) {
+          console.log(`전문가 ${expert.name} - 카테고리 "${category}" 매칭: 스타일=${expert.preferredStyle}, 매칭=${styleMatch || certMatch}`);
+        }
+        
+        return styleMatch || certMatch;
+      });
+    }
+    
+    return matchesSearch && matchesCategories;
   });
+
+  // 디버깅용 로그
+  console.log('전체 전문가 수:', experts.length);
+  console.log('선택된 카테고리:', selectedCategories);
+  console.log('필터링된 전문가 수:', filteredExperts.length);
+  
+  // 모든 전문가의 preferredStyle 값들 확인
+  const allStyles = experts.map(expert => ({ name: expert.name, style: expert.preferredStyle }));
+  console.log('모든 전문가의 스타일:', allStyles);
+  
+  if (filteredExperts.length > 0) {
+    console.log('첫 번째 전문가 스타일:', filteredExperts[0].preferredStyle);
+  }
 
   // 정렬 적용
   const sortedExperts = [...filteredExperts].sort((a, b) => {
+    // 현재 로그인한 사용자 정보 가져오기
+    const currentUserInfo = AuthService.getUserInfo();
+    const currentUserName = currentUserInfo?.name; // 사용자 이름으로 매칭
+    
+    // 로그인한 전문가의 글이 있다면 맨 위로 고정
+    if (userInfo?.role === 'ADVISOR' && currentUserName) {
+      const aIsCurrentUser = a.name === currentUserName;
+      const bIsCurrentUser = b.name === currentUserName;
+      
+      if (aIsCurrentUser && !bIsCurrentUser) return -1; // a를 위로
+      if (!aIsCurrentUser && bIsCurrentUser) return 1;  // b를 위로
+    }
+    
+    // 일반 정렬 로직
     if (sortBy === 'recent') {
       // 최근 등록순 (createdAt 기준)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -109,20 +159,20 @@ const ExpertsPage = () => {
     return 0;
   });
 
-  const handleKeywordClick = (keyword: string) => {
-    if (keyword === '전체') {
+  const handleCategoryClick = (category: string) => {
+    console.log('카테고리 클릭:', category);
+    if (category === '전체') {
       // 전체 클릭 시 모든 선택 해제
-      setSelectedKeywords([]);
+      setSelectedCategories([]);
+      console.log('전체 선택 - 카테고리 초기화');
     } else {
-      // 전체가 아닌 키워드 클릭 시 다중 선택
-      setSelectedKeywords(prev => {
-        if (prev.includes(keyword)) {
-          // 이미 선택된 키워드면 제거
-          return prev.filter(k => k !== keyword);
-        } else {
-          // 선택되지 않은 키워드면 추가
-          return [...prev, keyword];
-        }
+      // 전체가 아닌 카테고리 클릭 시 다중 선택
+      setSelectedCategories(prev => {
+        const newCategories = prev.includes(category) 
+          ? prev.filter(c => c !== category)
+          : [...prev, category];
+        console.log('선택된 카테고리들:', newCategories);
+        return newCategories;
       });
     }
   };
@@ -203,9 +253,9 @@ const ExpertsPage = () => {
                 }}
               >
                 <button 
-                  onClick={() => handleKeywordClick('전체')}
+                  onClick={() => handleCategoryClick('전체')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.length === 0 
+                    selectedCategories.length === 0 
                       ? 'bg-blue-500 text-white hover:bg-blue-600' 
                       : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
                   }`}
@@ -213,39 +263,9 @@ const ExpertsPage = () => {
                   전체
                 </button>
                 <button 
-                  onClick={() => handleKeywordClick('입문자 대상')}
+                  onClick={() => handleCategoryClick('단기')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('입문자 대상')
-                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
-                  }`}
-                >
-                  입문자 대상
-                </button>
-                <button 
-                  onClick={() => handleKeywordClick('중급자 대상')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('중급자 대상')
-                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
-                  }`}
-                >
-                  중급자 대상
-                </button>
-                <button 
-                  onClick={() => handleKeywordClick('상급자 대상')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('상급자 대상')
-                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
-                  }`}
-                >
-                  상급자 대상
-                </button>
-                <button 
-                  onClick={() => handleKeywordClick('단기')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('단기')
+                    selectedCategories.includes('단기')
                       ? 'bg-blue-500 text-white hover:bg-blue-600' 
                       : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
                   }`}
@@ -253,19 +273,9 @@ const ExpertsPage = () => {
                   단기
                 </button>
                 <button 
-                  onClick={() => handleKeywordClick('중단기')}
+                  onClick={() => handleCategoryClick('중기')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('중단기')
-                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
-                  }`}
-                >
-                  중단기
-                </button>
-                <button 
-                  onClick={() => handleKeywordClick('중기')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('중기')
+                    selectedCategories.includes('중기')
                       ? 'bg-blue-500 text-white hover:bg-blue-600' 
                       : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
                   }`}
@@ -273,19 +283,9 @@ const ExpertsPage = () => {
                   중기
                 </button>
                 <button 
-                  onClick={() => handleKeywordClick('중장기')}
+                  onClick={() => handleCategoryClick('장기')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('중장기')
-                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
-                  }`}
-                >
-                  중장기
-                </button>
-                <button 
-                  onClick={() => handleKeywordClick('장기')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedKeywords.includes('장기')
+                    selectedCategories.includes('장기')
                       ? 'bg-blue-500 text-white hover:bg-blue-600' 
                       : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
                   }`}
@@ -294,8 +294,7 @@ const ExpertsPage = () => {
                 </button>
               </div>
           </div>
-          <div className='flex flex-row items-center gap-2 flex-shrink-0'>
-            <label className='text-gray-700 font-medium whitespace-nowrap' htmlFor="sorting">정렬: </label>
+          <div className='flex flex-row items-center gap-2 flex-shrink-0 focus:outline-none focus:ring-0'>
             <select
               id="sorting"
               value={sortBy}
@@ -311,13 +310,28 @@ const ExpertsPage = () => {
         {/* 전문가 프로필 목록 --------------------------------------------------------------------- */}
         {/* Expert Profiles */}
         <div className="space-y-6">
-          {sortedExperts.map((expert) => (
+          {sortedExperts.map((expert) => {
+            // 현재 로그인한 사용자의 카드인지 확인
+            const currentUserInfo = AuthService.getUserInfo();
+            const currentUserName = currentUserInfo?.name;
+            const isCurrentUser = userInfo?.role === 'ADVISOR' && currentUserName && expert.name === currentUserName;
+            
+            return (
             <div 
               key={expert.id} 
-              className="bg-white rounded-lg px-12 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 cursor-pointer"
+              className={`flex flex-col bg-white rounded-lg border transition-all duration-300 cursor-pointer ${
+                isCurrentUser 
+                  ? 'border-blue-500 bg-blue-50 hover:border-blue-600 hover:shadow-xl' 
+                  : 'border-gray-200 hover:border-blue-300 hover:shadow-lg'
+              }`}
               onClick={() => handleExpertClick(expert.id)}
             >
-              <div className="flex h-50 items-start items-end justify-between">
+              {isCurrentUser && (
+                <span className="flex px-12 py-1 text-sm font-medium bg-blue-500 text-white h-10 w-full rounded-t-lg text-left items-center">
+                  내 프로필
+                </span>
+              )}
+              <div className="px-12 flex h-50 items-start items-end justify-between">
                 <div className="flex-1 py-10">
                   {/* Preferred Style */}
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -346,6 +360,7 @@ const ExpertsPage = () => {
                       <span className="ml-4 text-gray-600">리뷰 {expert.reviewCount}개</span>
                     </div>
                   </div>
+                    
 
                   {/* Description */}
                   <p className="text-lg font- text-left text-gray-700 mb-4">{expert.shortIntro}</p>
@@ -363,7 +378,7 @@ const ExpertsPage = () => {
                 </div>
 
                 {/* Profile Image */}
-                <div className="w-48 h-60
+                <div className="w-40 h-50
                  ml-6 flex items-end">
                   <img
                     src={expert.profileImageUrl}
@@ -373,7 +388,8 @@ const ExpertsPage = () => {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* No Results */}
@@ -385,7 +401,7 @@ const ExpertsPage = () => {
             <button
               onClick={() => {
                 setSearchTerm('');
-                setSelectedCategory('all');
+                setSelectedCategories([]);
               }}
               className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
             >
