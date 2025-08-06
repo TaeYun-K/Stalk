@@ -140,8 +140,8 @@ public class SecurityConfig {
             // 회원, 로그인 관련 API - 인증 없이 열어둘 엔드포인트
             .requestMatchers("/api/auth/**").permitAll()
 
-            .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval").permitAll()
-            .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").denyAll()
+            .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval").denyAll()
+            .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").permitAll()
 
             // 커뮤니티 글 목록 및 단일 글 조회
             .requestMatchers(HttpMethod.GET, "/api/community/posts/**").permitAll()
@@ -157,7 +157,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/community/**").authenticated()
-            
+
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()
         )
