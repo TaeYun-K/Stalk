@@ -64,8 +64,6 @@ const TIMER_INTERVAL_MS = 1000;
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
-  const [streams, setStreams] = useState<Stream[]>([]);
-  const subscribersRef = useRef<Subscriber[]>([]);
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
@@ -242,47 +240,6 @@ const VideoConsultationPage: React.FC = () => {
   }, [subscribers]);
 
 
-  // STEP 1: streamCreated 이벤트에서 스트림만 저장
-  useEffect(() => {
-    if (!session) return;       
-    const handler = (event: any) => {
-      console.log('🔴 streamCreated:', event.stream.streamId);
-      setStreams((prev) => [...prev, event.stream]);
-    };
-    session.on('streamCreated', handler);
-    return () => {
-      session.off('streamCreated', handler);
-    };
-  }, [session]);
-
-  // STEP 2: streams 배열이 변할 때마다, 렌더된 컨테이너가 있는지 보고 subscribe
-  useEffect(() => {
-    if (!session) return;       
-    streams.forEach((stream, idx) => {
-      // 이미 구독한 건 건너뛰기
-      if (subscribersRef.current[idx]) return;
-
-      const containerId = `subscriber-video-${idx}`;
-      console.log('👉 subscribing to', stream.streamId, 'in', containerId);
-      const subscriber = session.subscribe(stream, containerId);
-
-      // 이벤트 바로 등록
-      subscriber.on('videoElementCreated', ({ element }) => {
-        console.log('📺 videoElementCreated for idx', idx);
-        element.playsInline = true;
-        element.muted = false;
-        element.play().catch(console.error);
-      });
-      subscriber.on('streamPlaying', () => {
-        console.log('▶️ streamPlaying for', stream.streamId);
-      });
-
-      // ref 와 state 동기 업데이트
-      subscribersRef.current[idx] = subscriber;
-      setSubscribers([...subscribersRef.current]);
-    });
-  }, [streams, session]);
-
   const getDuration = (): string => {
     const diff = Math.floor(
       (currentTime.getTime() - consultationStartTime.getTime()) / 1000
@@ -324,24 +281,27 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
-          const idx = subscribersRef.current.length;
-        
-          // 구독자 컨테이너로 DOM 생성
-          const containerId = `subscriber-video-${idx}`;
-          const subscriber = session.subscribe(event.stream, containerId);
-          console.log('Subscribing to new stream:', event.stream.streamId);
 
-          subscriber.on('videoElementCreated', ({element}) => {
-            console.log('📺 subscriber videoElementCreated', idx);
-            element.playsInline = true; // 모바일에서도 자동 재생 가능하도록 설정
-            element.muted = false; // 자동 재생을 위해 음소거 설정
-            element.play().catch(console.error);
-            console.log('✅ 비디오 엘리먼트 설정 완료');
-          });
+          const subscriber = session.subscribe(event.stream, undefined);
+
+          setSubscribers((prev) => [...prev, subscriber]);
         
-          // 구독자 목록에 추가
-          subscribersRef.current.push(subscriber);
-          setSubscribers([...subscribersRef.current]);
+          subscriber.on('videoElementCreated', (event) => {
+            console.log('📺 videoElementCreated for subscriber');
+            const videoElement = event.element;
+            videoElement.playsInline = true;
+            videoElement.muted = false;
+
+            // 수동으로 비디오 엘리먼트를 컨테이너에 삽입
+            const containerIndex = subscribers.length;
+            const container = document.getElementById(`subscriber-video-${containerIndex}`);
+            if (container && !container.querySelector('video')) {
+              container.appendChild(videoElement);
+              videoElement.play().catch(console.error);
+              console.log(`✅ Video element attached to container ${containerIndex}`);
+            }
+          });
+      
 
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
@@ -635,14 +595,18 @@ const VideoConsultationPage: React.FC = () => {
   // 구독자 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
     subscribers.forEach((subscriber, index) => {
-      // mediaStream이 준비되지 않은 경우 방지
-      const mediaStream = subscriber.stream.getMediaStream();
-      if (mediaStream && mediaStream.getVideoTracks().length > 0) {
-        attachSubscriberVideo(subscriber, index);
-      } else {
-        console.warn(`⏳ Stream not ready for subscriber ${index}`);
-      }
-    });
+      const container = document.getElementById(`subscriber-video-${index}`);
+      const videoElement = subscriber.videos[0]?.video;
+
+        if (container && videoElement && !container.querySelector('video')) {
+          // 기존 비디오가 없으면 추가
+          container.appendChild(videoElement);
+          videoElement.playsInline = true;
+          videoElement.muted = false;
+          videoElement.play().catch(console.error);
+          console.log(`✅ Manually attached video for subscriber ${index}`);
+        }
+      });
   }, [subscribers]);
 
   // 카메라와 마이크 권한 확인 함수
