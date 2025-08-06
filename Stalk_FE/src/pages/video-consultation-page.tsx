@@ -267,18 +267,31 @@ const VideoConsultationPage: React.FC = () => {
 
           const subscriber = session.subscribe(event.stream, undefined);
 
-          setSubscribers((prev) => [...prev, subscriber]);
-        
-          // 구독자 비디오 요소를 수동으로 연결
-          setTimeout(() => {
-            const container = document.getElementById(`subscriber-video-${subscribers.length}`);
-            if (container) { 
-              const videoElement = subscriber.createVideoElement(); 
-              if (videoElement) {
+          // 2. 이벤트 등록은 state 변경 전에 반드시 먼저
+          subscriber.on('videoElementCreated', (event) => {
+            console.log('📹 videoElementCreated 이벤트 발생:');
+            const videoElement = event.element;
+            videoElement.playsInline = true;
+            videoElement.autoplay = true;
+            videoElement.muted = false; // 구독자 비디오는 음소거 해제
+            videoElement.className = 'w-full h-full object-cover rounded-2xl';
+
+            // 3. 정확한 인덱스를 prev 기반으로 추정
+            setSubscribers((prev) => {
+              const index = prev.length;
+              const container = document.getElementById(`subscriber-video-${index}`);
+              if (container && !container.querySelector('video')) {
                 container.appendChild(videoElement);
+                videoElement.play().catch(console.error);
+                console.log(`✅ Video element attached to container ${index}`);
+              } else {
+                console.warn('⚠️ No container found or video already attached');
               }
-            }
-          }, 100);
+
+              return [...prev, subscriber];
+            });
+          });
+
       
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
@@ -755,7 +768,7 @@ const VideoConsultationPage: React.FC = () => {
               {subscribers.length > 0 ? (
                 subscribers.map((subscriber, index) => (
                   <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
-                    <div className="w-full h-full">
+                    <div className="w-full h-full flex-1">
                       <div 
                         id={`subscriber-video-${index}`}
                         className="w-full h-full object-cover rounded-2xl"
