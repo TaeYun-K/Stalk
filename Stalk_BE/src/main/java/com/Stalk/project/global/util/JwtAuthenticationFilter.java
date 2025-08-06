@@ -76,7 +76,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 로그인, 리프레시, 회원가입 등 Auth 관련 엔드포인트 전체 스킵
      * 로그인이나 회원가입 같은 기능은 아직 JWT 토큰이 발급되지 않은 상태에서 호출되므로, 토큰을 검증하는 이 필터가 동작할 필요 x
      */
-    return request.getRequestURI().startsWith("/api/auth/");
+    String uri = request.getRequestURI();
+
+    return uri.startsWith("/api/auth/")
+        || uri.startsWith("/api/public/krx/");
   }
 
   @Override
