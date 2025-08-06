@@ -335,13 +335,13 @@ class CommunityService {
   }
 
   // 본인 작성 글 조회 (투자 지식iN용)
-  static async getMyPosts(category: string = 'KNOWLEDGE', pageNo: number = 1, pageSize: number = 10): Promise<{ content: CommunityPostSummaryDto[] }> {
+  static async getMyPosts(category: string = 'ALL', pageNo: number = 1, pageSize: number = 10): Promise<{ content: CommunityPostSummaryDto[] }> {
     try {
+      // 백엔드에서 authorId를 처리하지 않으므로 임시로 모든 글을 가져온 후 필터링
       const queryParams = new URLSearchParams({
         category: category,
         pageNo: pageNo.toString(),
-        pageSize: pageSize.toString(),
-        authorId: 'me' // 본인 작성 글만 조회
+        pageSize: pageSize.toString()
       });
 
       const response = await AuthService.authenticatedRequest(
@@ -359,7 +359,20 @@ class CommunityService {
       }
 
       const data = await response.json();
-      return data.result;
+      
+      // 현재 사용자 정보 가져오기
+      const userInfo = AuthService.getUserInfo();
+      if (!userInfo) {
+        return { content: [] };
+      }
+
+      // 본인이 작성한 글만 필터링
+      const myPosts = data.result.content.filter((post: any) => {
+        // authorName이 현재 사용자의 이름/닉네임과 일치하는지 확인
+        return post.authorName === userInfo.name || post.authorName === userInfo.nickname;
+      });
+
+      return { content: myPosts };
     } catch (error) {
       console.error('Error fetching my posts:', error);
       throw error;

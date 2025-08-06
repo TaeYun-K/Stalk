@@ -102,13 +102,7 @@ const Navbar: React.FC = () => {
               상품 조회
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
             </button>
-            <button 
-              onClick={() => navigate('/mypage?tab=내 상담 내역')}
-              className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
-            >
-              상담내역
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </button>
+            
             <div 
               className="relative group"
               onMouseEnter={() => {

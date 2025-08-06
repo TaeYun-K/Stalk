@@ -129,17 +129,7 @@ const HomePageNavbar: React.FC = () => {
               상품 조회
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
             </button>
-            <button 
-              onClick={() => navigate('/mypage?tab=내 상담 내역')}
-              className={`hover:font-semibold font-medium text-lg transition-all duration-300 relative group ${
-                isNavBarScrolled ? 'text-gray-600 hover:text-blue-600' : 'text-white hover:text-blue-200'
-              }`}
-            >
-              상담내역
-              <span className={`absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                isNavBarScrolled ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-white'
-              }`}></span>
-            </button>
+            
             <div 
               className="relative group"
               onMouseEnter={() => {
@@ -178,7 +168,7 @@ const HomePageNavbar: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      navigate('/community?tab=free');
+                      navigate('/community?tab=knowledge');
                       setShowCommunityMenu(false);
                     }}
                     className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
