@@ -166,7 +166,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/community/**").authenticated()
 
-            // KRX 주식 데이터 (비로그인 공개 허용)
+            // KRX 주식 데이터
             .requestMatchers(HttpMethod.GET, "/api/public/krx/**").permitAll()
 
             // 그 외 모든 요청은 인증 필요
