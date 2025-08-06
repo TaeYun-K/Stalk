@@ -501,7 +501,7 @@ const VideoConsultationPage: React.FC = () => {
       if (newVideoState) {
         // 비디오 켜기
         await publisher.publishVideo(true);
-        console.log('Video enabled');
+        attachLocalVideo(publisher);
       } else {
         // 비디오 끄기
         await publisher.publishVideo(false);
@@ -792,7 +792,7 @@ const VideoConsultationPage: React.FC = () => {
 
 
                     <div className="absolute bottom-4 right-4 flex space-x-2">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center" ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
@@ -805,7 +805,7 @@ const VideoConsultationPage: React.FC = () => {
                           />
                         </svg>
                       </div>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center" ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
                         <svg
                           className="w-4 h-4"
                           fill="currentColor"
