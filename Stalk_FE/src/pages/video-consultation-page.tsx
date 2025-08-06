@@ -4,7 +4,7 @@ import {
   Session,
   Subscriber,
 } from "openvidu-browser";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
@@ -556,22 +556,22 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [publisher]);
 
-  // 구독자 비디오 렌더링을 위한 useEffect 추가
-  useEffect(() => {
-    subscribers.forEach((subscriber, index) => {
-      const container = document.getElementById(`subscriber-video-${index}`);
-      const videoElement = subscriber.videos[0]?.video;
+  // // 구독자 비디오 렌더링을 위한 useEffect 추가
+  // useEffect(() => {
+  //   subscribers.forEach((subscriber, index) => {
+  //     const container = document.getElementById(`subscriber-video-${index}`);
+  //     const videoElement = subscriber.videos[0]?.video;
 
-        if (container && videoElement && !container.querySelector('video')) {
-          // 기존 비디오가 없으면 추가
-          container.appendChild(videoElement);
-          videoElement.playsInline = true;
-          videoElement.muted = false;
-          videoElement.play().catch(console.error);
-          console.log(`✅ Manually attached video for subscriber ${index}`);
-        }
-      });
-  }, [subscribers]);
+  //       if (container && videoElement && !container.querySelector('video')) {
+  //         // 기존 비디오가 없으면 추가
+  //         container.appendChild(videoElement);
+  //         videoElement.playsInline = true;
+  //         videoElement.muted = false;
+  //         videoElement.play().catch(console.error);
+  //         console.log(`✅ Manually attached video for subscriber ${index}`);
+  //       }
+  //     });
+  // }, [subscribers]);
 
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
@@ -953,21 +953,7 @@ const VideoConsultationPage: React.FC = () => {
                   <div className="flex items-center justify-between p-4 h-full">
                     <div className="flex items-center space-x-4 overflow-x-auto flex-1">
                       {/* 구독자 비디오 미니뷰 */}
-                      {subscribers.map((subscriber) => {
-
-                        const videoRef = useRef<HTMLVideoElement>(null);
-
-                        useEffect(() => {
-                          if (videoRef.current && subscriber.stream) {
-                            const mediaStream = subscriber.stream.getMediaStream();
-                            if (mediaStream) {
-                              videoRef.current.srcObject = mediaStream;
-                              videoRef.current.play().catch(console.error);
-                            }
-                          }
-                        }, [subscriber.stream]); // 의존성 배열에 subscriber.stream 추가     
-
-                      return (
+                      {subscribers.map((subscriber) => (
                         <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <video
                             id={`subscriber-mini-video-${subscriber.stream.streamId}`}
@@ -1004,8 +990,7 @@ const VideoConsultationPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        );
-                      })}
+                      ))}
 
                       <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                         {(publisher || localStream) &&
