@@ -4,7 +4,7 @@ import {
   Session,
   Subscriber,
 } from "openvidu-browser";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
@@ -99,7 +99,6 @@ const VideoConsultationPage: React.FC = () => {
       if (subscriber.stream.connection.data) {
         const raw = subscriber.stream.connection.data;
         const data = JSON.parse(raw.split('%/%')[0]);
-        console.log('Parsed subscriber data:', data);
         return data.role || 'USER';
       }
     } catch (error) {
@@ -954,7 +953,21 @@ const VideoConsultationPage: React.FC = () => {
                   <div className="flex items-center justify-between p-4 h-full">
                     <div className="flex items-center space-x-4 overflow-x-auto flex-1">
                       {/* 구독자 비디오 미니뷰 */}
-                      {subscribers.map((subscriber) => (
+                      {subscribers.map((subscriber) => {
+
+                        const videoRef = useRef<HTMLVideoElement>(null);
+
+                        useEffect(() => {
+                          if (videoRef.current && subscriber.stream) {
+                            const mediaStream = subscriber.stream.getMediaStream();
+                            if (mediaStream) {
+                              videoRef.current.srcObject = mediaStream;
+                              videoRef.current.play().catch(console.error);
+                            }
+                          }
+                        }, [subscriber.stream]); // 의존성 배열에 subscriber.stream 추가     
+
+                      return (
                         <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <video
                             id={`subscriber-mini-video-${subscriber.stream.streamId}`}
@@ -991,7 +1004,8 @@ const VideoConsultationPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
 
                       <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                         {(publisher || localStream) &&
