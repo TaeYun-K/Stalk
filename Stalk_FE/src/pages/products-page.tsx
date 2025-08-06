@@ -29,6 +29,7 @@ interface RankingStock {
   change: number;
   changeRate: number;
   marketCap: string;
+  volume: string;
   logo?: string;
 }
 
@@ -169,7 +170,7 @@ const ProductsPage = () => {
         const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const url = `${import.meta.env.VITE_API_URL}/api/public/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
+        const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
 
 
         const response = await axios.get(url, {
@@ -219,7 +220,7 @@ const ProductsPage = () => {
       // Fallback: Use our public KRX endpoint instead
       
       try {
-        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/public/krx/stock/${selectedTicker}?market=${marketType}`);
+        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}`);
         if (dailyResponse.data.success && dailyResponse.data.data) {
           const stockData = dailyResponse.data.data;
 
@@ -577,7 +578,7 @@ const ProductsPage = () => {
               ) : (
                 <StockRankingTable
                   stocks={rankingStocks}
-                  onStockSelect={selectStock}
+                  onStockClick={selectStock}
                   rankingType={rankingType}
                   onRankingTypeChange={handleRankingTypeChange}
                   searchQuery={searchQuery}

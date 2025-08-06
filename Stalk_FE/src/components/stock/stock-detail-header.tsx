@@ -81,7 +81,7 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
       const cleanTicker = ticker;
       
       const response = await fetch(
-        `/api/public/krx/stock/${cleanTicker}?market=${marketType}`
+        `/api/krx/stock/${cleanTicker}?market=${marketType}`
       );
 
       if (!response.ok) {

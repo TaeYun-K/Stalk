@@ -202,10 +202,10 @@ const StockChart: React.FC<StockChartProps> = ({
       const marketType = selectedStock?.ticker?.startsWith('9') || selectedStock?.ticker?.startsWith('3') ? 'KOSDAQ' : 'KOSPI';
       const ticker = selectedStock?.ticker || '';
       
-      console.log(`StockChart - API 요청: /api/public/krx/stock/${ticker}?market=${marketType}&period=${period}`);
+      console.log(`StockChart - API 요청: /api/krx/stock/${ticker}?market=${marketType}&period=${period}`);
       
       const response = await fetch(
-        `/api/public/krx/stock/${ticker}?market=${marketType}&period=${period}`
+        `/api/krx/stock/${ticker}?market=${marketType}&period=${period}`
       );
 
       if (!response.ok) {

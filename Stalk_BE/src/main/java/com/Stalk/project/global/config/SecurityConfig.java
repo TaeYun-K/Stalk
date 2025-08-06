@@ -163,6 +163,9 @@ public class SecurityConfig {
 
             // 회원, 로그인 관련 API - 인증 없이 열어둘 엔드포인트
             .requestMatchers("/api/auth/**").permitAll()
+            
+            // KRX 주식 데이터 API - 인증 없이 접근 가능  
+            .requestMatchers("/api/krx/**").permitAll()
 
             .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval")
             .hasAnyRole("ADVISOR")
@@ -182,9 +185,6 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/community/**").authenticated()
-
-            // KRX 주식 데이터
-            .requestMatchers(HttpMethod.GET, "/api/public/krx/**").permitAll()
 
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()
