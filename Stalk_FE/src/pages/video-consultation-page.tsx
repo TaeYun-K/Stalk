@@ -18,8 +18,7 @@ import participantsIcon from "@/assets/images/icons/consultation/participants.sv
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
 import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
-import StockChart from "@/components/chart/stock-chart";
-import StockSearch from "@/components/chart/stock-search";
+import { StockChart, StockSearch } from "@/components/stock";
 import { User } from "@/types";
 
 interface LocationState {

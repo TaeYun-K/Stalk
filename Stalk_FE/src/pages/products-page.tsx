@@ -1,9 +1,7 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import StockChart from "../components/chart/stock-chart";
-import StockDetailHeader from "../components/stock-detail-header";
-import StockRankingTable from "../components/stock-ranking-table";
+import { StockChart, StockDetailHeader, StockRankingTable, StockSearch } from "../components/stock";
 import {
   useMarketIndices,
   useStockBasicInfo,
