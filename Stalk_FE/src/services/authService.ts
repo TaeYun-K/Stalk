@@ -6,6 +6,10 @@ let accessToken: string | null = null;
 let userInfo: any = null;
 let refreshPromise: Promise<string | null> | null = null;
 
+// localStorage 키 상수
+const ACCESS_TOKEN_KEY = 'accessToken';
+const USER_INFO_KEY = 'userInfo';
+
 // JWT 디코딩 함수
 const decodeJwt = (token: string): any => {
   try {
@@ -39,15 +43,24 @@ const isTokenExpiringSoon = (token: string): boolean => {
 class AuthService {
   // Access Token 관리
   static getAccessToken(): string | null {
+    // 메모리에 없으면 localStorage에서 가져오기
+    if (!accessToken) {
+      const savedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+      if (savedToken) {
+        accessToken = savedToken;
+      }
+    }
     return accessToken;
   }
 
   static setAccessToken(token: string): void {
     accessToken = token;
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
   }
 
   static removeAccessToken(): void {
     accessToken = null;
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
   }
 
   // 로그인
@@ -158,40 +171,59 @@ class AuthService {
 
   // 인증된 API 요청 헬퍼
   static async authenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
-    if (!accessToken) {
+    let token = this.getAccessToken();
+    console.log('authenticatedRequest - token:', token ? 'exists' : 'null');
+    console.log('authenticatedRequest - token value:', token ? token.substring(0, 20) + '...' : 'null');
+    if (!token) {
       throw new Error('인증이 필요합니다.');
     }
 
     // 토큰이 만료되었거나 곧 만료될 예정인 경우에만 refresh
-    if (isTokenExpired(accessToken) || isTokenExpiringSoon(accessToken)) {
+    console.log('Token expired check:', isTokenExpired(token));
+    console.log('Token expiring soon check:', isTokenExpiringSoon(token));
+    if (isTokenExpired(token) || isTokenExpiringSoon(token)) {
+      console.log('Token is expired or expiring soon, attempting refresh...');
       const newToken = await this.refreshToken();
       if (!newToken) {
         throw new Error('인증이 만료되었습니다.');
       }
+      token = newToken;
+      console.log('Token refreshed successfully');
     }
 
     const config: RequestInit = {
       ...options,
+      credentials: 'include',
       headers: {
         ...options.headers,
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        // FormData인 경우 Content-Type을 설정하지 않음 (브라우저가 자동 설정)
+        ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       },
-      credentials: 'include',
     };
+
+    console.log('Request URL:', url);
+    console.log('Request headers:', config.headers);
+    console.log('Full Authorization header:', (config.headers as any).Authorization);
 
     const response = await fetch(url, config);
 
     // 401 에러 시 토큰 갱신 후 재시도
     if (response.status === 401) {
+      console.log('Received 401 error, attempting token refresh...');
       const newToken = await this.refreshToken();
       if (!newToken) {
+        console.log('Token refresh failed, removing token and throwing error');
+        this.removeAccessToken();
         throw new Error('인증이 만료되었습니다.');
       }
 
+      console.log('Token refreshed after 401, retrying request...');
       config.headers = {
         ...config.headers,
         'Authorization': `Bearer ${newToken}`,
+        // FormData인 경우 Content-Type을 설정하지 않음
+        ...(!(config.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       };
 
       return fetch(url, config);
@@ -203,10 +235,26 @@ class AuthService {
   // 앱 초기화 (새로고침/새 탭)
   static async initialize(): Promise<void> {
     try {
-      // 페이지 진입 시 무조건 refresh 요청
-      const token = await this.refreshToken();
-      if (token) {
-        await this.fetchUserProfile();
+      // localStorage에서 토큰 복원
+      const savedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+      if (savedToken) {
+        accessToken = savedToken;
+        
+        // 토큰이 만료되지 않았는지 확인
+        if (!isTokenExpired(savedToken)) {
+          // 사용자 정보 조회
+          await this.fetchUserProfile();
+        } else {
+          // 토큰이 만료되었으면 refresh 시도
+          const newToken = await this.refreshToken();
+          if (newToken) {
+            await this.fetchUserProfile();
+          } else {
+            // refresh 실패 시 토큰 제거
+            this.removeAccessToken();
+            userInfo = null;
+          }
+        }
       }
     } catch (error) {
       console.error('초기화 실패:', error);
