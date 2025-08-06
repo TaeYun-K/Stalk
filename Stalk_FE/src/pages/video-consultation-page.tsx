@@ -223,23 +223,6 @@ const VideoConsultationPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-
-  useEffect(() => {
-  subscribers.forEach((subscriber, idx) => {
-    // 1) 컨테이너가 렌더링되었는지
-    const container = document.getElementById(`subscriber-video-${idx}`);
-    // 2) 미디어 스트림이 준비되었는지
-    const mediaStream = subscriber.stream.getMediaStream();
-    // 3) 아직 이 컨테이너에 <video>가 붙지 않았는지
-    const hasVideoTag = container?.querySelector('video');
-
-    if (container && mediaStream && !hasVideoTag) {
-      attachSubscriberVideo(subscriber, idx);
-    }
-  });
-  }, [subscribers]);
-
-
   const getDuration = (): string => {
     const diff = Math.floor(
       (currentTime.getTime() - consultationStartTime.getTime()) / 1000
@@ -286,23 +269,17 @@ const VideoConsultationPage: React.FC = () => {
 
           setSubscribers((prev) => [...prev, subscriber]);
         
-          subscriber.on('videoElementCreated', (event) => {
-            console.log('📺 videoElementCreated for subscriber');
-            const videoElement = event.element;
-            videoElement.playsInline = true;
-            videoElement.muted = false;
-
-            // 수동으로 비디오 엘리먼트를 컨테이너에 삽입
-            const containerIndex = subscribers.length;
-            const container = document.getElementById(`subscriber-video-${containerIndex}`);
-            if (container && !container.querySelector('video')) {
-              container.appendChild(videoElement);
-              videoElement.play().catch(console.error);
-              console.log(`✅ Video element attached to container ${containerIndex}`);
+          // 구독자 비디오 요소를 수동으로 연결
+          setTimeout(() => {
+            const container = document.getElementById(`subscriber-video-${subscribers.length}`);
+            if (container) { 
+              const videoElement = subscriber.createVideoElement(); 
+              if (videoElement) {
+                container.appendChild(videoElement);
+              }
             }
-          });
+          }, 100);
       
-
           // 이후에 발생할 수 있는 이벤트만 로그로 남김
           subscriber.on('streamPlaying', () => {
             console.log('▶️ streamPlaying for', subscriber.stream.streamId);
