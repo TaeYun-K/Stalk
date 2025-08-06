@@ -8,6 +8,7 @@ services:
       - "8082:8081" # 외부:내부 포트
     volumes:
       - ./stalk_BE/src:/app/src
+      - ./keys:/keys  
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - GCP_KEY_FILE=/keys/stalkaiproject-812b3a8660a4.json

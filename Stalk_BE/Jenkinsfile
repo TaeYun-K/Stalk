@@ -29,15 +29,15 @@ pipeline {
                   rm -f application.properties
                   cp -f "$APP_PROPS_FILE" application.properties
                 """
-
-                // 2) 워크스페이스 루트에 keys 폴더 생성 → GCP JSON 키 복사
-                sh """
-                  echo "🔐 워크스페이스 루트에 keys 폴더 생성 및 GCP 키 복사..."
-                  rm -rf keys
-                  mkdir -p keys
-                  cp -f "$GCP_KEY_FILE" keys/stalkaiproject-812b3a8660a4.json
-                """
               }
+
+              // 2) 워크스페이스 루트에 keys 폴더 생성 → GCP JSON 키 복사
+              sh """
+                echo "🔐 워크스페이스 루트에 keys 폴더 생성 및 GCP 키 복사..."
+                rm -rf keys
+                mkdir -p keys
+                cp -f "$GCP_KEY_FILE" keys/stalkaiproject-812b3a8660a4.json
+              """
 
               sh """
                 echo "🗑️ 기존 BE 컨테이너 삭제 (${CONTAINER})..."
