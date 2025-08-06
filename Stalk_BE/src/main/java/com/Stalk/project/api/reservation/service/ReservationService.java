@@ -22,6 +22,7 @@ import com.Stalk.project.api.user.dao.UserProfileMapper;
 import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.notification.event.ReservationCanceledEvent;
+import com.Stalk.project.global.notification.event.ReservationCreatedEvent;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.PageRequestDto;
@@ -90,9 +91,25 @@ public class ReservationService {
     // 4. 응답 생성
     ZonedDateTime scheduledTime = ZonedDateTime.of(requestDate, requestTime,
         ZoneId.of("Asia/Seoul"));
+    String scheduledTimeStr = scheduledTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
     log.info("결제 포함 예약 생성 완료: userId={}, reservationId={}, orderId={}, amount={}",
         currentUserId, paymentResponse.getReservationId(), paymentResponse.getOrderId(), paymentResponse.getAmount());
+
+    try {
+      UserProfileResponseDto userProfile = userProfileMapper.findUserProfileById(currentUserId);
+      String clientName = userProfile != null ? userProfile.getName() : "Unknown";
+
+      eventPublisher.publishEvent(new ReservationCreatedEvent(
+          requestDto.getAdvisorUserId(),
+          clientName,
+          scheduledTimeStr
+      ));
+      log.debug("예약 생성 이벤트 발행 완료 - advisorId={}, clientName={}, dateTime={}",
+          requestDto.getAdvisorUserId(), clientName, scheduledTimeStr);
+    } catch (Exception e) {
+      log.error("예약 생성 이벤트 발행 중 오류 발생", e);
+    }
 
     return PaymentReservationResponseDto.builder()
         .reservationId(paymentResponse.getReservationId())
@@ -367,14 +384,13 @@ public class ReservationService {
       LocalDateTime canceledAt) {
 
     try {
-      // 1. 토스페이먼츠 결제 취소 요청
+      // 1. 결제 취소 요청
       if (reservation.getPaymentKey() != null) {
         PaymentCancelRequestDto paymentCancelDto = PaymentCancelRequestDto.builder()
             .cancelReason("예약 취소: " + requestDto.getCancelReason().getDisplayName())
-            .cancelAmount(reservation.getAmount())  // 예약 금액 그대로 전달
+            .cancelAmount(reservation.getAmount())
             .build();
 
-        // ✅ 실제 메서드 시그니처에 맞춰 호출
         paymentService.cancelPayment(
             reservation.getOrderId(),
             paymentCancelDto,
@@ -384,7 +400,7 @@ public class ReservationService {
         log.info("결제 취소 완료: paymentKey={}, orderId={}", reservation.getPaymentKey(), reservation.getOrderId());
       }
 
-      // 2. 예약 상태 업데이트 (결제 취소 정보 포함)
+      // 2. 예약 상태 업데이트
       int result = reservationMapper.cancelReservationWithPayment(
           reservation.getId(),
           currentUserId,
@@ -397,11 +413,42 @@ public class ReservationService {
         throw new BaseException(CANCEL_REQUEST_FAILED);
       }
 
+      // ✅ 3. 예약 취소 이벤트 발행
+      try {
+        Long targetUserId;
+        String canceledByName;
+
+        if (currentUserId.equals(reservation.getUserId())) {
+          targetUserId = reservation.getAdvisorId();
+          UserProfileResponseDto userProfile = userProfileMapper.findUserProfileById(currentUserId);
+          canceledByName = userProfile != null ? userProfile.getName() : "Unknown";
+        } else {
+          targetUserId = reservation.getUserId();
+          UserProfileResponseDto advisorProfile = userProfileMapper.findUserProfileById(currentUserId);
+          canceledByName = advisorProfile != null ? advisorProfile.getName() : "Unknown";
+        }
+
+        String dateTime = String.format("%s %s", reservation.getDate(), reservation.getStartTime());
+        String reason = requestDto.getCancelReason().getDisplayName();
+
+        eventPublisher.publishEvent(new ReservationCanceledEvent(
+            targetUserId,
+            canceledByName,
+            dateTime,
+            reason
+        ));
+
+        log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}, targetUserId: {}", canceledByName, targetUserId);
+      } catch (Exception e) {
+        log.warn("예약 취소 이벤트 발행 실패 (취소는 성공)", e);
+      }
+
     } catch (Exception e) {
       log.error("결제 취소 실패로 인한 예약 취소 롤백: reservationId={}", reservation.getId(), e);
       throw new BaseException(PAYMENT_CANCEL_FAILED);
     }
   }
+
 
   /**
    * 예약 내역 조회 (SecurityUtil 기반)
