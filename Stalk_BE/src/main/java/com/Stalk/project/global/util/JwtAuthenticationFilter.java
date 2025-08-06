@@ -16,7 +16,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 @Component
-// OncePerRequestFilter 상속으로 매 요청마다 한 번 실행
+/* SecurityConfig에서 등록한 JWT 인증의 핵심 실행부
+ * 유효한 경우 해당 요청을 "인증된" 상태로 만들어주는 역할
+ * OncePerRequestFilter 상속으로 매 요청마다 한 번 실행
+ */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtUtil jwtUtil;
