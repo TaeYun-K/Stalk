@@ -35,7 +35,14 @@ import java.util.Arrays;
  * 해당 어노테이션을 추가하면 기본적인 보안 필터 체인이 자동으로 등록
  */
 @EnableWebSecurity
+/*
+ * PreAuthorize, @PostAuthorize 등 메소드 수준에서 보안을 적용할 수 있는 기능을 활성화
+ */
 @EnableMethodSecurity
+/*
+ * final 키워드가 붙은 필드들을 인자로 받는 생성자를 자동으로 생성해주는 Lombok 어노테이션
+ * 의존성 주입(DI) 간편하게 처리
+ */
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -74,7 +81,6 @@ public class SecurityConfig {
       AuthenticationConfiguration authenticationConfiguration) throws Exception {
     return authenticationConfiguration.getAuthenticationManager();
   }
-
 
   @Bean
   public PasswordEncoder passwordEncoder() {
@@ -119,6 +125,16 @@ public class SecurityConfig {
             .accessDeniedHandler(jwtAccessDeniedHandler) // 인가 실패 시 jwtAccessDeniedHandler가 동작
         )
         // HTTP 요청에 대한 접근 권한을 설정
+        /*
+         *  | 코드                            | 의미
+            | ------------------------------ | --------------------------------------
+            | `.permitAll()`                 | 누구나 접근 가능 (비로그인 포함)
+            | `.authenticated()`             | 로그인한 사용자만 접근 가능
+            | `.hasRole("ADMIN")`            | `ROLE_ADMIN` 권한을 가진 사용자만 접근 가능
+            | `.hasAnyRole("ADMIN", "USER")` | `ADMIN` 또는 `USER` 권한 모두 허용
+            | `.denyAll()`                   | 모든 사용자에게 차단
+
+         */
         .authorizeHttpRequests(authz -> authz
             // Swagger UI 와 API docs 허용
             .requestMatchers(
@@ -148,7 +164,8 @@ public class SecurityConfig {
             // 회원, 로그인 관련 API - 인증 없이 열어둘 엔드포인트
             .requestMatchers("/api/auth/**").permitAll()
 
-            .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval").denyAll()
+            .requestMatchers(HttpMethod.GET, "/api/advisors/certificate-approval")
+            .hasAnyRole("ADVISOR")
             .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").permitAll()
 
             // 커뮤니티 글 목록 및 단일 글 조회
