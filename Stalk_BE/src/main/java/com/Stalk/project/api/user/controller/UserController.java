@@ -1,5 +1,6 @@
 package com.Stalk.project.api.user.controller;
 
+import com.Stalk.project.api.login.service.MyUserDetails;
 import com.Stalk.project.global.util.SecurityUtil;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.api.user.dto.in.UserUpdateRequestDto;
@@ -9,8 +10,11 @@ import com.Stalk.project.api.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -51,5 +55,21 @@ public class UserController {
 
         UserUpdateResponseDto result = userService.updateUserProfile(currentUserId, requestDto);
         return new BaseResponse<>(result);
+    }
+
+    /**
+     * 회원 탈퇴 API
+     * @param request  현재 HTTP 요청 객체 (토큰 추출용)
+     * @param response 현재 HTTP 응답 객체 (쿠키 만료용)
+     * @return BaseResponse<String>
+     */
+    @PatchMapping("/me/deactivate")
+    @Operation(summary = "회원 탈퇴 (비활성화)", description = "로그인된 사용자의 계정을 비활성화하고 즉시 로그아웃 처리합니다.")
+    public BaseResponse<String> deactivateUser(HttpServletRequest request, HttpServletResponse response) {
+        // SecurityUtil을 통해 현재 로그인한 사용자의 ID를 가져옴
+        Long userId = SecurityUtil.getCurrentUserPrimaryIdRequired();
+        userService.deactivateUser(userId, request, response);
+
+        return new BaseResponse<>("회원 탈퇴가 성공적으로 처리되었습니다.");
     }
 }
