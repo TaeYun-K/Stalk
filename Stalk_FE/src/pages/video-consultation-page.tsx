@@ -263,7 +263,17 @@ const VideoConsultationPage: React.FC = () => {
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
           const subscriber = session.subscribe(event.stream, undefined);
-          setSubscribers((prev) => [...prev, subscriber]);
+
+          setSubscribers((prev) => {
+            const newSubscribers = [...prev, subscriber];
+
+            // 비디오 연결은 상태 업데이트 이후로 미루기
+            setTimeout(() => {
+              attachSubscriberVideo(subscriber, newSubscribers.length - 1);
+            }, 100);
+            
+            return newSubscribers;
+          });
         });
         
         session.on('streamDestroyed', (event) => {
