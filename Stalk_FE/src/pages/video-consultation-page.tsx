@@ -523,18 +523,19 @@ const VideoConsultationPage: React.FC = () => {
 
   // 8. 컴포넌트 언마운트 시 리소스 정리
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      leaveSession();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
-      if (publisher) {
-        const pubStream = publisher.stream?.getMediaStream();
-        if (pubStream) {
-          pubStream.getTracks().forEach((track) => track.stop());
-        }
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      if (session) {
+        leaveSession();
       }
     };
-  }, []);
+  }, [session, consultationId, navigate]);
 
   // 로컬 비디오 렌더링을 위한 useEffect 추가
   useEffect(() => {
