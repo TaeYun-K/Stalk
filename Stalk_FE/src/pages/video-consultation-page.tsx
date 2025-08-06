@@ -501,7 +501,10 @@ const VideoConsultationPage: React.FC = () => {
       if (newVideoState) {
         // 비디오 켜기
         await publisher.publishVideo(true);
-        attachLocalVideo(publisher);
+
+        setTimeout(() => {
+          attachLocalVideo(publisher);
+        }, 100); // 100ms 후 시도
       } else {
         // 비디오 끄기
         await publisher.publishVideo(false);
