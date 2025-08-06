@@ -5,6 +5,7 @@ import com.Stalk.project.api.auth.mock.dto.in.LoginRequestDto;
 import com.Stalk.project.api.auth.mock.dto.out.LoginResponseDto;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.global.response.BaseResponseStatus;
+import com.Stalk.project.global.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +26,10 @@ import java.util.UUID;
 @RequestMapping("/api/auth")
 @Tag(name = "🔐 Mock Auth API", description = "인증 관련 Mock API - 프론트엔드 개발용")
 @Slf4j
+@RequiredArgsConstructor
 public class MockAuthController {
+
+  private final JwtUtil jwtUtil;
 
   // Mock 사용자 데이터
   private final Map<String, MockUser> mockUsers = Map.of(
@@ -410,8 +415,11 @@ public class MockAuthController {
    * Mock 토큰 생성 메서드 실제 JWT 구현 시에는 적절한 JWT 라이브러리 사용 필요
    */
   private String generateSimpleMockToken(MockUser user, String type) {
-    String uuid = UUID.randomUUID().toString().substring(0, 8);
-    return String.format("MOCK_TOKEN_%s_%s_%d_%s",
-        uuid, type.toUpperCase(), user.getId(), user.getRole());
+    // 실제 JWT 토큰 생성 (JwtUtil 사용)
+    if ("access".equals(type)) {
+      return jwtUtil.createAccessToken(user.getId(), user.getRole());
+    } else {
+      return jwtUtil.createRefreshToken(user.getId(), user.getRole());
+    }
   }
 }
