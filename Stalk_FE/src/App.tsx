@@ -119,7 +119,7 @@ const AppContent: React.FC = () => {
               <Route path="/consultations" element={<div className="p-4"><h1>상담 내역</h1></div>} />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/expert-registration" element={<ExpertsIntroductionRegistrationPage />} />
+              <Route path="/expert-registration/:advisorId" element={<ExpertsIntroductionRegistrationPage />} />
               <Route path="/expert-introduction-update/:advisorId" element={<ExpertIntroductionUpdatePage />} />
               
               {/* Sidebar Routes */}

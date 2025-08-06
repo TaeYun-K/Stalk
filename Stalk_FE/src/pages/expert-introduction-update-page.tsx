@@ -794,8 +794,9 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
       console.log(`Submitting blocked times for ${date}:`, blockedTimes);
       console.log(`Request body:`, blockedTimesData);
 
-      const response = await AuthService.authenticatedRequest(`/api/advisors/blocked-times?date=${date}`, {
+      const response = await AuthService.authenticatedRequest(`/api/advisors/${advisorId}/blocked-times?date=${date}`, {
         method: 'PUT', // PUT 메서드 사용 (백엔드 API에 맞춤)
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(blockedTimesData)
       });
 

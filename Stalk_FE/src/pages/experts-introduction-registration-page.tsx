@@ -29,6 +29,11 @@ interface QualificationEntry {
   serialNumber: string;
 }
 
+const parseLocalDate = (dateString: string): Date => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const ExpertsIntroductionRegistrationPage: React.FC = () => {
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -748,10 +753,10 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       const allTimeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
       const processedDates = new Set<string>();
 
-      // 1. 운영 날짜들 처리 - 과거 날짜 제외
+      // 1. 운영 날짜들 처리 (과거 날짜 포함)
       for (const [dateKey, _] of allOperatingDates) {
         const dateSpecificTimeSlots = dateTimeSlots[dateKey] || [];
-        const date = new Date(dateKey);
+        const date = parseLocalDate(dateKey);
         
         // 날짜 검증
         const today = new Date();
@@ -759,32 +764,36 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         const targetDate = new Date(date);
         targetDate.setHours(0, 0, 0, 0);
         
-        // 과거 날짜는 건너뛰기
-        if (targetDate < today) {
-          console.log(`Skipping past operating date ${dateKey}: cannot modify past dates`);
-          processedDates.add(dateKey);
-          continue;
-        }
-        
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth();
-        const dateYear = date.getFullYear();
-        const dateMonth = date.getMonth();
-        const dayOfWeek = date.getDay();
-        const isCurrentMonthWeekdayAfterToday = dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today;
-        
         let blockedTimes: string[];
         const dateStatus = getDateStatus(date);
+        const isPastDate = targetDate < today;
         
-        if (dateStatus === 'operating') {
-          // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
-          blockedTimes = dateSpecificTimeSlots;
+        if (isPastDate) {
+          // 과거 날짜: 잠금된 시간들을 차단 시간으로 처리
+          console.log(`Processing past operating date ${dateKey}: using locked time slots as blocked times`);
+          
+          // 과거 날짜의 현재 시간 설정을 가져와서 차단 시간으로 설정
+          const lockedTimeSlots = dateSpecificTimeSlots.length > 0 ? dateSpecificTimeSlots : [];
+          
+          if (dateStatus === 'operating') {
+            // 과거 운영일: 현재 설정된 시간들이 차단된 시간
+            blockedTimes = lockedTimeSlots;
+          } else {
+            // 과거 휴무일: 모든 시간이 차단됨
+            blockedTimes = allTimeSlots;
+          }
         } else {
-          // 휴무일: 모든 시간이 차단됨
-          blockedTimes = allTimeSlots;
+          // 미래 날짜: 기존 로직 유지
+          if (dateStatus === 'operating') {
+            // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
+            blockedTimes = dateSpecificTimeSlots;
+          } else {
+            // 휴무일: 모든 시간이 차단됨
+            blockedTimes = allTimeSlots;
+          }
         }
         
-        console.log(`Processing operating date ${dateKey}: blockedTimes =`, blockedTimes);
+        console.log(`Processing ${isPastDate ? 'past' : 'future'} operating date ${dateKey}: blockedTimes =`, blockedTimes);
         
         const success = await submitBlockedTimes(dateKey, blockedTimes);
         if (!success) {
@@ -795,22 +804,15 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         processedDates.add(dateKey);
       }
 
-      // 2. 비활성화된 날짜들 처리 (모든 시간 차단) - 과거 날짜 제외
+      // 2. 비활성화된 날짜들 처리 (모든 시간 차단) - 과거 날짜 포함
       for (const [dateKey, status] of Object.entries(dateStatus)) {
         if (status === 'inactive' && !processedDates.has(dateKey)) {
-          // 과거 날짜는 건너뛰기
-          const targetDate = new Date(dateKey);
-          targetDate.setHours(0, 0, 0, 0);
+          const targetDate = parseLocalDate(dateKey);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
+          const isPastDate = targetDate < today;
           
-          if (targetDate < today) {
-            console.log(`Skipping past date ${dateKey}: cannot block past dates`);
-            processedDates.add(dateKey);
-            continue;
-          }
-          
-          console.log(`Processing inactive date ${dateKey}: blocking all times`);
+          console.log(`Processing ${isPastDate ? 'past' : 'future'} inactive date ${dateKey}: blocking all times`);
           
           const success = await submitBlockedTimes(dateKey, allTimeSlots);
           if (!success) {
@@ -849,24 +851,42 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         return false;
       }
       
-      // 날짜 검증 (과거 날짜 확인)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
+      // 날짜 정보 로깅
+      const today = parseLocalDate(date);
+      const targetDate = parseLocalDate(date);
+      const isPastDate = targetDate < today;
       
-      console.log(`Date validation - Today: ${today.toISOString()}, Target: ${targetDate.toISOString()}`);
+      console.log(`Date info - Today: ${today.toISOString()}, Target: ${targetDate.toISOString()}, isPast: ${isPastDate}`);
       
-      if (targetDate < today) {
-        console.error(`Cannot set blocked times for past date: ${date}`);
-        return false;
-      }
-      
-      // 토큰도 확인
+      // 토큰 상태 확인
       const token = AuthService.getAccessToken();
-      console.log(`Current access token exists:`, !!token);
+      console.log(`🔑 토큰 존재:`, !!token);
+      
       if (token) {
-        console.log(`Token starts with:`, token.substring(0, 50) + '...');
+        // 토큰이 실제 JWT인지 확인
+        const isJWT = token.includes('.') && token.split('.').length === 3;
+        console.log(`🔍 JWT 형식:`, isJWT);
+        
+        if (isJWT) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log(`👤 사용자:`, payload.sub, '역할:', payload.role);
+            const expired = payload.exp * 1000 < Date.now();
+            console.log(`⏰ 토큰 만료:`, expired ? '만료됨' : '유효함');
+          } catch (e) {
+            console.error('❌ JWT 파싱 실패:', e);
+          }
+        } else {
+          console.warn(`⚠️ Mock 토큰 감지: ${token.substring(0, 30)}...`);
+          console.warn(`📝 해결방법: 로그아웃 후 다시 로그인하여 JWT 토큰을 받으세요.`);
+          
+          // Mock 토큰인 경우 자동으로 로그아웃 처리
+          console.log(`🔄 자동 로그아웃 처리 중...`);
+          AuthService.logout();
+          alert('Mock 토큰이 감지되어 자동으로 로그아웃됩니다. 다시 로그인해주세요.');
+          window.location.href = '/login';
+          return false;
+        }
       }
 
       const blockedTimesData: BlockedTimesRequest = {
@@ -882,6 +902,8 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
 
       const response = await AuthService.authenticatedRequest(`/api/advisors/blocked-times?date=${date}`, {
         method: 'PUT', // PUT 메서드 사용 (백엔드 API에 맞춤)
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(blockedTimesData)
       });
 
@@ -1603,14 +1625,14 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
               </div>
             </div>
           </div>
-                             <button 
-                 onClick={handleSubmitAll}
-                 className="w-full py-3 mt-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
-               >
-                 등록하기
-               </button>
-        </div>
-      </div>
+            <button 
+                onClick={handleSubmitAll}
+                className="w-full py-3 mt-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+              >
+                등록하기
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

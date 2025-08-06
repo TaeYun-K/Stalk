@@ -224,7 +224,7 @@ const ExpertsPage = () => {
       {/* 전문가 등록 버튼 - ADVISOR 역할인 경우에만 표시 */}
       {userInfo?.role === 'ADVISOR' && (
         <button
-          onClick={() => navigate('/expert-registration')}
+          onClick={() => navigate(`/expert-registration/${userInfo.userId}`)}
           className="fixed bottom-8 right-28 bg-blue-500 px-3 py-2hover:bg-blue-600 text-white rounded-full shadow-lg transition-all duration-600 group z-50"
           style={{ width: 'fit-content' }}
         >
