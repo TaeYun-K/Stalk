@@ -70,4 +70,10 @@
     WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
   </update>
 
+  <update id="updatePassword">
+    UPDATE users
+    SET password = #{encodedPassword}
+    WHERE id = #{userId}
+  </update>
+
 </mapper>
