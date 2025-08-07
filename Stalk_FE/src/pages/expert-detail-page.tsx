@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import NewNavbar from '@/components/new-navbar';
-import ExpertProfileImage from '@/assets/expert_profile_image.png';
-import AuthService from '@/services/authService';
-import ProfileDefaultImage from '@/assets/images/profiles/Profile_default.svg';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import NewNavbar from "@/components/new-navbar";
+import ExpertProfileImage from "@/assets/expert_profile_image.png";
+import AuthService from "@/services/authService";
+import ProfileDefaultImage from "@/assets/images/profiles/Profile_default.svg";
 
 // 전문가 정보 API Response Interfaces
 interface ApiCareer {
@@ -91,24 +91,61 @@ interface ApiAvailableTimesApiResponse {
   result: ApiAvailableTimesResponse;
 }
 
+// 예약 요청 인터페이스
+interface PaymentReservationRequest {
+  advisorUserId: number;
+  date: string; // YYYY-MM-DD 형식
+  time: string; // HH:mm 형식
+  requestMessage?: string;
+}
+
+// 예약 응답 인터페이스 (백엔드 PaymentReservationResponseDto와 매칭)
+interface PaymentReservationResponse {
+  reservationId: number;
+  scheduledTime: string;
+  orderId: string;
+  amount: number;
+  paymentData: {
+    // 토스페이먼츠 SDK에 필요한 데이터들
+    orderId: string;
+    orderName: string;
+    amount: number;
+    customerKey: string;
+    customerName: string;
+    successUrl: string;
+    failUrl: string;
+  };
+}
+
+interface PaymentReservationApiResponse {
+  httpStatus: string;
+  isSuccess: boolean;
+  message: string;
+  code: number;
+  result: PaymentReservationResponse;
+}
+
 const ExpertDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedTime, setSelectedTime] = useState<string>('');
-  const [showReservationModal, setShowReservationModal] = useState<boolean>(false);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [showReservationModal, setShowReservationModal] =
+    useState<boolean>(false);
   const [displayedReviews, setDisplayedReviews] = useState<number>(3);
-  
+
   // API 상태 관리
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expertData, setExpertData] = useState<ApiAdvisorDetail | null>(null);
-  
+
   // 예약 가능 시간 API 상태 관리
   const [availableTimesLoading, setAvailableTimesLoading] = useState(false);
-  const [availableTimesError, setAvailableTimesError] = useState<string | null>(null);
+  const [availableTimesError, setAvailableTimesError] = useState<string | null>(
+    null
+  );
   const [availableTimes, setAvailableTimes] = useState<ApiTimeSlot[]>([]);
-  
+
   // 현재 전문가의 ID (URL 파라미터의 id)
   const advisorId = id;
 
@@ -116,42 +153,44 @@ const ExpertDetailPage: React.FC = () => {
   useEffect(() => {
     const fetchExpertDetails = async () => {
       if (!id) {
-        setError('전문가 ID가 없습니다.');
+        setError("전문가 ID가 없습니다.");
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        
+
         // 토큰 확인
         const token = AuthService.getAccessToken();
         if (!token) {
-          throw new Error('로그인 후 이용하실 수 있는 서비스입니다.');
+          throw new Error("로그인 후 이용하실 수 있는 서비스입니다.");
         }
-        
-        const response = await AuthService.authenticatedRequest(`/api/advisors/${id}`);
-        
+
+        const response = await AuthService.authenticatedRequest(
+          `/api/advisors/${id}`
+        );
+
         if (response.status === 401) {
           // 401 에러 시 토큰 제거하고 로그인 페이지로 리다이렉트
           AuthService.removeAccessToken();
-          navigate('/login');
+          navigate("/login");
           return;
         }
-        
+
         if (!response.ok) {
-          throw new Error('Failed to fetch expert details');
+          throw new Error("Failed to fetch expert details");
         }
-        
+
         const data: ApiResponse = await response.json();
         if (data.isSuccess) {
           setExpertData(data.result);
         } else {
-          throw new Error(data.message || 'Failed to fetch expert details');
+          throw new Error(data.message || "Failed to fetch expert details");
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-        console.error('Error fetching expert details:', err);
+        setError(err instanceof Error ? err.message : "An error occurred");
+        console.error("Error fetching expert details:", err);
       } finally {
         setLoading(false);
       }
@@ -161,75 +200,83 @@ const ExpertDetailPage: React.FC = () => {
   }, [id, navigate]);
 
   const [reservationForm, setReservationForm] = useState({
-    name: '',
-    phone: '',
-    requestDetails: ''
+    name: "",
+    phone: "",
+    requestDetails: "",
   });
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
-
-
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(
+    null
+  );
 
   // 연도만 추출하는 함수
   const formatPeriod = (period: string): string => {
     // "현재"가 포함된 경우
-    if (period.includes('현재')) {
+    if (period.includes("현재")) {
       const yearMatch = period.match(/(\d{4})년/);
       if (yearMatch) {
         return `${yearMatch[1]} - 현재`;
       }
-      return '현재';
+      return "현재";
     }
-    
+
     // 연도 범위 추출 (예: "2018년 - 2020년" -> "2018 - 2020")
     const yearRangeMatch = period.match(/(\d{4})년\s*-\s*(\d{4})년/);
     if (yearRangeMatch) {
       return `${yearRangeMatch[1]} - ${yearRangeMatch[2]}`;
     }
-    
+
     // 단일 연도 추출 (예: "2012년 6월" -> "2012")
     const singleYearMatch = period.match(/(\d{4})년/);
     if (singleYearMatch) {
       return singleYearMatch[1];
     }
-    
+
     // 기타 경우 원본 반환
     return period;
   };
 
   // API 데이터를 기반으로 전문가 정보 생성
-  const expert = expertData ? {
-    id: expertData.user_id.toString(),
-    name: expertData.name,
-    title: '컨설턴트',
-    tagline: expertData.short_intro,
-    image: expertData.profile_image_url || ExpertProfileImage,
-    introduction: expertData.long_intro,
-    qualifications: expertData.certificates.map(cert => cert.certificate_name),
-    experience: expertData.careers.map(career => ({
-      period: `${new Date(career.started_at).getFullYear()} - ${career.ended_at ? new Date(career.ended_at).getFullYear() : '현재'}`,
-      position: career.title
-    })),
-    rating: expertData.avg_rating,
-    reviewCount: expertData.review_count,
-    consultationFee: '상담료 정보 없음' // API에 consultationFee가 없으므로 기본값 사용
-  } : null;
+  const expert = expertData
+    ? {
+        id: expertData.user_id.toString(),
+        name: expertData.name,
+        title: "컨설턴트",
+        tagline: expertData.short_intro,
+        image: expertData.profile_image_url || ExpertProfileImage,
+        introduction: expertData.long_intro,
+        qualifications: expertData.certificates.map(
+          (cert) => cert.certificate_name
+        ),
+        experience: expertData.careers.map((career) => ({
+          period: `${new Date(career.started_at).getFullYear()} - ${
+            career.ended_at ? new Date(career.ended_at).getFullYear() : "현재"
+          }`,
+          position: career.title,
+        })),
+        rating: expertData.avg_rating,
+        reviewCount: expertData.review_count,
+        consultationFee: "상담료 정보 없음", // API에 consultationFee가 없으므로 기본값 사용
+      }
+    : null;
 
   // API 리뷰 데이터를 기반으로 리뷰 생성
-  const reviews: Review[] = expertData ? expertData.reviews.map((review) => ({
-    id: review.review_id,
-    avatar: review.profile_image || ProfileDefaultImage,
-    username: review.nickname,
-    rating: review.rating,
-    date: new Date(review.created_at).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).replace(/\./g, '.'),
-    content: review.content
-  })) : [];
-
-
+  const reviews: Review[] = expertData
+    ? expertData.reviews.map((review) => ({
+        id: review.review_id,
+        avatar: review.profile_image || ProfileDefaultImage,
+        username: review.nickname,
+        rating: review.rating,
+        date: new Date(review.created_at)
+          .toLocaleDateString("ko-KR", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          })
+          .replace(/\./g, "."),
+        content: review.content,
+      }))
+    : [];
 
   // 달력 관련 함수들
   const getDaysInMonth = (date: Date) => {
@@ -241,18 +288,21 @@ const ExpertDetailPage: React.FC = () => {
   };
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   };
 
   const isSelected = (date: Date) => {
-    return selectedCalendarDate && date.toDateString() === selectedCalendarDate.toDateString();
+    return (
+      selectedCalendarDate &&
+      date.toDateString() === selectedCalendarDate.toDateString()
+    );
   };
 
   const handleDateClick = (date: Date) => {
     setSelectedCalendarDate(date);
     const formattedDate = formatDate(date);
     setSelectedDate(formattedDate);
-    
+
     // 날짜 선택 시 예약 가능 시간 조회
     if (id) {
       fetchAvailableTimes(id, formattedDate);
@@ -260,105 +310,123 @@ const ExpertDetailPage: React.FC = () => {
   };
 
   // 예약 가능 시간 조회 API
-    const fetchAvailableTimes = async (advisorId: string, date: string) => {
+  const fetchAvailableTimes = async (advisorId: string, date: string) => {
     try {
       setAvailableTimesLoading(true);
       setAvailableTimesError(null);
-      
+
       // 현재 사용자 정보 확인
       const userInfo = AuthService.getUserInfo();
-      console.log('Current user info:', userInfo);
-      console.log('Current user role:', userInfo?.role);
-      
+      console.log("Current user info:", userInfo);
+      console.log("Current user role:", userInfo?.role);
+
       // 토큰 상태 확인
       const currentToken = AuthService.getAccessToken();
-      console.log('Current token exists:', !!currentToken);
-      
+      console.log("Current token exists:", !!currentToken);
+
       if (currentToken) {
         // JWT 토큰 디코딩하여 만료 시간 확인
         try {
-          const base64Url = currentToken.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const base64Url = currentToken.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
           const payload = JSON.parse(window.atob(base64));
-          
+
           const currentTime = Math.floor(Date.now() / 1000); // 현재 시간 (초)
           const expirationTime = payload.exp; // 토큰 만료 시간
-          
-          console.log('Token expiration check:');
-          console.log('- Current time:', new Date(currentTime * 1000).toISOString());
-          console.log('- Expiration time:', new Date(expirationTime * 1000).toISOString());
-          console.log('- Time until expiration:', expirationTime - currentTime, 'seconds');
-          console.log('- Is expired:', currentTime >= expirationTime);
-          
+
+          console.log("Token expiration check:");
+          console.log(
+            "- Current time:",
+            new Date(currentTime * 1000).toISOString()
+          );
+          console.log(
+            "- Expiration time:",
+            new Date(expirationTime * 1000).toISOString()
+          );
+          console.log(
+            "- Time until expiration:",
+            expirationTime - currentTime,
+            "seconds"
+          );
+          console.log("- Is expired:", currentTime >= expirationTime);
+
           if (currentTime >= expirationTime) {
-            console.log('Token is expired, attempting refresh...');
+            console.log("Token is expired, attempting refresh...");
             try {
               await AuthService.refreshToken();
-              console.log('Token refreshed successfully after expiration');
+              console.log("Token refreshed successfully after expiration");
             } catch (error) {
-              console.log('Token refresh failed after expiration:', error);
-              throw new Error('토큰이 만료되었습니다. 다시 로그인해주세요.');
+              console.log("Token refresh failed after expiration:", error);
+              throw new Error("토큰이 만료되었습니다. 다시 로그인해주세요.");
             }
-          } else if (expirationTime - currentTime <= 180) { // 3분 이내 만료
-            console.log('Token expires soon, attempting refresh...');
+          } else if (expirationTime - currentTime <= 180) {
+            // 3분 이내 만료
+            console.log("Token expires soon, attempting refresh...");
             try {
               await AuthService.refreshToken();
-              console.log('Token refreshed successfully before expiration');
+              console.log("Token refreshed successfully before expiration");
             } catch (error) {
-              console.log('Token refresh failed before expiration:', error);
+              console.log("Token refresh failed before expiration:", error);
             }
           } else {
-            console.log('Token is still valid');
+            console.log("Token is still valid");
           }
         } catch (error) {
-          console.log('Error decoding token:', error);
+          console.log("Error decoding token:", error);
         }
       } else {
-        console.log('No token found');
-        throw new Error('로그인이 필요한 서비스입니다.');
+        console.log("No token found");
+        throw new Error("로그인이 필요한 서비스입니다.");
       }
-      
+
       const response = await AuthService.authenticatedRequest(
         `/api/advisors/${advisorId}/available-times?date=${date}`
       );
-      
+
       if (response.status === 401) {
-        throw new Error('로그인이 필요한 서비스입니다.');
+        throw new Error("로그인이 필요한 서비스입니다.");
       }
-      
+
       if (response.status === 403) {
-        throw new Error('일반 사용자만 사용 가능한 서비스입니다.');
+        throw new Error("일반 사용자만 사용 가능한 서비스입니다.");
       }
-      
+
       if (response.status === 404) {
-        throw new Error('존재하지 않은 전문가입니다.');
+        throw new Error("존재하지 않은 전문가입니다.");
       }
-      
+
       if (!response.ok) {
-        throw new Error('예약 가능 시간 조회에 실패했습니다.');
+        throw new Error("예약 가능 시간 조회에 실패했습니다.");
       }
-      
+
       const data: ApiAvailableTimesApiResponse = await response.json();
       if (data.isSuccess) {
         setAvailableTimes(data.result.time_slots);
       } else {
-        throw new Error(data.message || '예약 가능 시간 조회에 실패했습니다.');
+        throw new Error(data.message || "예약 가능 시간 조회에 실패했습니다.");
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '예약 가능 시간 조회 중 오류가 발생했습니다.';
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "예약 가능 시간 조회 중 오류가 발생했습니다.";
       setAvailableTimesError(errorMessage);
-      console.error('Error fetching available times:', err);
+      console.error("Error fetching available times:", err);
     } finally {
       setAvailableTimesLoading(false);
     }
   };
 
   const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1)
+    );
   };
 
   const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1)
+    );
   };
 
   const handleToday = () => {
@@ -368,48 +436,151 @@ const ExpertDetailPage: React.FC = () => {
     setSelectedDate(formatDate(today));
   };
 
-  const handleReservation = () => {
-    if (selectedDate && selectedTime && reservationForm.name && reservationForm.phone) {
-      // 예약 로직 구현
-      alert('예약이 완료되었습니다!');
-      setShowReservationModal(false);
-      navigate('/mypage?tab=내 상담 내역');
-    } else {
-      alert('이름과 휴대폰 번호를 입력해주세요.');
+  // 예약 + 결제 API 호출 함수
+  const createReservationWithPayment = async (
+    requestData: PaymentReservationRequest
+  ): Promise<PaymentReservationResponse> => {
+    try {
+      const response = await fetch("/api/reservations/with-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`, // 토큰 방식에 맞게 수정
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse: PaymentReservationApiResponse = await response.json();
+
+      if (!apiResponse.isSuccess) {
+        throw new Error(apiResponse.message);
+      }
+
+      return apiResponse.result;
+    } catch (error) {
+      console.error("예약 생성 실패:", error);
+      throw error;
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  // 토스페이먼츠 결제창으로 이동하는 함수
+  const redirectToPayment = (
+    paymentData: PaymentReservationResponse["paymentData"]
+  ) => {
+    // 토스페이먼츠 결제창 SDK 사용
+    const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY;
+
+    if (window.TossPayments) {
+      const tossPayments = window.TossPayments(clientKey);
+
+      tossPayments.requestPayment("카드", {
+        amount: paymentData.amount,
+        orderId: paymentData.orderId,
+        orderName: paymentData.orderName,
+        customerKey: paymentData.customerKey,
+        customerName: paymentData.customerName,
+        successUrl: paymentData.successUrl,
+        failUrl: paymentData.failUrl,
+      });
+    } else {
+      console.error("토스페이먼츠 SDK가 로드되지 않았습니다.");
+      alert("결제 시스템을 불러오는 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleReservation = async () => {
+    if (
+      selectedDate &&
+      selectedTime &&
+      reservationForm.name &&
+      reservationForm.phone
+    ) {
+      // expertData가 없는 경우 처리
+      if (!expertData) {
+        alert("전문가 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+
+      try {
+        // 예약 요청 데이터 준비
+        const requestData: PaymentReservationRequest = {
+          advisorUserId: expertData.user_id, // ✅ null 체크 후 안전하게 사용
+          date: selectedDate,
+          time: selectedTime,
+          requestMessage: reservationForm.requestDetails || undefined,
+        };
+
+        // API 호출
+        const reservationResponse = await createReservationWithPayment(
+          requestData
+        );
+
+        // 예약 생성 성공 후 결제창으로 이동
+        setShowReservationModal(false);
+        redirectToPayment(reservationResponse.paymentData);
+      } catch (error) {
+        console.error("예약 생성 실패:", error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : "예약 생성 중 오류가 발생했습니다."
+        );
+      }
+    } else {
+      alert("이름과 휴대폰 번호를 입력해주세요.");
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setReservationForm({
       ...reservationForm,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
   const handleLoadMoreReviews = () => {
-    setDisplayedReviews(prev => prev + 3);
+    setDisplayedReviews((prev) => prev + 3);
   };
 
   const handleDeleteExpert = async () => {
-    if (!window.confirm('정말로 전문가 프로필을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+    if (
+      !window.confirm(
+        "정말로 전문가 프로필을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+      )
+    ) {
       return;
     }
 
     try {
-      const response = await AuthService.authenticatedRequest(`/api/advisors/${advisorId}`, {
-        method: 'DELETE'
-      });
+      const response = await AuthService.authenticatedRequest(
+        `/api/advisors/${advisorId}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (response.ok) {
-        alert('전문가 프로필이 성공적으로 삭제되었습니다.');
-        navigate('/experts');
+        alert("전문가 프로필이 성공적으로 삭제되었습니다.");
+        navigate("/experts");
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.message || '전문가 프로필 삭제에 실패했습니다.');
+        throw new Error(
+          errorData.message || "전문가 프로필 삭제에 실패했습니다."
+        );
       }
     } catch (error) {
-      console.error('Error deleting expert:', error);
-      alert(error instanceof Error ? error.message : '전문가 프로필 삭제 중 오류가 발생했습니다.');
+      console.error("Error deleting expert:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "전문가 프로필 삭제 중 오류가 발생했습니다."
+      );
     }
   };
 
@@ -420,10 +591,17 @@ const ExpertDetailPage: React.FC = () => {
     const days = [];
 
     // 이전 달의 마지막 날들
-    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+    const prevMonth = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() - 1
+    );
     const daysInPrevMonth = getDaysInMonth(prevMonth);
     for (let i = firstDay - 1; i >= 0; i--) {
-      const date = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), daysInPrevMonth - i);
+      const date = new Date(
+        prevMonth.getFullYear(),
+        prevMonth.getMonth(),
+        daysInPrevMonth - i
+      );
       days.push(
         <div key={`prev-${i}`} className="text-gray-300 text-center py-2">
           {date.getDate()}
@@ -433,20 +611,26 @@ const ExpertDetailPage: React.FC = () => {
 
     // 현재 달의 날들
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+      const date = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth(),
+        day
+      );
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
       const isSelectedDate = isSelected(date);
-      
+
       days.push(
         <div
           key={day}
           onClick={() => handleDateClick(date)}
           className={`text-center py-2 cursor-pointer ${
             isSelectedDate
-              ? 'bg-blue-500 text-white rounded-full'
+              ? "bg-blue-500 text-white rounded-full"
               : isWeekend
-              ? date.getDay() === 0 ? 'text-red-500' : 'text-blue-500'
-              : 'text-gray-900'
+              ? date.getDay() === 0
+                ? "text-red-500"
+                : "text-blue-500"
+              : "text-gray-900"
           } hover:bg-blue-100 hover:rounded-full transition-colors`}
         >
           {day}
@@ -457,7 +641,11 @@ const ExpertDetailPage: React.FC = () => {
     // 다음 달의 첫 날들
     const remainingDays = 42 - days.length; // 6주 표시를 위해
     for (let i = 1; i <= remainingDays; i++) {
-      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, i);
+      const date = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+        i
+      );
       days.push(
         <div key={`next-${i}`} className="text-gray-300 text-center py-2">
           {date.getDate()}
@@ -494,7 +682,9 @@ const ExpertDetailPage: React.FC = () => {
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <div className="text-6xl mb-4">⚠️</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">오류가 발생했습니다</h3>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">
+                오류가 발생했습니다
+              </h3>
               <p className="text-gray-600 mb-4">{error}</p>
               <button
                 onClick={() => window.location.reload()}
@@ -518,8 +708,12 @@ const ExpertDetailPage: React.FC = () => {
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">전문가 정보를 찾을 수 없습니다</h3>
-              <p className="text-gray-600 mb-4">요청하신 전문가 정보가 존재하지 않습니다.</p>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">
+                전문가 정보를 찾을 수 없습니다
+              </h3>
+              <p className="text-gray-600 mb-4">
+                요청하신 전문가 정보가 존재하지 않습니다.
+              </p>
             </div>
           </div>
         </div>
@@ -543,45 +737,61 @@ const ExpertDetailPage: React.FC = () => {
                   <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
                     {expert.name}
                   </h1>
-                  <h3 className='text-left text-l font-semibold text-blue-500 mb-2'>{expert.title}</h3>
-                  <h3 className='text-left text-l font-medium text-gray-400 mb-2'>/  {expertData?.contact || '010-0000-0000'}</h3>
+                  <h3 className="text-left text-l font-semibold text-blue-500 mb-2">
+                    {expert.title}
+                  </h3>
+                  <h3 className="text-left text-l font-medium text-gray-400 mb-2">
+                    / {expertData?.contact || "010-0000-0000"}
+                  </h3>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center mb-2 ml-4">
-                      <div className="flex text-yellow-400">
-                        ⭐
-                      </div>
-                      <span className="ml-2 font-semibold text-gray-900">{expert.rating}</span>
-                      <span className="text-gray-600 ml-4">리뷰 {expert.reviewCount}개</span>
+                      <div className="flex text-yellow-400">⭐</div>
+                      <span className="ml-2 font-semibold text-gray-900">
+                        {expert.rating}
+                      </span>
+                      <span className="text-gray-600 ml-4">
+                        리뷰 {expert.reviewCount}개
+                      </span>
                     </div>
-                </div>
+                  </div>
                 </div>
                 <p className="text-left text-lg text-gray-600 italic mb-4">
                   "{expert.tagline}"
                 </p>
               </div>
               <div className="w-48 h-60 rounded-2xl overflow-hidden">
-                <img 
-                  src={expert.image} 
+                <img
+                  src={expert.image}
                   alt={expert.name}
                   className="w-full h-full object-cover object-top"
                 />
               </div>
             </div>
-        
+
             {/* Expert Introduction */}
             <section className=" border-b border-gray-300 pb-8">
-              <header className='flex flex-row items-end space-x-3'>
-                <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">전문가 소개</h2>
-                <h3 className="text-left text-gray-500 text-sm mb-4">Expert Introduction</h3>
+              <header className="flex flex-row items-end space-x-3">
+                <h2 className="text-left text-2xl font-bold text-gray-900 mb-4">
+                  전문가 소개
+                </h2>
+                <h3 className="text-left text-gray-500 text-sm mb-4">
+                  Expert Introduction
+                </h3>
               </header>
-              <p className="text-left text-gray-700 leading-loose">{expert.introduction}</p>
+              <p className="text-left text-gray-700 leading-loose">
+                {expert.introduction}
+              </p>
             </section>
-            <div className='flex flex-row mt-8 border-b border-gray-300 pb-8'>
+            <div className="flex flex-row mt-8 border-b border-gray-300 pb-8">
               {/* Qualifications */}
               <section className="mb-8  w-1/2">
-                <div className='flex flex-row items-end space-x-3 mb-4'>
-                  <h2 className="text-left text-2xl font-bold text-gray-900">자격 증명</h2>
-                  <p className="text-left text-gray-500 text-sm">Certifications</p>
+                <div className="flex flex-row items-end space-x-3 mb-4">
+                  <h2 className="text-left text-2xl font-bold text-gray-900">
+                    자격 증명
+                  </h2>
+                  <p className="text-left text-gray-500 text-sm">
+                    Certifications
+                  </p>
                 </div>
                 <ul className="space-y-4">
                   {expert.qualifications.map((qualification, index) => (
@@ -596,8 +806,12 @@ const ExpertDetailPage: React.FC = () => {
               {/* Experience */}
               <section className="w-1/2">
                 <div className="flex flex-row items-end space-x-3 mb-4">
-                  <h2 className="text-left text-2xl font-bold text-gray-900">학력 및 경력사항</h2>
-                  <p className="text-left text-gray-500 text-sm">Education & Professional Experience</p>
+                  <h2 className="text-left text-2xl font-bold text-gray-900">
+                    학력 및 경력사항
+                  </h2>
+                  <p className="text-left text-gray-500 text-sm">
+                    Education & Professional Experience
+                  </p>
                 </div>
                 <div className="space-y-4">
                   {expert.experience.map((exp, index) => (
@@ -616,25 +830,37 @@ const ExpertDetailPage: React.FC = () => {
             {/* Reviews */}
             <section className="mt-8">
               <div className="flex flex-row items-end space-x-3 mb-4">
-                <h2 className="text-left text-2xl font-bold text-gray-900">상담 후기</h2>
+                <h2 className="text-left text-2xl font-bold text-gray-900">
+                  상담 후기
+                </h2>
                 <h3 className="text-left text-gray-500 text-sm">Reviews</h3>
               </div>
               <div className="space-y-6">
                 {reviews.slice(0, displayedReviews).map((review) => (
                   <div key={review.id} className="py-6">
                     <div className="flex items-center mb-3">
-                      <img src={review.avatar} alt={`${review.username}의 프로필 사진`} className='w-10 h-10 rounded-full'/>
-                      <div className='ml-3'>
-                        <div className="text-left font-medium text-gray-90 font-semibold">{review.username} ⭐ {review.rating}</div>
-                        <div className="text-left text-sm text-gray-500">{review.date}</div>
+                      <img
+                        src={review.avatar}
+                        alt={`${review.username}의 프로필 사진`}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      <div className="ml-3">
+                        <div className="text-left font-medium text-gray-90 font-semibold">
+                          {review.username} ⭐ {review.rating}
+                        </div>
+                        <div className="text-left text-sm text-gray-500">
+                          {review.date}
+                        </div>
                       </div>
                     </div>
-                    <p className="text-left text-gray-700 leading-relaxed">{review.content}</p>
+                    <p className="text-left text-gray-700 leading-relaxed">
+                      {review.content}
+                    </p>
                   </div>
                 ))}
               </div>
               {displayedReviews < reviews.length && (
-                <button 
+                <button
                   onClick={handleLoadMoreReviews}
                   className="mt-4 text-gray-600 bg-gray-100 py-3 px-6 rounded-full hover:text-gray-700 hover:bg-gray-200 hover:font-semibold font-medium transition-colors"
                 >
@@ -648,7 +874,9 @@ const ExpertDetailPage: React.FC = () => {
           <div className="text-left w-80 flex-shrink-0 ml-4">
             <div className="fixed top-32 right-30 w-80 z-10">
               <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-lg">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">예약 유의사항</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">
+                  예약 유의사항
+                </h3>
                 <ul className="space-y-3 mb-6 text-sm text-gray-600">
                   <li className="flex items-start">
                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
@@ -656,24 +884,34 @@ const ExpertDetailPage: React.FC = () => {
                   </li>
                   <li className="flex items-start">
                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                    <span>예약 후 즉시 예약이 확정되며 예약 정보는 마이페이지의 내 상담 내역에서 확인할 수 있습니다.</span>
+                    <span>
+                      예약 후 즉시 예약이 확정되며 예약 정보는 마이페이지의 내
+                      상담 내역에서 확인할 수 있습니다.
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                    <span>방해 행위(욕설 등) 시 전문가가 상담을 중단할 수 있습니다.</span>
+                    <span>
+                      방해 행위(욕설 등) 시 전문가가 상담을 중단할 수 있습니다.
+                    </span>
                   </li>
                 </ul>
               </div>
-              
+
               {/* 현재 로그인한 사용자가 이 전문가인지 확인 */}
               {(() => {
                 const currentUserInfo = AuthService.getUserInfo();
-                return currentUserInfo?.role === 'ADVISOR' && currentUserInfo?.name === expertData?.name;
+                return (
+                  currentUserInfo?.role === "ADVISOR" &&
+                  currentUserInfo?.name === expertData?.name
+                );
               })() ? (
                 <>
                   {/* 전문가 본인인 경우 수정/삭제 버튼 */}
                   <button
-                    onClick={() => navigate(`/expert-introduction-update/${advisorId}`)}
+                    onClick={() =>
+                      navigate(`/expert-introduction-update/${advisorId}`)
+                    }
                     className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
                   >
                     수정하기
@@ -692,19 +930,19 @@ const ExpertDetailPage: React.FC = () => {
                     // 토큰 확인
                     const token = AuthService.getAccessToken();
                     if (!token) {
-                      alert('로그인이 필요한 서비스입니다.');
-                      navigate('/login');
+                      alert("로그인이 필요한 서비스입니다.");
+                      navigate("/login");
                       return;
                     }
-                    
+
                     const currentUserInfo = AuthService.getUserInfo();
                     setReservationForm({
-                      name: currentUserInfo?.name || '',
-                      phone: currentUserInfo?.contact || '',
-                      requestDetails: ''
+                      name: currentUserInfo?.name || "",
+                      phone: currentUserInfo?.contact || "",
+                      requestDetails: "",
                     });
-                    setSelectedDate('');
-                    setSelectedTime('');
+                    setSelectedDate("");
+                    setSelectedTime("");
                     setSelectedCalendarDate(null);
                     setAvailableTimes([]);
                     setAvailableTimesError(null);
@@ -733,35 +971,41 @@ const ExpertDetailPage: React.FC = () => {
                 ✕
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto px-8 pr-6 scrollbar-hide">
               <form className="space-y-6 pb-4">
                 <div>
-                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">이름</label>
-                                      <input
-                      type="text"
-                      name="name"
-                      value={reservationForm.name}
-                      onChange={handleInputChange}
-                      placeholder="김싸피"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
+                    이름
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={reservationForm.name}
+                    onChange={handleInputChange}
+                    placeholder="김싸피"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
                 <div>
-                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">휴대폰 번호</label>
-                                      <input
-                      type="tel"
-                      name="phone"
-                      value={reservationForm.phone}
-                      onChange={handleInputChange}
-                      placeholder="010-0000-0000"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
+                    휴대폰 번호
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={reservationForm.phone}
+                    onChange={handleInputChange}
+                    placeholder="010-0000-0000"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-                
+
                 <div>
-                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 일자</label>
-                  
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
+                    상담 일자
+                  </label>
+
                   {/* Month Navigation */}
                   <div className="flex items-center justify-between mb-4">
                     <button
@@ -772,7 +1016,8 @@ const ExpertDetailPage: React.FC = () => {
                       &lt;
                     </button>
                     <span className="font-bold text-gray-900">
-                      {currentMonth.getFullYear()}년 {String(currentMonth.getMonth() + 1).padStart(2, '0')}월
+                      {currentMonth.getFullYear()}년{" "}
+                      {String(currentMonth.getMonth() + 1).padStart(2, "0")}월
                     </span>
                     <div className="flex items-center space-x-2">
                       <button
@@ -796,16 +1041,22 @@ const ExpertDetailPage: React.FC = () => {
                   <div className="border border-gray-200 rounded-lg p-4">
                     {/* Days of Week */}
                     <div className="grid grid-cols-7 gap-1 mb-2">
-                      {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
-                        <div
-                          key={day}
-                          className={`text-center text-sm font-medium py-2 ${
-                            index === 0 ? 'text-red-500' : index === 6 ? 'text-blue-500' : 'text-gray-900'
-                          }`}
-                        >
-                          {day}
-                        </div>
-                      ))}
+                      {["일", "월", "화", "수", "목", "금", "토"].map(
+                        (day, index) => (
+                          <div
+                            key={day}
+                            className={`text-center text-sm font-medium py-2 ${
+                              index === 0
+                                ? "text-red-500"
+                                : index === 6
+                                ? "text-blue-500"
+                                : "text-gray-900"
+                            }`}
+                          >
+                            {day}
+                          </div>
+                        )
+                      )}
                     </div>
 
                     {/* Calendar Grid */}
@@ -815,76 +1066,93 @@ const ExpertDetailPage: React.FC = () => {
                   </div>
                 </div>
 
-                                 <div>
-                   <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 시간</label>
-                   
-                   {/* 에러 메시지 표시 */}
-                   {availableTimesError && (
-                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                       <p className="text-red-600 text-sm">{availableTimesError}</p>
-                     </div>
-                   )}
-                   
-                   {/* 로딩 상태 */}
-                   {availableTimesLoading && (
-                     <div className="mb-4 flex items-center justify-center py-4">
-                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                       <span className="ml-2 text-sm text-gray-600">예약 가능 시간을 불러오는 중...</span>
-                     </div>
-                   )}
-                   
-                   {/* 시간 슬롯 표시 */}
-                   {!availableTimesLoading && !availableTimesError && selectedDate && (
-                     <div className="grid grid-cols-3 gap-2">
-                       {availableTimes.length > 0 ? (
-                         availableTimes.map((timeSlot) => {
-                           const isDisabled = !timeSlot.is_available || timeSlot.is_reserved || timeSlot.is_blocked;
-                           const isSelected = selectedTime === timeSlot.time;
-                           
-                           return (
-                             <button
-                               key={timeSlot.time}
-                               type="button"
-                               onClick={() => !isDisabled && setSelectedTime(timeSlot.time)}
-                               className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                                 isSelected
-                                   ? 'bg-blue-500 text-white border-blue-500'
-                                   : isDisabled
-                                   ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                   : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
-                               }`}
-                               disabled={isDisabled}
-                             >
-                               {timeSlot.time}
-                             </button>
-                           );
-                         })
-                       ) : (
-                         <div className="col-span-3 text-center py-4 text-gray-500 text-sm border border-red-500 rounded-lg p-3 bg-red-50 text-red-500">
-                           선택한 날짜에 예약 가능한 시간이 없습니다.
-                         </div>
-                       )}
-                     </div>
-                   )}
-                   
-                   {/* 날짜를 선택하지 않은 경우 안내 메시지 */}
-                   {!selectedDate && !availableTimesLoading && !availableTimesError && (
-                     <div className="text-center py-4 text-sm border border-blue-500 rounded-lg p-3 bg-blue-50 text-blue-500">
-                       날짜 선택 시 예약 가능한 시간을 확인할 수 있습니다.
-                     </div>
-                   )}
-                 </div>
+                <div>
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
+                    상담 시간
+                  </label>
+
+                  {/* 에러 메시지 표시 */}
+                  {availableTimesError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-red-600 text-sm">
+                        {availableTimesError}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 로딩 상태 */}
+                  {availableTimesLoading && (
+                    <div className="mb-4 flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                      <span className="ml-2 text-sm text-gray-600">
+                        예약 가능 시간을 불러오는 중...
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 시간 슬롯 표시 */}
+                  {!availableTimesLoading &&
+                    !availableTimesError &&
+                    selectedDate && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {availableTimes.length > 0 ? (
+                          availableTimes.map((timeSlot) => {
+                            const isDisabled =
+                              !timeSlot.is_available ||
+                              timeSlot.is_reserved ||
+                              timeSlot.is_blocked;
+                            const isSelected = selectedTime === timeSlot.time;
+
+                            return (
+                              <button
+                                key={timeSlot.time}
+                                type="button"
+                                onClick={() =>
+                                  !isDisabled && setSelectedTime(timeSlot.time)
+                                }
+                                className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                                  isSelected
+                                    ? "bg-blue-500 text-white border-blue-500"
+                                    : isDisabled
+                                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "bg-white text-gray-700 border-gray-300 hover:border-blue-300"
+                                }`}
+                                disabled={isDisabled}
+                              >
+                                {timeSlot.time}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="col-span-3 text-center py-4 text-gray-500 text-sm border border-red-500 rounded-lg p-3 bg-red-50 text-red-500">
+                            선택한 날짜에 예약 가능한 시간이 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  {/* 날짜를 선택하지 않은 경우 안내 메시지 */}
+                  {!selectedDate &&
+                    !availableTimesLoading &&
+                    !availableTimesError && (
+                      <div className="text-center py-4 text-sm border border-blue-500 rounded-lg p-3 bg-blue-50 text-blue-500">
+                        날짜 선택 시 예약 가능한 시간을 확인할 수 있습니다.
+                      </div>
+                    )}
+                </div>
 
                 <div>
-                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">상담 요청 사항</label>
-                                      <textarea
-                      name="requestDetails"
-                      value={reservationForm.requestDetails}
-                      onChange={handleInputChange}
-                      placeholder="상담 요청 사항을 입력하세요."
-                      rows={4}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring focus:ring-blue-500 focus:ring-2 focus:outline focus:outline-blue-500 resize-none"
-                    />
+                  <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
+                    상담 요청 사항
+                  </label>
+                  <textarea
+                    name="requestDetails"
+                    value={reservationForm.requestDetails}
+                    onChange={handleInputChange}
+                    placeholder="상담 요청 사항을 입력하세요."
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring focus:ring-blue-500 focus:ring-2 focus:outline focus:outline-blue-500 resize-none"
+                  />
                 </div>
               </form>
             </div>
@@ -905,4 +1173,4 @@ const ExpertDetailPage: React.FC = () => {
   );
 };
 
-export default ExpertDetailPage; 
+export default ExpertDetailPage;

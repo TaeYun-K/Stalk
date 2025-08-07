@@ -9,6 +9,7 @@ import com.Stalk.project.api.payment.service.PaymentService;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.SecurityUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import com.Stalk.project.api.payment.dto.in.PaymentCancelRequestDto;
 import com.Stalk.project.api.payment.dto.out.PaymentCancelResponseDto;
@@ -246,5 +247,19 @@ public class PaymentController {
             case 3 -> "김영희";
             default -> "전문가";
         };
+    }
+
+    @PostMapping("/success")
+    public BaseResponse<?> confirmPayment(
+        @RequestBody PaymentConfirmRequestDto requestDto,
+        HttpServletRequest request
+    ) {
+        // 토큰에서 사용자 정보 추출
+        Long userId = SecurityUtil.getCurrentUserPrimaryId();
+
+        // 결제 승인 처리
+        paymentService.confirmPayment(requestDto);
+
+        return new BaseResponse<>();
     }
 }
