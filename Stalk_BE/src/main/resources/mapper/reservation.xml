@@ -237,11 +237,17 @@
     WHERE id = #{reservationId}
   </update>
 
-  <!-- reservation.xml -->
   <delete id="deleteReservation">
     DELETE FROM consultation_sessions
     WHERE id = #{reservationId}
   </delete>
 
+  <select id="isValidPendingReservation" resultType="boolean">
+    SELECT COUNT(*) > 0
+    FROM consultation_sessions
+    WHERE id = #{reservationId}
+      AND user_id = #{userId}
+      AND payment_status = 'PENDING'
+  </select>
 
 </mapper>

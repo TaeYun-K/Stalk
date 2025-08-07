@@ -163,4 +163,6 @@ public interface ReservationMapper {
   int deleteReservation(@Param("reservationId") Long reservationId);
 
   Long getReservationIdByOrderId(String orderId);
+
+  boolean isValidPendingReservation(@Param("reservationId") Long reservationId, @Param("userId") Long userId);
 }
