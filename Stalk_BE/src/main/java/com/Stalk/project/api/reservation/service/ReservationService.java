@@ -38,7 +38,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,20 +95,8 @@ public class ReservationService {
     log.info("결제 포함 예약 생성 완료: userId={}, reservationId={}, orderId={}, amount={}",
         currentUserId, paymentResponse.getReservationId(), paymentResponse.getOrderId(), paymentResponse.getAmount());
 
-    try {
-      UserProfileResponseDto userProfile = userProfileMapper.findUserProfileById(currentUserId);
-      String clientName = userProfile != null ? userProfile.getName() : "Unknown";
-
-      eventPublisher.publishEvent(new ReservationCreatedEvent(
-          requestDto.getAdvisorUserId(),
-          clientName,
-          scheduledTimeStr
-      ));
-      log.debug("예약 생성 이벤트 발행 완료 - advisorId={}, clientName={}, dateTime={}",
-          requestDto.getAdvisorUserId(), clientName, scheduledTimeStr);
-    } catch (Exception e) {
-      log.error("예약 생성 이벤트 발행 중 오류 발생", e);
-    }
+    // 예약 생성 이벤트 발행
+    publishCreatedEvent(requestDto.getAdvisorUserId(), currentUserId, scheduledTimeStr);
 
     return PaymentReservationResponseDto.builder()
         .reservationId(paymentResponse.getReservationId())
@@ -451,5 +438,33 @@ public class ReservationService {
     } catch (Exception e) {
       log.warn("예약 취소 이벤트 발행 실패 (취소는 성공)", e);
     }
+  }
+
+  /**
+   * 예약 생성 이벤트 발행
+   */
+  private void publishCreatedEvent(Long advisorUserId, Long clientUserId, String scheduledTime) {
+    try {
+      String clientName = getUserName(clientUserId);
+
+      eventPublisher.publishEvent(new ReservationCreatedEvent(
+          advisorUserId,
+          clientName,
+          scheduledTime
+      ));
+
+      log.debug("예약 생성 이벤트 발행 완료 - advisorId={}, clientName={}, dateTime={}",
+          advisorUserId, clientName, scheduledTime);
+    } catch (Exception e) {
+      log.warn("예약 생성 이벤트 발행 실패 (예약은 성공)", e);
+    }
+  }
+
+  /**
+   * 사용자 이름 조회 헬퍼 메서드
+   */
+  private String getUserName(Long userId) {
+    UserProfileResponseDto profile = userProfileMapper.findUserProfileById(userId);
+    return profile != null ? profile.getName() : "Unknown";
   }
 }
