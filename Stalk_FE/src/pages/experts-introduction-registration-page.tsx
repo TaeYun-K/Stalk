@@ -548,27 +548,6 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
     return targetDate >= today;
   };
 
-  // 오늘 날짜에서 현재 시간 이전인지 확인하는 함수
-  const isTimeSlotPast = (timeSlot: string, date: Date) => {
-    const now = new Date();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    
-    // 오늘 날짜가 아니면 과거 시간이 아님
-    if (targetDate.getTime() !== today.getTime()) {
-      return false;
-    }
-    
-    // 오늘 날짜인 경우 현재 시간과 비교
-    const [hours, minutes] = timeSlot.split(':').map(Number);
-    const slotTime = new Date();
-    slotTime.setHours(hours, minutes, 0, 0);
-    
-    return slotTime <= now;
-  };
-
   const getDateStatus = (date: Date) => {
     const dateKey = getDateKey(date);
     const savedStatus = dateStatus[dateKey];
@@ -583,8 +562,8 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
     const targetDate = new Date(date);
     targetDate.setHours(0, 0, 0, 0);
     
-    // 오늘 이전 날짜는 모두 비활성화
-    if (targetDate < today) {
+    // 오늘을 포함한 이전 날짜는 모두 비활성화
+    if (targetDate <= today) {
       return 'inactive';
     }
     
@@ -640,6 +619,14 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         return '미운영';
     }
   };
+
+  const isTimeSlotPast = (time: string, date: Date) => {
+    const [hour, minute] = time.split(':').map(Number);
+    const slotDate = new Date(date);
+    slotDate.setHours(hour, minute, 0, 0);
+    return slotDate < new Date();
+  };
+  
 
   // 시간 슬롯 토글
   const toggleTimeSlot = (time: string) => {
@@ -768,30 +755,21 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         const dateStatus = getDateStatus(date);
         const isPastDate = targetDate < today;
         
-        if (isPastDate) {
-          // 과거 날짜: 잠금된 시간들을 차단 시간으로 처리
-          console.log(`Processing past operating date ${dateKey}: using locked time slots as blocked times`);
-          
-          // 과거 날짜의 현재 시간 설정을 가져와서 차단 시간으로 설정
-          const lockedTimeSlots = dateSpecificTimeSlots.length > 0 ? dateSpecificTimeSlots : [];
-          
-          if (dateStatus === 'operating') {
-            // 과거 운영일: 현재 설정된 시간들이 차단된 시간
-            blockedTimes = lockedTimeSlots;
-          } else {
-            // 과거 휴무일: 모든 시간이 차단됨
-            blockedTimes = allTimeSlots;
-          }
-        } else {
-          // 미래 날짜: 기존 로직 유지
-          if (dateStatus === 'operating') {
-            // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
-            blockedTimes = dateSpecificTimeSlots;
-          } else {
-            // 휴무일: 모든 시간이 차단됨
-            blockedTimes = allTimeSlots;
-          }
+        if (targetDate <= today) {
+          console.log(`Skipping past date ${dateKey}`);
+          processedDates.add(dateKey);
+          continue;
         }
+        
+        // 미래 날짜: 기존 로직 유지
+        if (dateStatus === 'operating') {
+          // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
+          blockedTimes = dateSpecificTimeSlots;
+        } else {
+          // 휴무일: 모든 시간이 차단됨
+          blockedTimes = allTimeSlots;
+        }
+        
         
         console.log(`Processing ${isPastDate ? 'past' : 'future'} operating date ${dateKey}: blockedTimes =`, blockedTimes);
         
@@ -852,7 +830,8 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       }
       
       // 날짜 정보 로깅
-      const today = parseLocalDate(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const targetDate = parseLocalDate(date);
       const isPastDate = targetDate < today;
       
@@ -902,7 +881,10 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
 
       const response = await AuthService.authenticatedRequest(`/api/advisors/blocked-times?date=${date}`, {
         method: 'PUT', // PUT 메서드 사용 (백엔드 API에 맞춤)
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+         },
         credentials: 'include',
         body: JSON.stringify(blockedTimesData)
       });
