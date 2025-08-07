@@ -96,6 +96,46 @@ const VideoConsultationPage: React.FC = () => {
   const [showParticipantFaces, setShowParticipantFaces] =
     useState<boolean>(true);
 
+  // 페이지 이탈 방지 훅
+  const usePreventNavigation = (enabled: boolean) => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      if (!enabled) return;
+
+      // 🔒 1. 브라우저 새로고침 / 닫기 방지
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = '';
+      };
+
+      // 🔒 2. 뒤로가기 방지
+      const handlePopState = (e: PopStateEvent) => {
+        e.preventDefault();
+        // 뒤로가기 막고 알림창 보여주기 (선택)
+        const confirmLeave = window.confirm('상담이 종료되지 않았습니다. 정말 나가시겠습니까?');
+        if (confirmLeave) {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          navigate(-1); // 실제 뒤로가기
+        } else {
+          // ❌ 뒤로가기 중단: 앞으로 한 번 더 이동 (뒤로 간 걸 다시 앞으로 감)
+          window.history.pushState(null, '', window.location.href);
+        }
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('popstate', handlePopState);
+      // popstate 트리거를 위해 현재 상태 push (뒤로가기 가능하게 만들어줘야 감지 가능)
+      window.history.pushState(null, '', window.location.href);
+
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, [enabled, navigate]);
+  };
+  usePreventNavigation(true);
+
   // 참가자 역할 구분을 위한 함수들
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
     try {
@@ -527,8 +567,8 @@ const VideoConsultationPage: React.FC = () => {
           console.error('구독자 트랙 중지 실패:', err);
         }
       });
-
-      // 5) 상태 초기화
+      
+      // 4) 상태 초기화
       navigate(`/mypage`);
     }
   };
@@ -590,22 +630,6 @@ const VideoConsultationPage: React.FC = () => {
       alert(newAudioState ? "마이크를 시작할 수 없습니다." : "마이크를 중지할 수 없습니다.");
     }
   };
-
-  // 컴포넌트 언마운트 시 리소스 정리
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      leaveSession();
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (session) {
-        leaveSession();
-      }
-    };
-  }, [session, consultationId, navigate]);
 
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
