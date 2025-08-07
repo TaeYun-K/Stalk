@@ -94,8 +94,6 @@ public class PaymentService {
                 .amount(tossPaymentConfig.getDefaultConsultationFee())
                 .customerName(userInfo.getName())
                 .customerEmail(userInfo.getEmail())
-                .successUrl(tossPaymentConfig.getSuccessUrl())
-                .failUrl(tossPaymentConfig.getFailUrl())
                 .clientKey(tossPaymentConfig.getTestClientApiKey())
                 .build();
     }
@@ -436,8 +434,6 @@ public class PaymentService {
             .amount(consultationFee) // ⭐ 핵심: 어드바이저별 상담료 사용
             .customerName(userInfo.getName())
             .customerEmail(userInfo.getEmail())
-            .successUrl(tossPaymentConfig.getSuccessUrl())
-            .failUrl(tossPaymentConfig.getFailUrl())
             .clientKey(tossPaymentConfig.getTestClientApiKey())
             .reservationId(reservationDto.getId()) // ⭐ 추가: 예약 ID 반환
             .build();

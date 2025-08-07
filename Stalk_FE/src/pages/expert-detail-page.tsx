@@ -93,10 +93,10 @@ interface ApiAvailableTimesApiResponse {
 
 // 예약 요청 인터페이스
 interface PaymentReservationRequest {
-  advisorUserId: number;
+  advisorUserId: string;
   date: string; // YYYY-MM-DD 형식
   time: string; // HH:mm 형식
-  requestMessage?: string;
+  requestMessage: string;
 }
 
 // 예약 응답 인터페이스 (백엔드 PaymentReservationResponseDto와 매칭)
@@ -130,6 +130,7 @@ const ExpertDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
+  const [requestMessage] = useState<string>("");
   const [showReservationModal, setShowReservationModal] =
     useState<boolean>(false);
   const [displayedReviews, setDisplayedReviews] = useState<number>(3);
@@ -492,46 +493,82 @@ const ExpertDetailPage: React.FC = () => {
     }
   };
 
-  const handleReservation = async () => {
-    if (
-      selectedDate &&
-      selectedTime &&
-      reservationForm.name &&
-      reservationForm.phone
-    ) {
-      // expertData가 없는 경우 처리
-      if (!expertData) {
-        alert("전문가 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
-        return;
+  // 예약 및 결제 처리 함수
+  const handleReservation = async (
+    reservationData: PaymentReservationRequest,
+    onSuccess?: () => void,
+    onError?: (message: string) => void
+  ) => {
+    try {
+      // 토큰 확인
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        throw new Error("로그인이 필요합니다. 다시 로그인해주세요.");
       }
 
-      try {
-        // 예약 요청 데이터 준비
-        const requestData: PaymentReservationRequest = {
-          advisorUserId: expertData.user_id, // ✅ null 체크 후 안전하게 사용
-          date: selectedDate,
-          time: selectedTime,
-          requestMessage: reservationForm.requestDetails || undefined,
-        };
+      // 백엔드 API 호출 - 예약 생성 + 결제 준비
+      const response = await fetch("/api/reservations/with-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(reservationData),
+      });
 
-        // API 호출
-        const reservationResponse = await createReservationWithPayment(
-          requestData
-        );
+      const data: ApiResponse = await response.json();
 
-        // 예약 생성 성공 후 결제창으로 이동
-        setShowReservationModal(false);
-        redirectToPayment(reservationResponse.paymentData);
-      } catch (error) {
-        console.error("예약 생성 실패:", error);
-        alert(
-          error instanceof Error
-            ? error.message
-            : "예약 생성 중 오류가 발생했습니다."
+      if (!response.ok || !data.isSuccess) {
+        // 인증 오류 처리
+        if (response.status === 401 || data.code === 401) {
+          throw new Error("로그인이 만료되었습니다. 다시 로그인해주세요.");
+        }
+        throw new Error(data.message || "예약 생성에 실패했습니다.");
+      }
+
+      // result를 PaymentReservationResponse 타입으로 캐스팅
+      const reservationResult =
+        data.result as unknown as PaymentReservationResponse;
+
+      // 토스페이먼츠 SDK 로드 확인
+      if (!window.TossPayments) {
+        throw new Error(
+          "결제 시스템을 불러오는 중입니다. 잠시 후 다시 시도해주세요."
         );
       }
-    } else {
-      alert("이름과 휴대폰 번호를 입력해주세요.");
+
+      // 토스페이먼츠 초기화
+      const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY;
+      if (!clientKey) {
+        throw new Error("결제 설정에 오류가 있습니다.");
+      }
+
+      const tossPayments = window.TossPayments(clientKey);
+      const paymentData = reservationResult.paymentData;
+
+      // 🔥 중요: successUrl/failUrl을 프론트엔드 페이지로 설정
+      // 백엔드 API가 아닌 프론트엔드 페이지로 리다이렉트
+      await tossPayments.requestPayment("카드", {
+        amount: paymentData.amount,
+        orderId: paymentData.orderId,
+        orderName: paymentData.orderName,
+        customerKey: paymentData.customerKey,
+        customerName: paymentData.customerName,
+        // 프론트엔드 페이지로 리다이렉트 (백엔드 API X)
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+      });
+
+      // 📍 주의: 이 onSuccess는 결제창 호출 성공 시점이지, 결제 완료 시점이 아님
+      // 실제 결제 완료는 successUrl 페이지에서 처리됨
+      console.log("결제창 호출 성공");
+    } catch (error) {
+      console.error("예약/결제 처리 오류:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "알 수 없는 오류가 발생했습니다.";
+      onError?.(errorMessage);
     }
   };
 
@@ -1160,7 +1197,20 @@ const ExpertDetailPage: React.FC = () => {
             <div className="flex justify-end p-8 pt-4 border-t border-gray-200 bg-white">
               <button
                 type="button"
-                onClick={handleReservation}
+                onClick={() => {
+                  const reservationData = {
+                    advisorUserId: advisorId!, // 실제 어드바이저 ID
+                    date: selectedDate, // 선택된 날짜
+                    time: selectedTime, // 선택된 시간
+                    requestMessage: requestMessage, // 요청 메시지
+                  };
+
+                  handleReservation(
+                    reservationData,
+                    () => console.log("예약 성공"), // 성공 콜백
+                    (error) => setError(error) // 에러 콜백
+                  );
+                }}
                 className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
               >
                 예약 완료

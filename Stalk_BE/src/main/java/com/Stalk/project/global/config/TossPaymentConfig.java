@@ -16,12 +16,6 @@ public class TossPaymentConfig {
     @Value("${payment.toss.test_secret_api_key}")
     private String testSecretKey;
 
-    @Value("${payment.toss.success_url}")
-    private String successUrl;
-
-    @Value("${payment.toss.fail_url}")
-    private String failUrl;
-
     // 토스페이먼츠 API URL
     public static final String URL = "https://api.tosspayments.com/v1/payments/";
     
@@ -30,9 +24,6 @@ public class TossPaymentConfig {
     
     // 결제 취소 API URL  
     public static final String CANCEL_URL = URL;  // + paymentKey + "/cancel"
-    
-    // 결제 조회 API URL
-    public static final String GET_PAYMENT_URL = URL;  // + paymentKey
     
     // 상담 예약 기본 금액
     @Value("${consultation.default_fee:30000}")
