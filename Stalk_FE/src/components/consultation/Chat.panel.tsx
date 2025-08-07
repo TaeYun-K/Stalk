@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export interface ChatMessage {
   id: string;
@@ -24,12 +24,33 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   sendChatMessage,
   currentUsername,
 }) => {
-  return (
+
+//채팅 스크롤 유지
+const scrollContainerRef = useRef<HTMLDivElement>(null);
+const messagesEndRef = useRef<HTMLDivElement>(null);
+
+
+// 채팅창 스크롤이 생기면 자동으로 스크롤
+useEffect(() => {
+    const container = scrollContainerRef.current;
+
+    if (!container || !messagesEndRef.current) return;
+
+    const isScrollable = container.scrollHeight > container.clientHeight;
+
+    if (isScrollable) {
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+}, [chatMessages]);
+
+return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-gray-700">
         <h3 className="text-lg font-semibold">채팅</h3>
       </div>
-      <div className="flex-1 p-4 overflow-y-auto">
+      <div className="flex-1 p-4 overflow-y-auto" ref={scrollContainerRef}>
         <div className="space-y-3">
           {chatMessages.map((msg) => {
               if (msg.type === "system") {
@@ -59,6 +80,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 </div>
             );
             })}
+            <div ref={messagesEndRef} />
         </div>
       </div>
       <div className="p-4 border-t border-gray-700">

@@ -195,6 +195,9 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [showChat]);
 
+
+
+
   // 페이지 이탈 방지 훅
   const usePreventNavigation = (enabled: boolean) => {
     const navigate = useNavigate();
@@ -1406,7 +1409,7 @@ const VideoConsultationPage: React.FC = () => {
               >
                 <img src={chatIcon} alt="채팅" className="w-6 h-6" />
                 {hasUnreadMessages && !showChat && (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md animate-ping" />
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md" />
                 )}
               </button>
               {hoveredButton === "chat" && (
