@@ -1,6 +1,6 @@
-package com.Stalk.project.api.favorite.dao;
+package com.Stalk.project.api.favorite.advisor.dao;
 
-import com.Stalk.project.api.favorite.dto.out.FavoriteAdvisorResponseDto;
+import com.Stalk.project.api.favorite.advisor.dto.out.FavoriteAdvisorResponseDto;
 import com.Stalk.project.global.util.PageRequestDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

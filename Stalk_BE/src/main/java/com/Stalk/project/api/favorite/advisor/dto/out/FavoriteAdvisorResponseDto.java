@@ -1,6 +1,6 @@
-package com.Stalk.project.api.favorite.dto.out;
+package com.Stalk.project.api.favorite.advisor.dto.out;
 
-import com.Stalk.project.api.favorite.dto.in.PreferredTradeStyle;
+import com.Stalk.project.api.favorite.advisor.dto.in.PreferredTradeStyle;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
