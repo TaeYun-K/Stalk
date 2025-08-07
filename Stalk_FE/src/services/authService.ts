@@ -211,7 +211,8 @@ class AuthService {
     // 401 에러 시 토큰 갱신 후 재시도
     if (response.status === 401) {
       console.log('Received 401 error, attempting token refresh...');
-      const newToken = await this.refreshToken();
+      const newToken = await this.refreshToken
+      ();
       if (!newToken) {
         console.log('Token refresh failed, removing token and throwing error');
         this.removeAccessToken();
@@ -225,7 +226,7 @@ class AuthService {
         // FormData인 경우 Content-Type을 설정하지 않음
         ...(!(config.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       };
-
+      console.log('Refreshed token:', newToken);
       return fetch(url, config);
     }
 
