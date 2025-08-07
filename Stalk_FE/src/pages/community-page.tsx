@@ -48,27 +48,7 @@ const CommunityPage = () => {
     navigate(`/knowledge-board/${postId}`);
   };
 
-  const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!window.confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
-      return;
-    }
 
-    try {
-      await CommunityService.deletePost(postId);
-      alert('게시글이 삭제되었습니다.');
-      fetchKnowledgePosts(); // Refresh the list
-    } catch (error) {
-      console.error('Error deleting post:', error);
-      alert('게시글 삭제 중 오류가 발생했습니다.');
-    }
-  };
-
-  const handleEditPost = (postId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigate(`/write-post?edit=${postId}`);
-  };
 
   const newsPosts = [
     {
@@ -191,16 +171,16 @@ const CommunityPage = () => {
                     <div key={post.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                       <div className="flex items-start space-x-4">
                         <img src={post.image} alt={post.title} className="w-24 h-24 object-cover rounded-lg" />
-                        <div className="flex-1">
+                        <div className="flex-1 px-4">
                           <div className="flex items-center space-x-2 mb-2">
                             <span className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
                               {post.category}
                             </span>
                             <span className="text-sm text-gray-500">{post.date}</span>
                           </div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
-                          <p className="text-gray-600 text-sm line-clamp-3">{post.content}</p>
-                          <div className="mt-3 flex items-center justify-between">
+                          <h3 className="text-left text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
+                          <p className="text-left text-gray-600 text-sm line-clamp-3">{post.content}</p>
+                          <div className="mt-3 flex items-center justify-end">
                             <span className="text-sm text-gray-500">작성자: {post.author}</span>
                           </div>
                         </div>
@@ -231,7 +211,7 @@ const CommunityPage = () => {
                       <div
                         key={post.postId}
                         onClick={() => handlePostClick(post.postId)}
-                        className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
+                        className="space-y-4 bg-white rounded-lg shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center space-x-2">
@@ -240,28 +220,14 @@ const CommunityPage = () => {
                             </span>
                             <span className="text-sm text-gray-500">{formatDate(post.createdAt)}</span>
                           </div>
+                        </div>
+                        <h3 className="text-left text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-4">
                             <span className="text-sm text-gray-500">조회 {post.viewCount}</span>
                             <span className="text-sm text-gray-500">댓글 {post.commentCount}</span>
                           </div>
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
-                        <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-500">작성자: {post.authorName}</span>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={(e) => handleEditPost(post.postId, e)}
-                              className="text-sm text-blue-600 hover:text-blue-800"
-                            >
-                              수정
-                            </button>
-                            <button
-                              onClick={(e) => handleDeletePost(post.postId, e)}
-                              className="text-sm text-red-600 hover:text-red-800"
-                            >
-                              삭제
-                            </button>
-                          </div>
                         </div>
                       </div>
                     ))}

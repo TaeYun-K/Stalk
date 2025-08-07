@@ -19,6 +19,7 @@ interface AuthContextType {
   isLoggingIn: boolean;
   isLoggingOut: boolean;
   userInfo: UserInfo | null;
+  userRole: 'USER' | 'ADVISOR' | 'ADMIN' | null;
   accessToken: string | null;
   login: (userInfo: UserInfo) => void;
   logout: () => void;
@@ -176,12 +177,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => clearInterval(interval);
   }, [isLoggedIn, checkAuth, navigate, location.pathname, isPublicRoute]);
 
+  // userRole을 userInfo에서 추출
+  const userRole = userInfo?.role || null;
+
   const value: AuthContextType = {
     isLoggedIn,
     isLoading,
     isLoggingIn,
     isLoggingOut,
     userInfo,
+    userRole,
     accessToken,
     login,
     logout,
