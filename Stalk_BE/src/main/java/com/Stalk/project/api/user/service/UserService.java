@@ -113,11 +113,13 @@ public class UserService {
 
   /**
    * 사용자 계정을 비활성화(소프트 삭제)합니다.
+   *
    * @param userId 비활성화할 사용자의 ID
    */
   @Transactional
-  public void deactivateUser(Long userId, HttpServletRequest request, HttpServletResponse response) {
-    // 1. 사용자 존재 및 활성 상태 확인
+  public void deactivateUser(Long userId, HttpServletRequest request,
+      HttpServletResponse response) {
+    // 사용자 존재 및 활성 상태 확인
     User user = userProfileMapper.findUserById(userId);
     if (user == null) {
       throw new BaseException(USER_NOT_FOUND);
