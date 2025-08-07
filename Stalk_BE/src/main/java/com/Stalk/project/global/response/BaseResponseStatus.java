@@ -161,14 +161,15 @@ public enum BaseResponseStatus {
   // ===== 회원 탈퇴 관련 에러 코드 (1510번대) =====
   ALREADY_DEACTIVATED_USER(HttpStatus.BAD_REQUEST, false, 1511, "이미 탈퇴 처리된 회원입니다."),
   USER_DEACTIVATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1512, "회원 탈퇴 처리에 실패했습니다."),
-  CANNOT_DEACTIVATE_WITH_RESERVATIONS(HttpStatus.CONFLICT, false, 1513, "진행중인 예약이 있어 탈퇴할 수 없습니다. 예약을 먼저 처리해주세요."),
-
+  CANNOT_DEACTIVATE_WITH_RESERVATIONS(HttpStatus.CONFLICT, false, 1513,
+      "진행중인 예약이 있어 탈퇴할 수 없습니다. 예약을 먼저 처리해주세요."),
+  CANNOT_CHANGE_PASSWORD_FOR_SOCIAL_ACCOUNT(HttpStatus.BAD_REQUEST, false, 1514,
+      "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다."),
 
   /**
    * Openvidu Session 관련 에러
    */
-  NOT_FOUND_SESSION(HttpStatus.NOT_FOUND,false ,1506,"상담 세션을 찾을 수 없습니다."),
-
+  NOT_FOUND_SESSION(HttpStatus.NOT_FOUND, false, 1506, "상담 세션을 찾을 수 없습니다."),
 
   /**
    * 1600: Admin 관련 에러
@@ -192,12 +193,14 @@ public enum BaseResponseStatus {
 
   // 경력 정보 관련
   CAREER_ENTRIES_REQUIRED(HttpStatus.BAD_REQUEST, false, 1705, "경력 정보는 최소 1개 이상 등록해야 합니다."),
-  MINIMUM_CAREER_ENTRIES_REQUIRED(HttpStatus.BAD_REQUEST, false, 1706, "경력 정보는 최소 1개 이상 유지되어야 합니다."),
+  MINIMUM_CAREER_ENTRIES_REQUIRED(HttpStatus.BAD_REQUEST, false, 1706,
+      "경력 정보는 최소 1개 이상 유지되어야 합니다."),
   CAREER_ENTRY_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1707, "해당 경력 정보를 찾을 수 없습니다."),
   CAREER_ENTRY_CREATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1708, "경력 정보 등록에 실패했습니다."),
   CAREER_ENTRY_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1709, "경력 정보 수정에 실패했습니다."),
   CAREER_ENTRY_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1710, "경력 정보 삭제에 실패했습니다."),
-  INVALID_CAREER_ACTION_FOR_CREATE(HttpStatus.BAD_REQUEST, false, 1711, "프로필 등록 시에는 CREATE 액션만 허용됩니다."),
+  INVALID_CAREER_ACTION_FOR_CREATE(HttpStatus.BAD_REQUEST, false, 1711,
+      "프로필 등록 시에는 CREATE 액션만 허용됩니다."),
 
   // 자격증 승인 요청 관련
   APPROVAL_REQUEST_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 1712, "자격 승인 요청에 실패했습니다."),
