@@ -18,6 +18,7 @@ import participantsIcon from "@/assets/images/icons/consultation/participants.sv
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
 import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
+import ChatPanel from "@/components/consultation/Chat.panel";
 import StockChart from "@/components/stock/charts/stock-chart";
 import StockSearch from "@/components/stock/stock-search";
 
@@ -277,6 +278,7 @@ const VideoConsultationPage: React.FC = () => {
           });
         });
 
+        // mic/video 상태 변경 이벤트 핸들링
         session.on('streamPropertyChanged', (event) => {
           const connectionId = event.stream.connection.connectionId;
 
@@ -288,7 +290,28 @@ const VideoConsultationPage: React.FC = () => {
             },
           }));
         });
-        
+
+        // 채팅 메시지 수신 이벤트 핸들링
+        session.on('signal:chat', (event) => {
+          if (!event.data) {
+            console.warn('수신된 채팅 데이터가 없습니다');
+            return;
+          }
+
+          try {
+            const receivedMessage: ChatMessage = JSON.parse(event.data);
+
+            if (event.from?.connectionId === session.connection.connectionId) {
+              return;
+            }
+
+            setChatMessages(prev => [...prev, receivedMessage]);
+            console.log("📩 채팅 수신:", receivedMessage);
+          } catch (err) {
+            console.error("채팅 수신 파싱 오류:", err);
+          }
+        });
+      
         session.on('streamDestroyed', (event) => {
           console.log('Stream destroyed:', event.stream.streamId);
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
@@ -629,6 +652,13 @@ const VideoConsultationPage: React.FC = () => {
       };
       setChatMessages((prev) => [...prev, message]);
       setNewMessage("");
+
+      session.signal({
+        type: "chat",
+        data: JSON.stringify(message),
+      }).catch((error) => {
+        console.error("채팅 메시지 전송 실패:", error);
+      });
     }
   };
 
@@ -1207,46 +1237,12 @@ const VideoConsultationPage: React.FC = () => {
             )}
 
             {showChat && (
-              <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-gray-700">
-                  <h3 className="text-lg font-semibold">채팅</h3>
-                </div>
-                <div className="flex-1 p-4 overflow-y-auto">
-                  <div className="space-y-3">
-                    {chatMessages.map((msg) => (
-                      <div key={msg.id} className="bg-gray-700 rounded-lg p-3">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-sm font-medium">
-                            {msg.sender}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {msg.timestamp.toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-200">{msg.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="p-4 border-t border-gray-700">
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && sendChatMessage()}
-                      placeholder="메시지를 입력하세요..."
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={sendChatMessage}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      전송
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ChatPanel
+                chatMessages={chatMessages}
+                newMessage={newMessage}
+                setNewMessage={setNewMessage}
+                sendChatMessage={sendChatMessage}
+              />
             )}
           </div>
         )}
