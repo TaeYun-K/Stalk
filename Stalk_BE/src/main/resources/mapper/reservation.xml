@@ -226,9 +226,9 @@
     WHERE cs.id = #{reservationId}
   </select>
 
-  <!-- 예약 취소 + 결제 정보 업데이트 -->
+  <!-- 예약 취소 + 결제 정보 업데이트 (올바른 테이블명으로 수정) -->
   <update id="cancelReservationWithPayment">
-    UPDATE reservations
+    UPDATE consultation_sessions
     SET status = 'CANCELED',
         canceled_by = #{canceledBy},
         cancel_reason = #{cancelReason},
@@ -237,11 +237,13 @@
     WHERE id = #{reservationId}
   </update>
 
+  <!-- 예약 삭제 -->
   <delete id="deleteReservation">
     DELETE FROM consultation_sessions
     WHERE id = #{reservationId}
   </delete>
 
+  <!-- 유효한 대기중 예약인지 확인 -->
   <select id="isValidPendingReservation" resultType="boolean">
     SELECT COUNT(*) > 0
     FROM consultation_sessions
