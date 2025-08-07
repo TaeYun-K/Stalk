@@ -1,9 +1,9 @@
-import React, { 
-  createContext, 
-  useContext, 
-  useState, 
-  useEffect, 
-  ReactNode, 
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
   useCallback
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -60,12 +60,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     return token;
   }, [accessToken]);
-  
+
   const setToken = useCallback((token: string) => {
     AuthService.setAccessToken(token);
     setAccessToken(token);
   }, []);
-  
+
   const removeAccessToken = useCallback(() => {
     AuthService.removeAccessToken();
     setAccessToken(null);
@@ -98,12 +98,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // 앱 초기화 (토큰 갱신 시도)
       await AuthService.initialize();
-      
+
       // 로그인 상태 확인
       if (AuthService.isLoggedIn()) {
         const currentUserInfo = AuthService.getUserInfo();
         const token = AuthService.getAccessToken();
-        
+
         setIsLoggedIn(true);
         setUserInfo(currentUserInfo);
         if (token) {
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
         return true;
       }
-      
+
       AuthService.removeAccessToken(); // AuthService에서도 토큰 제거
       setIsLoggedIn(false);
       setUserInfo(null);

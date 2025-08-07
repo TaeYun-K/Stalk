@@ -34,7 +34,10 @@ public class AppConfig {
             "kosdaqPriceIncreaseRanking", 
             "kosdaqPriceDecreaseRanking",
             "individualStockInfo",
-            "etfDailyTrading"
+            "etfDailyTrading",
+            "historicalPrices",
+            "realHistoricalPrices",
+            "kisHistoricalPrices"
         ));
         return cacheManager;
     }

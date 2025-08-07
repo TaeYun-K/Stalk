@@ -3,7 +3,9 @@ package com.Stalk.project.api.stock.controller;
 import com.Stalk.project.api.stock.dto.KrxRankingStock;
 import com.Stalk.project.api.stock.dto.KrxStockInfo;
 import com.Stalk.project.api.stock.service.KrxApiService;
+import com.Stalk.project.api.stock.service.KisApiService;
 import com.Stalk.project.api.stock.service.StockListingService;
+import com.Stalk.project.api.stock.dto.KisStockInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +30,9 @@ public class KrxDataController {
     
     @Autowired
     private KrxApiService krxApiService;
+    
+    @Autowired
+    private KisApiService kisApiService;
     
     @GetMapping("/fetch-all-stocks")
     public ResponseEntity<Map<String, Object>> fetchAllStocks() {
@@ -238,21 +244,52 @@ public class KrxDataController {
     
     /**
      * Get individual stock information
+     * @param ticker Stock ticker code (e.g., "005930" for Samsung Electronics)
+     * @param market Market type: "KOSPI" for main market, "KOSDAQ" for growth market
      */
     @GetMapping("/stock/{ticker}")
-    public ResponseEntity<KrxStockInfo> getStockInfo(
+    public ResponseEntity<?> getStockInfo(
             @PathVariable String ticker,
-            @RequestParam(defaultValue = "STK") String market) {
+            @RequestParam(defaultValue = "KOSPI") String market,
+            @RequestParam(required = false) Integer period) {
         try {
-            logger.info("API request for stock info - ticker: {}, market: {}", ticker, market);
-            KrxStockInfo stockInfo = krxApiService.getIndividualStockInfo(ticker, market);
-            if (stockInfo != null) {
-                logger.info("Stock info retrieved - ticker: {}, name: {}, price: {}", 
-                    stockInfo.getTicker(), stockInfo.getName(), stockInfo.getClosePrice());
-                return ResponseEntity.ok(stockInfo);
+            logger.info("API request for stock info - ticker: {}, market: {}, period: {}", ticker, market, period);
+            
+            // If period is specified, use KIS API for historical data (hybrid approach)
+            if (period != null && period >= 1) {
+                logger.info("Using KIS API for historical data - ticker: {}, period: {} days", ticker, period);
+                List<KisStockInfo> kisHistoricalData = kisApiService.getHistoricalPrices(ticker, period);
+                
+                if (!kisHistoricalData.isEmpty()) {
+                    logger.info("KIS historical data retrieved - ticker: {}, points: {}", 
+                        ticker, kisHistoricalData.size());
+                    
+                    // Convert KIS format to KRX format for frontend compatibility
+                    List<Map<String, Object>> convertedData = convertKisToKrxFormat(kisHistoricalData);
+                    return ResponseEntity.ok(convertedData);
+                } else {
+                    logger.warn("No KIS historical data found, falling back to KRX current data");
+                    // Fall back to KRX current data but return as array for consistency
+                    KrxStockInfo stockInfo = krxApiService.getIndividualStockInfo(ticker, market);
+                    if (stockInfo != null) {
+                        List<KrxStockInfo> fallbackList = new java.util.ArrayList<>();
+                        fallbackList.add(stockInfo);
+                        logger.info("Returning KRX current data as fallback");
+                        return ResponseEntity.ok(fallbackList);
+                    }
+                    return ResponseEntity.notFound().build();
+                }
             } else {
-                logger.warn("No stock info found for ticker: {}", ticker);
-                return ResponseEntity.notFound().build();
+                // Return current stock info
+                KrxStockInfo stockInfo = krxApiService.getIndividualStockInfo(ticker, market);
+                if (stockInfo != null) {
+                    logger.info("Stock info retrieved - ticker: {}, name: {}, price: {}", 
+                        stockInfo.getTicker(), stockInfo.getName(), stockInfo.getClosePrice());
+                    return ResponseEntity.ok(stockInfo);
+                } else {
+                    logger.warn("No stock info found for ticker: {}", ticker);
+                    return ResponseEntity.notFound().build();
+                }
             }
         } catch (Exception e) {
             logger.error("Failed to fetch stock info for ticker: {}", ticker, e);
@@ -277,6 +314,26 @@ public class KrxDataController {
     }
     
     /**
+     * Clear KRX API service caches (Public endpoint for testing)
+     */
+    @PostMapping("/cache/clear-test")
+    public ResponseEntity<Map<String, Object>> clearCacheTest() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            krxApiService.clearCache();
+            response.put("success", true);
+            response.put("message", "KRX API service caches cleared successfully (test endpoint)");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Failed to clear caches", e);
+            response.put("success", false);
+            response.put("message", "Failed to clear caches: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
      * Clear KRX API service caches
      */
     @PostMapping("/cache/clear")
@@ -293,6 +350,128 @@ public class KrxDataController {
             response.put("success", false);
             response.put("message", "Failed to clear caches: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    // ========== Public Endpoints for Frontend ==========
+    
+    /**
+     * Get combined volume ranking from both KOSPI and KOSDAQ
+     */
+    @GetMapping("/ranking/volume")
+    public ResponseEntity<Map<String, Object>> getCombinedVolumeRanking() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching combined volume ranking data");
+            
+            // Get volume rankings from both markets
+            List<KrxRankingStock> kospiVolume = krxApiService.getKospiVolumeRanking(25);
+            List<KrxRankingStock> kosdaqVolume = krxApiService.getKosdaqVolumeRanking(25);
+            
+            // Combine both lists
+            List<KrxRankingStock> allStocks = new java.util.ArrayList<>(kospiVolume);
+            allStocks.addAll(kosdaqVolume);
+            
+            // Sort by volume and limit to top 50
+            allStocks.sort((a, b) -> {
+                try {
+                    long volA = parseVolume(a.getVolume());
+                    long volB = parseVolume(b.getVolume());
+                    return Long.compare(volB, volA);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            if (allStocks.size() > 50) {
+                allStocks = allStocks.subList(0, 50);
+            }
+            
+            // Update rankings
+            for (int i = 0; i < allStocks.size(); i++) {
+                allStocks.get(i).setRank(i + 1);
+            }
+            
+            response.put("success", true);
+            response.put("data", allStocks);
+            response.put("message", "거래량 순위 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch volume ranking", e);
+            response.put("success", false);
+            response.put("message", "거래량 순위 조회 실패: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
+     * Get market indices (placeholder endpoint)
+     */
+    @GetMapping("/indices")
+    public ResponseEntity<Map<String, Object>> getMarketIndices() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching market indices data");
+            
+            // Return empty list for now
+            response.put("success", true);
+            response.put("data", new java.util.ArrayList<>());
+            response.put("message", "지수 정보 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch market indices", e);
+            response.put("success", false);
+            response.put("message", "지수 정보 조회 실패: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
+     * Convert KIS API format to KRX API format for frontend compatibility
+     */
+    private List<Map<String, Object>> convertKisToKrxFormat(List<KisStockInfo> kisData) {
+        List<Map<String, Object>> convertedData = new ArrayList<>();
+        
+        for (KisStockInfo kisStock : kisData) {
+            Map<String, Object> krxFormat = new HashMap<>();
+            
+            // Map KIS fields to KRX field names expected by frontend
+            krxFormat.put("tradeDate", kisStock.getDate());  // stck_bsop_date -> tradeDate
+            krxFormat.put("closePrice", kisStock.getClosePrice()); // stck_clpr -> closePrice  
+            krxFormat.put("openPrice", kisStock.getOpenPrice());   // stck_oprc -> openPrice
+            krxFormat.put("highPrice", kisStock.getHighPrice());   // stck_hgpr -> highPrice
+            krxFormat.put("lowPrice", kisStock.getLowPrice());     // stck_lwpr -> lowPrice
+            krxFormat.put("volume", kisStock.getVolume());         // acml_vol -> volume
+            krxFormat.put("priceChange", kisStock.getPriceChange()); // prdy_vrss -> priceChange
+            krxFormat.put("changeRate", kisStock.getChangeRate());   // prdy_ctrt -> changeRate
+            krxFormat.put("ticker", kisStock.getTicker());
+            
+            convertedData.add(krxFormat);
+        }
+        
+        logger.debug("Converted {} KIS records to KRX format", convertedData.size());
+        return convertedData;
+    }
+
+    /**
+     * Helper method to parse volume string to long for sorting
+     */
+    private long parseVolume(String volume) {
+        if (volume == null || volume.trim().isEmpty()) {
+            return 0L;
+        }
+        
+        try {
+            // Remove commas and parse
+            String cleanVolume = volume.replace(",", "").trim();
+            return Long.parseLong(cleanVolume);
+        } catch (NumberFormatException e) {
+            logger.warn("Failed to parse volume: {}", volume);
+            return 0L;
         }
     }
     

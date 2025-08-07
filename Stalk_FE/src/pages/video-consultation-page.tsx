@@ -18,10 +18,8 @@ import participantsIcon from "@/assets/images/icons/consultation/participants.sv
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
 import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
-import StockChart from "@/components/chart/stock-chart";
-import StockSearch from "@/components/chart/stock-search";
-import Stream from "stream";
-import { stat } from "fs";
+import StockChart from "@/components/stock/charts/stock-chart";
+import StockSearch from "@/components/stock/stock-search";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
