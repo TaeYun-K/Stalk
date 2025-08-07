@@ -104,4 +104,9 @@ public interface AdvisorMapper {
    * 단일 전문가의 자격증 정보 조회 (목록 조회용)
    */
   List<AdvisorResponseDto.CertificateDto> findCertificatesByAdvisorId(@Param("advisorId") Long advisorId);
+
+  /**
+   * 전문가 상담료 조회
+   */
+  Integer getConsultationFee(@Param("advisorUserId") Long advisorUserId);
 }

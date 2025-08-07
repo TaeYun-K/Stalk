@@ -9,6 +9,7 @@ import com.Stalk.project.api.payment.service.PaymentService;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.SecurityUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import com.Stalk.project.api.payment.dto.in.PaymentCancelRequestDto;
 import com.Stalk.project.api.payment.dto.out.PaymentCancelResponseDto;
@@ -69,136 +70,36 @@ public class PaymentController {
     }
 
     /**
-     * 결제 성공 콜백 - 실제 결제 승인 처리
-     * 토스페이먼츠에서 호출하므로 토큰 인증 불필요
+     * 🔥 중요: 프론트엔드에서 결제 성공 후 호출하는 결제 승인 API
+     * JWT 토큰 인증 필요
      */
-    @GetMapping("/toss/success")
-    public String paymentSuccess(
-        @RequestParam String paymentKey,
-        @RequestParam String orderId,
-        @RequestParam Integer amount) {
+    @PostMapping("/confirm")
+    public BaseResponse<TossPaymentResponseDto> confirmPayment(
+        @RequestBody PaymentConfirmRequestDto requestDto) {
 
-        log.info("결제 성공 콜백: paymentKey={}, orderId={}, amount={}",
-            paymentKey, orderId, amount);
+        System.out.println("🔥 결제 승인 API 호출됨!");
+
+        log.info("결제 승인 요청: paymentKey={}, orderId={}, amount={}",
+            requestDto.getPaymentKey(), requestDto.getOrderId(), requestDto.getAmount());
+
+        // JWT 토큰에서 사용자 정보 추출
+        Long userId = SecurityUtil.getCurrentUserPrimaryId();
+        log.info("결제 승인 요청 사용자: userId={}", userId);
 
         try {
-            // 토스페이먼츠에 결제 승인 요청
-            PaymentConfirmRequestDto confirmRequest = PaymentConfirmRequestDto.builder()
-                .paymentKey(paymentKey)
-                .orderId(orderId)
-                .amount(amount)
-                .build();
+            // 토스페이먼츠에 결제 승인 요청 + DB 업데이트
+            TossPaymentResponseDto response = paymentService.confirmPayment(requestDto);
 
-            TossPaymentResponseDto tossResponse = paymentService.confirmPayment(confirmRequest);
+            log.info("결제 승인 완료: orderId={}, status={}, userId={}",
+                requestDto.getOrderId(), response.getStatus(), userId);
 
-            // 결제 승인 성공
-            String paymentMethod = getPaymentMethodDisplay(tossResponse);
-            String approvedAt = tossResponse.getApprovedAt();
-
-            log.info("결제 승인 완료: orderId={}, status={}, method={}",
-                orderId, tossResponse.getStatus(), paymentMethod);
-
-            // 성공 페이지 반환 (더 자세한 정보 포함)
-            return String.format("""
-                <html>
-                <head>
-                    <title>결제 성공</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-                        .success { color: #28a745; }
-                        .info { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; }
-                        .btn { background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
-                    </style>
-                </head>
-                <body>
-                    <h1 class="success">✅ 결제 성공!</h1>
-                    <div class="info">
-                        <p><strong>주문번호:</strong> %s</p>
-                        <p><strong>결제키:</strong> %s</p>
-                        <p><strong>결제금액:</strong> %,d원</p>
-                        <p><strong>결제수단:</strong> %s</p>
-                        <p><strong>결제상태:</strong> %s</p>
-                        <p><strong>승인시간:</strong> %s</p>
-                    </div>
-                    <a href="/payment-test.html" class="btn">다시 테스트하기</a>
-                    <script>
-                        // 5초 후 자동으로 테스트 페이지로 이동
-                        setTimeout(() => {
-                            window.location.href = '/payment-test.html';
-                        }, 5000);
-                    </script>
-                </body>
-                </html>
-                """, orderId, paymentKey, amount, paymentMethod, tossResponse.getStatus(), approvedAt);
+            return new BaseResponse<>(response);
 
         } catch (Exception e) {
-            log.error("결제 승인 처리 중 오류: orderId={}", orderId, e);
-
-            // 실패 페이지로 리다이렉트
-            return String.format("""
-                <html>
-                <head><title>결제 승인 실패</title></head>
-                <body>
-                    <h1 style="color: red;">❌ 결제 승인 실패</h1>
-                    <p>주문번호: %s</p>
-                    <p>오류: 결제 승인 처리 중 문제가 발생했습니다.</p>
-                    <a href="/payment-test.html">다시 시도하기</a>
-                </body>
-                </html>
-                """, orderId);
+            log.error("결제 승인 중 오류: orderId={}, userId={}, error={}",
+                requestDto.getOrderId(), userId, e.getMessage(), e);
+            throw e;
         }
-    }
-
-    /**
-     * 결제 수단 표시명 변환
-     */
-    private String getPaymentMethodDisplay(TossPaymentResponseDto response) {
-        String method = response.getMethod();
-        if (method == null) return "알 수 없음";
-
-        return switch (method) {
-            case "카드" -> {
-                if (response.getCard() != null) {
-                    yield response.getCard().getCompany() + " 카드";
-                }
-                yield "카드";
-            }
-            case "간편결제" -> {
-                if (response.getEasyPay() != null) {
-                    yield response.getEasyPay().getProvider() + " 간편결제";
-                }
-                yield "간편결제";
-            }
-            case "계좌이체" -> "계좌이체";
-            default -> method;
-        };
-    }
-
-    /**
-     * 결제 실패 콜백
-     * 토스페이먼츠에서 호출하므로 토큰 인증 불필요
-     */
-    @GetMapping("/toss/fail")
-    public String paymentFail(
-        @RequestParam String code,
-        @RequestParam String message,
-        @RequestParam String orderId) {
-
-        log.warn("결제 실패 콜백: code={}, message={}, orderId={}", code, message, orderId);
-
-        // 임시로 간단한 실패 페이지 반환
-        return String.format("""
-            <html>
-            <head><title>결제 실패</title></head>
-            <body>
-                <h1>❌ 결제 실패</h1>
-                <p>주문번호: %s</p>
-                <p>에러코드: %s</p>
-                <p>에러메시지: %s</p>
-                <a href="/payment-test.html">다시 시도하기</a>
-            </body>
-            </html>
-            """, orderId, code, message);
     }
 
     /**
@@ -234,17 +135,5 @@ public class PaymentController {
                 orderId, currentUserId, e.getMessage());
             throw e;
         }
-    }
-
-    /**
-     * 어드바이저 이름 가져오기 (임시)
-     */
-    private String getAdvisorName(Long advisorId) {
-        return switch (advisorId.intValue()) {
-            case 1 -> "이수진";
-            case 2 -> "박민수";
-            case 3 -> "김영희";
-            default -> "전문가";
-        };
     }
 }

@@ -207,4 +207,35 @@
     WHERE order_id = #{orderId}
   </update>
 
+  <select id="findReservationForCancelWithPayment" resultType="com.Stalk.project.api.reservation.dto.ReservationCancelWithPaymentCheckDto">
+    SELECT
+      cs.id,
+      cs.user_id as userId,
+      cs.advisor_id as advisorId,
+      cs.date,
+      cs.start_time as startTime,
+      cs.status,
+      cs.payment_status as paymentStatus,
+      cs.payment_key as paymentKey,
+      cs.amount,
+      u1.name as advisorName,
+      u2.name as clientName
+    FROM consultation_sessions cs
+           INNER JOIN users u1 ON cs.advisor_id = u1.id
+           INNER JOIN users u2 ON cs.user_id = u2.id
+    WHERE cs.id = #{reservationId}
+  </select>
+
+  <!-- 예약 취소 + 결제 정보 업데이트 -->
+  <update id="cancelReservationWithPayment">
+    UPDATE reservations
+    SET status = 'CANCELED',
+        canceled_by = #{canceledBy},
+        cancel_reason = #{cancelReason},
+        cancel_memo = #{cancelMemo},
+        canceled_at = #{canceledAt}
+    WHERE id = #{reservationId}
+  </update>
+
+
 </mapper>
