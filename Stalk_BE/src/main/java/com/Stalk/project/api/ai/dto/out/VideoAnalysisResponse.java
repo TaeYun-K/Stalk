@@ -1,4 +1,4 @@
-package com.Stalk.project.api.ai.dto;
+package com.Stalk.project.api.ai.dto.out;
 
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
