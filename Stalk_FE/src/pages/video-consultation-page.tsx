@@ -380,7 +380,44 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 4. 구독자 비디오 연결 함수
+  // 로컬 비디오 렌더링을 위한 useEffect
+  useEffect(() => {
+    if (publisher && isVideoEnabled) {
+      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
+      if (videoElement) {
+        videoElement.srcObject = publisher.stream.getMediaStream();
+        videoElement.play().catch((e) => {
+          console.error("Error playing local video:", e);
+        });
+      }
+    }
+  }, [publisher]);
+
+  //localStream이 변경될 때마다 로컬 비디오를 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100);
+    }
+  }, [showParticipantFaces, publisher, isVideoEnabled]);
+
+  // 로컬 미니 비디오 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled && showParticipantFaces) {
+      setTimeout(() => {
+        const video = document.getElementById("local-mini-video-element") as HTMLVideoElement;
+        const stream = publisher.stream.getMediaStream();
+        if (video && stream && video.srcObject !== stream) {
+          video.srcObject = stream;
+          video.play().catch(console.error);
+          console.log("📺 MiniView local video attached");
+        }
+      }, 100);
+    }
+  }, [publisher, isVideoEnabled, showParticipantFaces]);
+
+  // 구독자 비디오 연결 함수
   const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
     const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
     if (!videoElement) {
@@ -405,7 +442,7 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 5. 미디어 시작 함수
+  // 미디어 시작 함수
   const startMedia = async () => {
     console.log('startMedia called');
     if (!ov || !session) {
@@ -428,7 +465,7 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 6. 상담 종료 함수
+  // 상담 종료 함수
   const leaveSession = async (): Promise<void> => {
 
     const token = AuthService.getAccessToken();
@@ -487,7 +524,7 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 7. 비디오 및 오디오 토글 함수들
+  // 비디오 및 오디오 토글 함수들
   const toggleVideo = async () => {
     console.log('toggleVideo called, current state:', isVideoEnabled);
     if (!publisher) {
@@ -545,7 +582,7 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 8. 컴포넌트 언마운트 시 리소스 정리
+  // 컴포넌트 언마운트 시 리소스 정리
   useEffect(() => {
     const handleBeforeUnload = () => {
       leaveSession();
@@ -560,28 +597,6 @@ const VideoConsultationPage: React.FC = () => {
       }
     };
   }, [session, consultationId, navigate]);
-
-  // 로컬 비디오 렌더링을 위한 useEffect 추가
-  useEffect(() => {
-    if (publisher && isVideoEnabled) {
-      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
-      if (videoElement) {
-        videoElement.srcObject = publisher.stream.getMediaStream();
-        videoElement.play().catch((e) => {
-          console.error("Error playing local video:", e);
-        });
-      }
-    }
-  }, [publisher]);
-
-  //localStream이 변경될 때마다 로컬 비디오를 연결
-  useEffect(() => {
-    if (publisher && isVideoEnabled) {
-      setTimeout(() => {
-        attachLocalVideo(publisher);
-      }, 100);
-    }
-  }, [showParticipantFaces, publisher, isVideoEnabled]);
 
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
@@ -1040,6 +1055,7 @@ const VideoConsultationPage: React.FC = () => {
                         (isVideoEnabled || isAudioEnabled) ? (
                           <div className="w-full h-full bg-gray-800 rounded-lg overflow-hidden">
                             <video
+                              id="local-mini-video-element"
                               autoPlay
                               muted
                               playsInline
@@ -1047,7 +1063,6 @@ const VideoConsultationPage: React.FC = () => {
                                 !isVideoEnabled ? "hidden" : ""
                               }`}
                               style={{ transform: "scaleX(-1)" }}
-                              srcObject={localStream}
                             />
                             {!isVideoEnabled && (
                               <div className="w-full h-full flex items-center justify-center">
