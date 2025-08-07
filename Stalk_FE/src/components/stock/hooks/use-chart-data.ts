@@ -54,7 +54,7 @@ export const useChartData = ({
       console.log(`Fetching chart data: ticker=${ticker}, market=${marketType}, period=${period}`);
       
       const response = await fetch(
-        `/api/krx/stock/${ticker}?market=${marketType}&period=${period}&t=${Date.now()}`,
+        `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}&period=${period}&t=${Date.now()}`,
         {
           method: 'GET',
           headers: {

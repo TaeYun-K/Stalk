@@ -69,7 +69,7 @@ const SimpleStockChart: React.FC<SimpleStockChartProps> = ({
       const marketType = selectedStock.ticker.startsWith('9') || selectedStock.ticker.startsWith('3') ? 'KOSDAQ' : 'KOSPI';
       
       // Get historical data from KRX API
-      const url = `/api/krx/stock/${selectedStock.ticker}?market=${marketType}&period=${currentPeriod}`;
+      const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedStock.ticker}?market=${marketType}&period=${currentPeriod}`;
       console.log(`Calling API: ${url}`);
       
       const response = await fetch(url);

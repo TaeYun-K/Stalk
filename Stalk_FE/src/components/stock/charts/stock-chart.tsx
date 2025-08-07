@@ -233,7 +233,7 @@ const StockChart: React.FC<StockChartProps> = ({
       console.log(`Period type: ${typeof period}, Period value: ${period}, Parsed: ${periodNum}`);
       
       const response = await fetch(
-        `/api/krx/stock/${ticker}?market=${marketType}&period=${periodNum}&t=${Date.now()}`,
+        `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}&period=${periodNum}&t=${Date.now()}`,
         {
           method: 'GET',
           headers: {
@@ -898,28 +898,6 @@ const StockChart: React.FC<StockChartProps> = ({
           display: true,
           color: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)',
           drawBorder: false,
-        },
-      },
-      y: {
-        type: 'linear' as const,
-        display: true,
-        position: 'right' as const,
-        title: {
-          display: false,
-        },
-        grid: {
-          display: true,
-          color: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)',
-          drawBorder: false,
-        },
-        ticks: {
-          color: darkMode ? '#9ca3af' : '#6b7280',
-          font: {
-            size: 10,
-          },
-          callback: function(value: any) {
-            return value.toLocaleString();
-          },
         },
       },
     },

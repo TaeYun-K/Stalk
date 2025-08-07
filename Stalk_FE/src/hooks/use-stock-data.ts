@@ -46,7 +46,7 @@ export const useStockData = (
     try {
       const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
       const response = await fetch(
-        `/api/krx/stock/${ticker}?market=${marketType}`
+        `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}`
       );
 
       if (!response.ok) {
@@ -148,7 +148,7 @@ export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketT
 
       if (category === 'volume') {
         // Use the combined volume endpoint
-        const response = await fetch('/api/krx/ranking/volume');
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/krx/ranking/volume`);
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -162,12 +162,12 @@ export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketT
       } else {
         // For gainers and losers, fetch from both KOSPI and KOSDAQ
         const kospiEndpoint = category === 'gainers' 
-          ? '/api/krx/kospi/price-increase-ranking'
-          : '/api/krx/kospi/price-decrease-ranking';
+          ? `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-increase-ranking`
+          : `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-decrease-ranking`;
         
         const kosdaqEndpoint = category === 'gainers'
-          ? '/api/krx/kosdaq/price-increase-ranking' 
-          : '/api/krx/kosdaq/price-decrease-ranking';
+          ? `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-increase-ranking` 
+          : `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-decrease-ranking`;
 
         // Fetch both markets concurrently
         const [kospiResponse, kosdaqResponse] = await Promise.all([
@@ -254,7 +254,7 @@ export const useMarketIndices = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/krx/indices');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/krx/indices`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

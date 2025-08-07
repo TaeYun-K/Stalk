@@ -81,7 +81,7 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
       const cleanTicker = ticker;
       
       const response = await fetch(
-        `/api/krx/stock/${cleanTicker}?market=${marketType}`
+        `${import.meta.env.VITE_API_URL}/api/krx/stock/${cleanTicker}?market=${marketType}`
       );
 
       if (!response.ok) {
