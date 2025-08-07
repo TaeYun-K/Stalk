@@ -52,15 +52,15 @@ const hideNavbarRoutes: string[] = ['/', '/login', '/signup', '/SignupChoicePage
 
 // Sidebar를 보여줄 페이지 목록 (모든 페이지에 적용)
 const showSidebarRoutes: string[] = [
-  '/',
-  '/experts',
+  '/', 
+  '/experts', 
   '/admin',
-  '/community',
-  '/products',
-  '/mypage',
-  '/settings',
-  '/write-post',
-  '/consultations',
+  '/community', 
+  '/products', 
+  '/mypage', 
+  '/settings', 
+  '/write-post', 
+  '/consultations', 
   '/favorites',
   '/search',
   '/notifications',
@@ -81,7 +81,7 @@ const AppContent: React.FC = () => {
   const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/') || location.pathname.startsWith('/community/post/');
   const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
   const isVideoPage = location.pathname.startsWith('/video-consultation');
-
+  
 
 
   return (
@@ -106,28 +106,22 @@ const AppContent: React.FC = () => {
               <Route path="/signup-complete" element={<SignupComplete />} />
 
               <Route path="/SignupChoicePage" element={<SignupChoicePage />} />
-              <Route path="/search" element={<SearchPage />} />
+              <Route path="/search" element={<SearchPage />} />              
               {/* Protected Routes */}
-
+              
               <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
               <Route path="/knowledge-board/:postId" element={<KnowledgeBoardPage />} />
 
-              <Route path="/products" element={<div className="p-4"><h1>상품 조회</h1></div>} />
               <Route path="/mypage" element={<MyPage />} />
-
+              
               <Route path="/write-post" element={<WritePostPage />} />
 
               <Route path="/consultations" element={<div className="p-4"><h1>상담 내역</h1></div>} />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />
-<<<<<<< HEAD
-              <Route path="/expert-registration" element={<ExpertsIntroductionRegistrationPage />} />
-
-=======
               <Route path="/expert-registration/:advisorId" element={<ExpertsIntroductionRegistrationPage />} />
               <Route path="/expert-introduction-update/:advisorId" element={<ExpertIntroductionUpdatePage />} />
               
->>>>>>> origin/dev
               {/* Sidebar Routes */}
               <Route path="/notifications" element={<div className="p-4"><h1>알림</h1></div>} />
               <Route path="/watchlist" element={<div className="p-4"><h1>관심종목</h1></div>} />
@@ -138,7 +132,7 @@ const AppContent: React.FC = () => {
               <Route path="/video-consultation/:consultationId" element={<VideoConsultationPage />} />
 
               {/* Protected Routes */}
-
+              
               {/* Redirect to home if route not found */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
