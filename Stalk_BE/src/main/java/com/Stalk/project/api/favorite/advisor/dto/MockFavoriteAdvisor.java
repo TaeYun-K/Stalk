@@ -1,6 +1,6 @@
-package com.Stalk.project.api.favorite.dto;
+package com.Stalk.project.api.favorite.advisor.dto;
 
-import com.Stalk.project.api.favorite.dto.in.PreferredTradeStyle;
+import com.Stalk.project.api.favorite.advisor.dto.in.PreferredTradeStyle;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
