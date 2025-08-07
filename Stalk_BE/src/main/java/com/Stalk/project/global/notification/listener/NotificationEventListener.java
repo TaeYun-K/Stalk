@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Slf4j
 @Component
@@ -18,7 +20,7 @@ public class NotificationEventListener {
     private final NotificationService notificationService;
 
     @Async("notificationExecutor") // 비동기 처리
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleReservationCreated(ReservationCreatedEvent event) {
         try {
             NotificationCreateDto dto = NotificationCreateDto.builder()
@@ -38,7 +40,7 @@ public class NotificationEventListener {
     }
 
     @Async("notificationExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleReservationCanceled(ReservationCanceledEvent event) {
         try {
             NotificationCreateDto dto = NotificationCreateDto.builder()
@@ -60,7 +62,7 @@ public class NotificationEventListener {
     /**
      * 댓글 작성 이벤트 처리
      */
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async("notificationExecutor")
     public void handleCommentCreated(CommentCreatedEvent event) {
         try {

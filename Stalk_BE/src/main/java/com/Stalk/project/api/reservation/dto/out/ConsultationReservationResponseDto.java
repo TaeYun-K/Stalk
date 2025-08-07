@@ -13,4 +13,13 @@ public class ConsultationReservationResponseDto {
 
   @Schema(description = "예약된 일시(ISO 8601)", example = "2025-07-20T15:00:00+09:00")
   private String scheduledTime;
+
+  @Schema(description = "주문 ID (결제 추적용)", example = "CONSULT_20250720150000_1001_2")
+  private String orderId;
+
+  @Schema(description = "결제 금액", example = "50000")
+  private Integer amount;
+
+  @Schema(description = "토스페이먼츠 결제창 URL")
+  private String paymentUrl;
 }

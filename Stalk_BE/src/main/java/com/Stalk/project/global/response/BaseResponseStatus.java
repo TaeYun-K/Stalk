@@ -104,6 +104,7 @@ public enum BaseResponseStatus {
   INVALID_DATE_FORMAT(HttpStatus.BAD_REQUEST, false, 1322, "날짜 형식이 올바르지 않습니다."),
   RESERVATION_USER_ONLY(HttpStatus.FORBIDDEN, false, 1323, "예약은 일반 사용자만 가능합니다."),
   AVAILABLE_TIME_USER_ONLY(HttpStatus.FORBIDDEN, false, 1324, "예약 가능 시간 조회는 일반 사용자만 가능합니다."),
+  CONSULTATION_FEE_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1325, "상담료를 찾을 수 없습니다."),
   // ===== 인증 관련 에러 코드 (2000번대) =====
 
   // 로그인 실패
@@ -221,7 +222,9 @@ public enum BaseResponseStatus {
   PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, false, 1904, "결제 정보를 찾을 수 없습니다."),
   INVALID_PAYMENT_AMOUNT(HttpStatus.BAD_REQUEST, false, 1905, "유효하지 않은 결제 금액입니다."),
   PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, false, 1906, "이미 처리된 결제입니다."),
-  PAYMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1907, "결제 접근 권한이 없습니다."); // 추가
+  PAYMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1907, "결제 접근 권한이 없습니다."), // 추가
+  INVALID_PAYMENT_STATUS(HttpStatus.FORBIDDEN, false, 1908, "유효하지 않은 결제 현황입니다.");
+
 
   private final HttpStatus httpStatus;
   private final boolean isSuccess;

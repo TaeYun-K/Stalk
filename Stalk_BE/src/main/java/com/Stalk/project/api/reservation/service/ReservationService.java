@@ -1,10 +1,21 @@
 package com.Stalk.project.api.reservation.service;
 
-import com.Stalk.project.api.reservation.dto.ReservationCancelCheckDto;
+import static com.Stalk.project.global.response.BaseResponseStatus.CANCEL_REQUEST_FAILED;
+import static com.Stalk.project.global.response.BaseResponseStatus.PAYMENT_CANCEL_FAILED;
+import static com.Stalk.project.global.util.SecurityUtil.getCurrentUserPrimaryId;
+
+import com.Stalk.project.api.advisor.dao.AdvisorMapper;
+import com.Stalk.project.api.payment.dto.PaymentReservationDto;
+import com.Stalk.project.api.payment.dto.in.PaymentCancelRequestDto;
+import com.Stalk.project.api.payment.dto.in.PaymentPrepareRequestDto;
+import com.Stalk.project.api.payment.dto.out.PaymentPrepareResponseDto;
+import com.Stalk.project.api.payment.service.PaymentService;
 import com.Stalk.project.api.reservation.dao.ReservationMapper;
-import com.Stalk.project.api.reservation.dto.in.ConsultationReservationRequestDto;
+import com.Stalk.project.api.reservation.dto.ReservationCancelWithPaymentCheckDto;
+import com.Stalk.project.api.reservation.dto.in.CancelReason;
+import com.Stalk.project.api.reservation.dto.in.PaymentReservationRequestDto;
 import com.Stalk.project.api.reservation.dto.in.ReservationCancelRequestDto;
-import com.Stalk.project.api.reservation.dto.out.ConsultationReservationResponseDto;
+import com.Stalk.project.api.reservation.dto.out.PaymentReservationResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto;
 import com.Stalk.project.api.user.dao.UserProfileMapper;
@@ -16,13 +27,6 @@ import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.PageRequestDto;
 import com.Stalk.project.global.util.SecurityUtil;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,68 +35,75 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 @Transactional
+@Slf4j
 public class ReservationService {
 
   private final ReservationMapper reservationMapper;
-  private final ApplicationEventPublisher eventPublisher; // 이벤트 발행용
-  private final UserProfileMapper userProfileMapper;  // 알람에서 사용자
+  private final AdvisorMapper advisorMapper;
+  private final PaymentService paymentService;
+  private final UserProfileMapper userProfileMapper; // ✅ 이벤트 발행용 추가
+  private final ApplicationEventPublisher eventPublisher; // ✅ 이벤트 발행용 추가
 
   /**
-   * 상담 예약 생성 (SecurityUtil 기반 인증)
+   * 결제를 포함한 상담 예약 생성
    */
-  public ConsultationReservationResponseDto createConsultationReservation(
-      ConsultationReservationRequestDto requestDto) {
+  public PaymentReservationResponseDto createReservationWithPayment(
+      PaymentReservationRequestDto requestDto) {
 
-    // SecurityUtil을 통한 현재 사용자 정보 획득
     Long currentUserId = getCurrentUserPrimaryId();
-
-    log.info("상담 예약 생성 시작: userId={}, advisorUserId={}",
+    log.info("결제 포함 예약 생성 시작: userId={}, advisorUserId={}",
         currentUserId, requestDto.getAdvisorUserId());
 
     LocalDate requestDate = LocalDate.parse(requestDto.getDate());
     LocalTime requestTime = LocalTime.parse(requestDto.getTime());
 
-    // 1. 기본 검증 (권한 포함)
+    // 1. 기본 검증 (기존 로직 재사용)
     validateBasicReservationRequest(currentUserId, requestDto.getAdvisorUserId(),
         requestDate, requestTime);
 
-    // 2. 예약 생성 (DB 제약조건이 동시성 보호)
-    Long reservationId = createReservationSafely(currentUserId, requestDto,
-        requestDate, requestTime);
-
-    // 3. 응답 생성
-    ZonedDateTime scheduledTime = ZonedDateTime.of(requestDate, requestTime,
-        ZoneId.of("Asia/Seoul"));
-
-    log.info("상담 예약 생성 완료: userId={}, reservationId={}", currentUserId, reservationId);
-
-    // ✅ 이벤트 발행 코드
-    try {
-      // 클라이언트 정보 조회
-      UserProfileResponseDto clientProfile = userProfileMapper.findUserProfileById(currentUserId);
-      String clientName = clientProfile != null ? clientProfile.getName() : "Unknown";
-      String dateTime = String.format("%s %s", requestDto.getDate(), requestDto.getTime());
-
-      eventPublisher.publishEvent(new ReservationCreatedEvent(
-          requestDto.getAdvisorUserId(),
-          clientName,
-          dateTime
-      ));
-
-      log.debug("예약 생성 이벤트 발행 완료 - clientName: {}", clientName);
-    } catch (Exception e) {
-      log.warn("예약 생성 이벤트 발행 실패 (예약은 성공)", e);
+    // 2. 상담료 조회
+    Integer consultationFee = advisorMapper.getConsultationFee(requestDto.getAdvisorUserId());
+    if (consultationFee == null || consultationFee <= 0) {
+      throw new BaseException(BaseResponseStatus.CONSULTATION_FEE_NOT_FOUND);
     }
 
+    // 3. PaymentService의 새로운 메서드 활용
+    PaymentPrepareRequestDto paymentRequest = PaymentPrepareRequestDto.builder()
+        .advisorId(requestDto.getAdvisorUserId())
+        .consultationDate(requestDto.getDate())
+        .consultationTime(requestDto.getTime())
+        .requestMessage(requestDto.getRequestMessage())
+        .build();
 
-    return ConsultationReservationResponseDto.builder()
-        .reservationId(reservationId)
+    PaymentPrepareResponseDto paymentResponse = paymentService.preparePaymentWithAdvisorFee(
+        paymentRequest, currentUserId, consultationFee);
+
+    // 4. 응답 생성
+    ZonedDateTime scheduledTime = ZonedDateTime.of(requestDate, requestTime,
+        ZoneId.of("Asia/Seoul"));
+    String scheduledTimeStr = scheduledTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+    log.info("결제 포함 예약 생성 완료: userId={}, reservationId={}, orderId={}, amount={}",
+        currentUserId, paymentResponse.getReservationId(), paymentResponse.getOrderId(), paymentResponse.getAmount());
+
+    // 예약 생성 이벤트 발행
+    publishCreatedEvent(requestDto.getAdvisorUserId(), currentUserId, scheduledTimeStr);
+
+    return PaymentReservationResponseDto.builder()
+        .reservationId(paymentResponse.getReservationId())
         .scheduledTime(scheduledTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        .orderId(paymentResponse.getOrderId())
+        .amount(paymentResponse.getAmount())
+        .paymentData(paymentResponse) // 토스페이먼츠 SDK에 필요한 모든 정보
         .build();
   }
 
@@ -146,48 +157,207 @@ public class ReservationService {
   }
 
   /**
-   * 안전한 예약 생성 (DB 제약조건 예외 처리 포함)
+   * 예약 취소 처리 (SecurityUtil 기반 + 결제 연동)
    */
-  private Long createReservationSafely(Long currentUserId,
-      ConsultationReservationRequestDto requestDto,
-      LocalDate requestDate, LocalTime requestTime) {
+  @Transactional
+  public ReservationCancelResponseDto cancelReservation(Long reservationId,
+      ReservationCancelRequestDto requestDto) {
+    Long currentUserId = getCurrentUserPrimaryId();
+
+    log.info("예약 취소 시작: reservationId={}, userId={}", reservationId, currentUserId);
 
     try {
-      LocalTime endTime = requestTime.plusHours(1);
+      // 1. 예약 조회 및 검증 (결제 정보 포함)
+      ReservationCancelWithPaymentCheckDto reservation =
+          reservationMapper.findReservationForCancelWithPayment(reservationId);
 
-      int insertResult = reservationMapper.insertConsultationReservation(
-          currentUserId,
-          requestDto.getAdvisorUserId(),
-          requestDate,
-          requestTime,
-          endTime,
-          requestDto.getRequestMessage()
-      );
-
-      if (insertResult <= 0) {
-        throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
+      if (reservation == null) {
+        throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
       }
 
-      Long reservationId = reservationMapper.getLastInsertId();
-      if (reservationId == null) {
-        throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
+      // 2. 취소 권한 확인
+      if (!currentUserId.equals(reservation.getUserId()) &&
+          !currentUserId.equals(reservation.getAdvisorId())) {
+        throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
       }
 
-      return reservationId;
+      // 3. 취소 가능 상태 확인 (결제 상태 고려)
+      validateCancelableStatusWithPayment(reservation);
 
-    } catch (DataIntegrityViolationException e) {
-      // DB 유니크 제약조건 위반 = 중복 예약 시도
-      log.warn("중복 예약 시도 감지: advisorId={}, date={}, time={}",
-          requestDto.getAdvisorUserId(), requestDate, requestTime, e);
-      throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
+      // 4. 당일 취소 방지
+      LocalDate today = LocalDate.now();
+      if (reservation.getDate().equals(today) || reservation.getDate().isBefore(today)) {
+        throw new BaseException(BaseResponseStatus.SAME_DAY_CANCEL_NOT_ALLOWED);
+      }
+
+      // 5. 결제 상태별 취소 처리
+      LocalDateTime canceledAt = LocalDateTime.now();
+      String cancelMessage = processCancellationByPaymentStatus(
+          reservation, currentUserId, requestDto, canceledAt);
+
+      // 6. ✅ 이벤트 발행 (알림을 위함)
+      publishCancelEvent(reservation, currentUserId, requestDto);
+
+      log.info("예약 취소 완료: reservationId={}, userId={}", reservationId, currentUserId);
+
+      return ReservationCancelResponseDto.builder()
+          .reservationId(reservationId)
+          .canceledAt(canceledAt.atZone(ZoneId.of("Asia/Seoul"))
+              .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+          .message(cancelMessage)
+          .build();
 
     } catch (BaseException e) {
       throw e;
     } catch (Exception e) {
-      log.error("예약 생성 중 예상치 못한 오류", e);
-      throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
+      log.error("예약 취소 처리 중 오류 발생: reservationId={}", reservationId, e);
+      throw new BaseException(CANCEL_REQUEST_FAILED);
     }
   }
+
+  /**
+   * 예약만 취소 (결제 처리 없음)
+   */
+  private void cancelReservationOnly(Long reservationId, Long currentUserId,
+      ReservationCancelRequestDto requestDto) {
+    int result = reservationMapper.cancelReservation(
+        reservationId, currentUserId, CancelReason.valueOf(requestDto.getCancelReason().name()),
+        requestDto.getCancelMemo(), LocalDateTime.now());
+
+    if (result != 1) {
+      throw new BaseException(CANCEL_REQUEST_FAILED);
+    }
+  }
+
+  /**
+   * 취소 가능 상태 확인 (결제 상태 고려)
+   */
+  private void validateCancelableStatusWithPayment(ReservationCancelWithPaymentCheckDto reservation) {
+    String status = reservation.getStatus();
+
+    // 이미 취소된 예약
+    if ("CANCELED".equals(status)) {
+      throw new BaseException(BaseResponseStatus.ALREADY_CANCELED_RESERVATION);
+    }
+
+    // PENDING 상태는 결제 완료 여부와 관계없이 취소 가능
+    if ("PENDING".equals(status)) {
+      return;
+    }
+
+    // APPROVED 상태는 취소 불가 (기존 정책 유지)
+    if ("APPROVED".equals(status)) {
+      throw new BaseException(BaseResponseStatus.RESERVATION_NOT_CANCELABLE);
+    }
+  }
+
+  /**
+   * 결제 상태별 취소 처리
+   */
+  private String processCancellationByPaymentStatus(
+      ReservationCancelWithPaymentCheckDto reservation,
+      Long currentUserId,
+      ReservationCancelRequestDto requestDto,
+      LocalDateTime canceledAt) {
+
+    String paymentStatus = reservation.getPaymentStatus();
+    String cancelMessage;
+
+    switch (paymentStatus) {
+      case "PENDING":
+        // 결제 미완료 예약: 예약만 취소
+        cancelReservationOnly(reservation.getId(), currentUserId, requestDto, canceledAt);
+        cancelMessage = "예약이 성공적으로 취소되었습니다.";
+        break;
+
+      case "PAID":
+        // 결제 완료 예약: 결제 취소 + 예약 취소 (트랜잭션)
+        cancelReservationWithPayment(reservation, currentUserId, requestDto, canceledAt);
+        cancelMessage = "예약 및 결제가 성공적으로 취소되었습니다.";
+        break;
+
+      case "CANCELLED":
+        // 이미 결제 취소된 예약: 예약만 취소 (결제는 이미 취소됨)
+        cancelReservationOnly(reservation.getId(), currentUserId, requestDto, canceledAt);
+        cancelMessage = "예약이 성공적으로 취소되었습니다. (결제는 이미 취소됨)";
+        break;
+
+      case "FAILED":
+        // 결제 실패한 예약: 예약만 취소
+        cancelReservationOnly(reservation.getId(), currentUserId, requestDto, canceledAt);
+        cancelMessage = "예약이 성공적으로 취소되었습니다.";
+        break;
+
+      default:
+        throw new BaseException(BaseResponseStatus.INVALID_PAYMENT_STATUS);
+    }
+
+    return cancelMessage;
+  }
+
+  /**
+   * 예약만 취소 (결제 처리 없음)
+   */
+  private void cancelReservationOnly(Long reservationId, Long currentUserId,
+      ReservationCancelRequestDto requestDto, LocalDateTime canceledAt) {
+    int result = reservationMapper.cancelReservation(
+        reservationId, currentUserId, CancelReason.valueOf(requestDto.getCancelReason().name()),
+        requestDto.getCancelMemo(), canceledAt);
+
+    if (result != 1) {
+      throw new BaseException(CANCEL_REQUEST_FAILED);
+    }
+  }
+
+  /**
+   * 결제 취소 + 예약 취소 (트랜잭션)
+   */
+  private void cancelReservationWithPayment(
+      ReservationCancelWithPaymentCheckDto reservation,
+      Long currentUserId,
+      ReservationCancelRequestDto requestDto,
+      LocalDateTime canceledAt) {
+
+    try {
+      // 1. 결제 취소 요청
+      if (reservation.getPaymentKey() != null) {
+        PaymentCancelRequestDto paymentCancelDto = PaymentCancelRequestDto.builder()
+            .cancelReason("예약 취소: " + requestDto.getCancelReason().getDisplayName())
+            .cancelAmount(reservation.getAmount())
+            .build();
+
+        paymentService.cancelPayment(
+            reservation.getOrderId(),
+            paymentCancelDto,
+            currentUserId
+        );
+
+        log.info("결제 취소 완료: paymentKey={}, orderId={}",
+            reservation.getPaymentKey(), reservation.getOrderId());
+      }
+
+      // 2. 예약 상태 업데이트
+      int result = reservationMapper.cancelReservationWithPayment(
+          reservation.getId(),
+          currentUserId,
+          requestDto.getCancelReason().name(),
+          requestDto.getCancelMemo(),
+          canceledAt
+      );
+
+      if (result != 1) {
+        throw new BaseException(CANCEL_REQUEST_FAILED);
+      }
+
+      // 3. 예약 취소 이벤트 발행 (중복 코드 제거)
+      publishCancelEvent(reservation, currentUserId, requestDto);
+
+    } catch (Exception e) {
+      log.error("결제 취소 실패로 인한 예약 취소 롤백: reservationId={}", reservation.getId(), e);
+      throw new BaseException(PAYMENT_CANCEL_FAILED);
+    }
+  }
+
 
   /**
    * 예약 내역 조회 (SecurityUtil 기반)
@@ -231,74 +401,29 @@ public class ReservationService {
         .build();
   }
 
+
   /**
-   * 예약 취소 처리 (SecurityUtil 기반)
+   * ✅ 예약 취소 이벤트 발행 (알림을 위함)
    */
-  public ReservationCancelResponseDto cancelReservation(Long reservationId,
+  private void publishCancelEvent(ReservationCancelWithPaymentCheckDto reservation,
+      Long currentUserId,
       ReservationCancelRequestDto requestDto) {
-    Long currentUserId = getCurrentUserPrimaryId();
-
-    log.info("예약 취소 시작: reservationId={}, userId={}", reservationId, currentUserId);
-
-    // 1. 예약 조회 및 검증
-    ReservationCancelCheckDto reservation = reservationMapper.findReservationForCancel(reservationId);
-    if (reservation == null) {
-      throw new BaseException(BaseResponseStatus.RESERVATION_NOT_FOUND);
-    }
-
-    // 2. 취소 권한 확인
-    if (!currentUserId.equals(reservation.getUserId()) &&
-        !currentUserId.equals(reservation.getAdvisorId())) {
-      throw new BaseException(BaseResponseStatus.UNAUTHORIZED_CANCEL_REQUEST);
-    }
-
-    // 3. 취소 가능 상태 확인
-    if (!"PENDING".equals(reservation.getStatus())) {
-      if ("CANCELED".equals(reservation.getStatus())) {
-        throw new BaseException(BaseResponseStatus.ALREADY_CANCELED_RESERVATION);
-      } else {
-        throw new BaseException(BaseResponseStatus.RESERVATION_NOT_CANCELABLE);
-      }
-    }
-
-    // 4. 당일 취소 방지
-    LocalDate today = LocalDate.now();
-    if (reservation.getDate().equals(today) || reservation.getDate().isBefore(today)) {
-      throw new BaseException(BaseResponseStatus.SAME_DAY_CANCEL_NOT_ALLOWED);
-    }
-
-    // 5. 예약 취소 처리
-    LocalDateTime canceledAt = LocalDateTime.now();
-    int updateResult = reservationMapper.cancelReservation(
-        reservationId, currentUserId, requestDto.getCancelReason(),
-        requestDto.getCancelMemo(), canceledAt);
-
-    if (updateResult <= 0) {
-      throw new BaseException(BaseResponseStatus.CANCEL_REQUEST_FAILED);
-    }
-
-    // ✅ 이벤트 발행 코드
     try {
-      // 알림 대상과 취소한 사람 이름 결정
       Long targetUserId;
       String canceledByName;
 
       if (currentUserId.equals(reservation.getUserId())) {
-        // 일반 사용자가 취소 → 전문가에게 알림
         targetUserId = reservation.getAdvisorId();
-        // 취소한 사람(일반 사용자) 이름 조회
         UserProfileResponseDto userProfile = userProfileMapper.findUserProfileById(currentUserId);
         canceledByName = userProfile != null ? userProfile.getName() : "Unknown";
       } else {
-        // 전문가가 취소 → 일반 사용자에게 알림
         targetUserId = reservation.getUserId();
-        // 취소한 사람(전문가) 이름 조회
         UserProfileResponseDto advisorProfile = userProfileMapper.findUserProfileById(currentUserId);
         canceledByName = advisorProfile != null ? advisorProfile.getName() : "Unknown";
       }
 
       String dateTime = String.format("%s %s", reservation.getDate(), reservation.getStartTime());
-      String reason = requestDto.getCancelReason().toString(); // 또는 .name()
+      String reason = requestDto.getCancelReason().getDisplayName();
 
       eventPublisher.publishEvent(new ReservationCanceledEvent(
           targetUserId,
@@ -307,30 +432,39 @@ public class ReservationService {
           reason
       ));
 
-      log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}", canceledByName);
+      // 더 상세한 로깅으로 통일
+      log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}, targetUserId: {}",
+          canceledByName, targetUserId);
     } catch (Exception e) {
       log.warn("예약 취소 이벤트 발행 실패 (취소는 성공)", e);
     }
-
-    log.info("예약 취소 완료: reservationId={}, userId={}", reservationId, currentUserId);
-
-    return ReservationCancelResponseDto.builder()
-        .reservationId(reservationId)
-        .canceledAt(canceledAt.atZone(ZoneId.of("Asia/Seoul"))
-            .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
-        .message("예약이 성공적으로 취소되었습니다.")
-        .build();
   }
 
   /**
-   * SecurityUtil에서 현재 사용자 PK 획득 (BaseException 변환)
+   * 예약 생성 이벤트 발행
    */
-  private Long getCurrentUserPrimaryId() {
+  private void publishCreatedEvent(Long advisorUserId, Long clientUserId, String scheduledTime) {
     try {
-      return SecurityUtil.getCurrentUserPrimaryIdRequired();
-    } catch (RuntimeException e) {
-      log.error("인증된 사용자 정보 획득 실패: {}", e.getMessage());
-      throw new BaseException(BaseResponseStatus.INVALID_USER_JWT);
+      String clientName = getUserName(clientUserId);
+
+      eventPublisher.publishEvent(new ReservationCreatedEvent(
+          advisorUserId,
+          clientName,
+          scheduledTime
+      ));
+
+      log.debug("예약 생성 이벤트 발행 완료 - advisorId={}, clientName={}, dateTime={}",
+          advisorUserId, clientName, scheduledTime);
+    } catch (Exception e) {
+      log.warn("예약 생성 이벤트 발행 실패 (예약은 성공)", e);
     }
+  }
+
+  /**
+   * 사용자 이름 조회 헬퍼 메서드
+   */
+  private String getUserName(Long userId) {
+    UserProfileResponseDto profile = userProfileMapper.findUserProfileById(userId);
+    return profile != null ? profile.getName() : "Unknown";
   }
 }
