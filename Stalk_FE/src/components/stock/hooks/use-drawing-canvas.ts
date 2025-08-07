@@ -31,29 +31,21 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
       return null;
     }
 
-    // 기존 캔버스가 있으면 제거
-    const existingCanvas = container.querySelector('#drawing-canvas');
-    if (existingCanvas) {
-      existingCanvas.remove();
+    // Use the existing drawing-canvas div from React
+    const canvasContainer = document.getElementById('drawing-canvas');
+    if (!canvasContainer) {
+      console.error('Drawing canvas element not found');
+      return null;
     }
-
-    // Konva 컨테이너 생성
-    const canvasContainer = document.createElement('div');
-    canvasContainer.id = 'drawing-canvas';
-    canvasContainer.style.position = 'absolute';
-    canvasContainer.style.top = '0';
-    canvasContainer.style.left = '0';
-    canvasContainer.style.width = '100%';
-    canvasContainer.style.height = '100%';
-    canvasContainer.style.pointerEvents = 'none';
-    canvasContainer.style.zIndex = '10';
-    container.appendChild(canvasContainer);
+    
+    // Clear any existing Konva content
+    canvasContainer.innerHTML = '';
 
     console.log('Konva Stage 생성 중...', { width, height });
 
-    // Konva Stage 생성
+    // Konva Stage 생성 - use container ID string
     const stage = new Konva.Stage({
-      container: canvasContainer,
+      container: 'drawing-canvas',
       width: width,
       height: height,
     });

@@ -43,6 +43,9 @@ import MyPage from '@/pages/my-page';
 import FavoritesPage from '@/pages/favorites-page';
 import SearchPage from '@/pages/search-page';
 import VideoConsultationPage from '@/pages/video-consultation-page';
+import VideoConsultationRedesigned from '@/pages/video-consultation-redesigned';
+import VideoConsultationChartFocused from '@/pages/video-consultation-chart-focused';
+import VideoConsultationSimpleTest from '@/pages/video-consultation-simple-test';
 import AdminPage from '@/pages/admin-page';
 
 
@@ -79,8 +82,8 @@ const AppContent: React.FC = () => {
   const location = useLocation();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean = showSidebarRoutes.includes(location.pathname) || location.pathname.startsWith('/expert-detail/') || location.pathname.startsWith('/community/post/');
-  const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
   const isVideoPage = location.pathname.startsWith('/video-consultation');
+  const showFooter: boolean = !hideFooterRoutes.includes(location.pathname) && !isVideoPage;
   
 
 
@@ -128,8 +131,11 @@ const AppContent: React.FC = () => {
               <Route path="/holdings" element={<div className="p-4"><h1>보유종목</h1></div>} />
               <Route path="/reservations" element={<div className="p-4"><h1>예약내역</h1></div>} />
 
-              {/* Video Consultation Route */}
+              {/* Video Consultation Routes */}
               <Route path="/video-consultation/:consultationId" element={<VideoConsultationPage />} />
+              <Route path="/video-consultation-new/:consultationId" element={<VideoConsultationRedesigned />} />
+              <Route path="/video-consultation-chart/:consultationId" element={<VideoConsultationChartFocused />} />
+              <Route path="/video-consultation-test/:consultationId" element={<VideoConsultationSimpleTest />} />
 
               {/* Protected Routes */}
               

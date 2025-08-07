@@ -63,7 +63,6 @@ const ProductsPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [chartType, setChartType] = useState<'line'>('line');
   const [drawingMode, setDrawingMode] = useState(false);
 
@@ -167,7 +166,17 @@ const ProductsPage = () => {
 
       try {
         // First try to get basic info from KRX
-        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
+        // More comprehensive market type detection - same logic as other components
+        let marketType: string;
+        
+        if (selectedTicker.startsWith('9') || selectedTicker.startsWith('3')) {
+          marketType = 'KOSDAQ';
+        } else if (selectedTicker.startsWith('00')) {
+          marketType = 'KOSPI'; 
+        } else {
+          // For ambiguous cases like 194480 (Dev Sisters), default to KOSDAQ for 1xxxxx range
+          marketType = selectedTicker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
+        }
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
         const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
@@ -235,7 +244,17 @@ const ProductsPage = () => {
       // Fallback: Use our public KRX endpoint instead
       
       try {
-        const fallbackMarketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
+        // Same market type detection logic for fallback
+        let fallbackMarketType: string;
+        
+        if (selectedTicker.startsWith('9') || selectedTicker.startsWith('3')) {
+          fallbackMarketType = 'KOSDAQ';
+        } else if (selectedTicker.startsWith('00')) {
+          fallbackMarketType = 'KOSPI'; 
+        } else {
+          // For ambiguous cases like 194480 (Dev Sisters), default to KOSDAQ for 1xxxxx range
+          fallbackMarketType = selectedTicker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
+        }
         const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${fallbackMarketType}`);
         
         // Handle both wrapped and direct format
@@ -332,47 +351,8 @@ const ProductsPage = () => {
 
     if (ranking) setRankingType(ranking);
     if (market) setMarketType(market);
-
-    // Handle search from URL params
-    const urlSearchQuery = searchParams.get("search");
-    if (urlSearchQuery) {
-      searchStocks(urlSearchQuery);
-    }
   }, [searchParams]);
 
-  // Search stocks from backend
-  const searchStocks = async (query: string) => {
-    if (!query.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/stock/search/${query}`
-      );
-      if (response.data.success && response.data.data.length > 0) {
-        const stock = response.data.data[0];
-
-        // Update URL params when selecting a stock from search
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set("ticker", stock.ticker);
-        newParams.set("ranking", rankingType);
-        newParams.set("market", marketType);
-        setSearchParams(newParams);
-
-        setSelectedTicker(stock.ticker);
-        setViewMode("detail");
-      } else {
-        setError("검색 결과가 없습니다.");
-      }
-    } catch (err) {
-      console.error("Stock search error:", err);
-      setError("주식 검색 중 오류가 발생했습니다.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const selectStock = (stock: RankingStock) => {
 
@@ -419,10 +399,6 @@ const ProductsPage = () => {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Search is now handled by the dropdown component
-  };
 
   const handleRankingTypeChange = (newType: RankingType) => {
     const newParams = new URLSearchParams(searchParams);
@@ -464,6 +440,24 @@ const ProductsPage = () => {
               {error}
             </div>
           )}
+
+          {/* Stock Search Bar - Always visible */}
+          <div className="mb-6">
+            <StockSearch 
+              onStockSelect={(stock) => {
+                selectStock({
+                  rank: 0,
+                  ticker: stock.ticker,
+                  name: stock.name,
+                  price: 0,
+                  change: 0,
+                  changeRate: 0,
+                  volume: 0
+                });
+              }}
+              darkMode={false}
+            />
+          </div>
 
           {/* Detail View */}
           {viewMode === "detail" && selectedTicker && (
@@ -550,9 +544,6 @@ const ProductsPage = () => {
                   onStockClick={selectStock}
                   rankingType={rankingType}
                   onRankingTypeChange={handleRankingTypeChange}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  onSearchSubmit={handleSearch}
                   title={`${marketType === "전체" ? "통합" : marketType.toUpperCase()} 실시간 차트`}
                   marketType={marketType}
                   onMarketTypeChange={handleMarketTypeChange}
