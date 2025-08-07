@@ -1242,6 +1242,7 @@ const VideoConsultationPage: React.FC = () => {
                 newMessage={newMessage}
                 setNewMessage={setNewMessage}
                 sendChatMessage={sendChatMessage}
+                currentUsername={getCurrentUserDisplayName()}
               />
             )}
           </div>
