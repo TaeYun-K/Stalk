@@ -171,23 +171,17 @@ public class SecurityConfig {
             .hasAnyRole("ADVISOR")
             .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").permitAll()
 
-            // 비로그인 사용자도 접근 가능 (조회 전용)
-            // 커뮤니티 글 목록 및 단일 글 조회
-            .requestMatchers(HttpMethod.GET, "/api/community/posts/**").permitAll()
-
-            // 댓글 목록 조회
-            .requestMatchers(HttpMethod.GET, "/api/community/posts/*/comments").permitAll()
-
-            .requestMatchers(HttpMethod.GET, "/api/experts/**").permitAll()
-            .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+            // 커뮤니티
             .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
-
             .requestMatchers(HttpMethod.POST, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/community/**").authenticated()
 
-            // KRX 데이터 - 주식
+            // KRX
             .requestMatchers(HttpMethod.GET, "/api/krx/**").permitAll()
+
+            // 주식 조회
+            .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
 
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()
