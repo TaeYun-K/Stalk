@@ -195,6 +195,9 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [showChat]);
 
+
+
+
   // 페이지 이탈 방지 훅
   const usePreventNavigation = (enabled: boolean) => {
     const navigate = useNavigate();
