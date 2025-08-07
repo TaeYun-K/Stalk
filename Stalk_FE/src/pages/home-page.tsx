@@ -85,9 +85,52 @@ const HomePage: React.FC = () => {
     fetchReservations();
   }, []);
 
+  // 홈페이지에서 sidebar margin 완전히 무시
+  useEffect(() => {
+    // CSS 클래스와 data attribute를 통한 강제 마진 제거
+    document.body.setAttribute('data-page', 'home');
+    const navbar = document.querySelector('nav');
+    if (navbar) {
+      navbar.setAttribute('data-page', 'home');
+    }
+
+    // JavaScript를 통한 강제 margin 제거
+    const forceResetMargin = () => {
+      document.body.style.marginRight = '0 !important';
+      if (navbar) {
+        (navbar as HTMLElement).style.marginRight = '0 !important';
+      }
+    };
+
+    // 초기 설정
+    forceResetMargin();
+
+    // MutationObserver로 스타일 변경 감지 및 즉시 복원
+    const observer = new MutationObserver(forceResetMargin);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['style']
+    });
+
+    // 주기적으로 margin 강제 리셋 (추가 보장)
+    const interval = setInterval(forceResetMargin, 50);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+      // 정리 시 data attribute 제거 및 margin 리셋
+      document.body.removeAttribute('data-page');
+      document.body.style.marginRight = '0';
+      if (navbar) {
+        navbar.removeAttribute('data-page');
+        (navbar as HTMLElement).style.marginRight = '0';
+      }
+    };
+  }, []);
+
   return (
     
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden" style={{ marginRight: '0 !important', marginLeft: '0 !important' }}>
       {/* Background Video */}
       <div className="relative w-full h-[100vh] overflow-hidden">
         <video 
@@ -100,10 +143,11 @@ const HomePage: React.FC = () => {
           <source src="/videos/stalk-background-video.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center px-4">
-          <h1 className="text-6xl font-bold mb-6">Fuel Your Future</h1>
-          <p className="text-2xl mb-8 opacity-90">투자 전문가를 통해 당신의 미래를 충전하세요</p>
-
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-white text-center w-full">
+            <h1 className="text-6xl font-bold mb-6">Fuel Your Future</h1>
+            <p className="text-2xl mb-8 opacity-90">투자 전문가를 통해 당신의 미래를 충전하세요</p>
+          </div>
         </div>
       </div>
 
@@ -162,7 +206,7 @@ const HomePage: React.FC = () => {
 
       {/* Content overlay */}
       
-      <div className="relative pr-20">
+      <div className="relative pt-10 pr-20">
         <main className="px-20 sm:px-6 lg:px-36 py-8 pt-1">
           
 

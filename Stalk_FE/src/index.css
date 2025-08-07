@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 홈페이지에서 sidebar margin 강제 무시 */
+body[data-page="home"] {
+  margin-right: 0 !important;
+}
+
+nav[data-page="home"] {
+  margin-right: 0 !important;
+}

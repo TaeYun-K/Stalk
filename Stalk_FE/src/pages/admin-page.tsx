@@ -6,6 +6,7 @@ import {
   ApprovalActionRequest 
 } from '@/types';
 import AdminService from '@/services/adminService';
+import kofiaLogo from '@/assets/images/logos/kofia_logo.png';
 
 const AdminPage = () => {
   const [is_admin] = useState<boolean>(true); // 관리자 권한 변수
@@ -152,7 +153,7 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 에러 메시지 */}
       {error && (
         <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 rounded-lg p-4 max-w-md">
@@ -184,38 +185,19 @@ const AdminPage = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">관리자 페이지</h1>
-          
-          {/* 필터 */}
-          <div className="flex gap-4 mb-4">
-            <select
-              value={statusFilter}
-              onChange={(e) => handleStatusFilterChange(e.target.value as ApprovalStatus)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value={ApprovalStatus.ALL}>전체</option>
-              <option value={ApprovalStatus.PENDING}>대기중</option>
-              <option value={ApprovalStatus.APPROVED}>승인됨</option>
-              <option value={ApprovalStatus.REJECTED}>거절됨</option>
-            </select>
-          </div>
         </div>
 
         {/* Sidebar and Content */}
         <div className="flex gap-8">
           {/* Sidebar */}
-          <div className="w-64 bg-white rounded-lg shadow-md p-6">
+          <div className="w-64 bg-white rounded-lg p-6">
             <nav className="space-y-4">
               <div>
-                <h2 className="text-left text-lg font-semibold text-gray-900 mb-4">관리</h2>
+                <h2 className="px-4 text-left text-lg font-semibold text-gray-900 mb-4">관리자</h2>
                 <ul className="space-y-2">
                   <li>
                     <button className="w-full text-left px-4 py-2 text-blue-600 bg-blue-50 rounded-lg font-medium">
-                      전문 자격 관리
-                    </button>
-                  </li>
-                  <li>
-                    <button className="w-full text-left px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg">
-                      제한된 사용자
+                      전문가 자격증 관리
                     </button>
                   </li>
                 </ul>
@@ -223,16 +205,38 @@ const AdminPage = () => {
             </nav>
           </div>
 
+
+
           {/* Main Content */}
           <div className="flex-1">
-            <div className="bg-white rounded-lg shadow-md">
-              {/* Content Header */}
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-left text-xl font-semibold text-gray-900">전문가 승인 대기 목록</h2>
+            <div className="flex justify-between items-center py-4">
+              <h2 className="flex items-center text-left text-xl font-semibold text-gray-900">전문가 자격증 관리</h2>
+              {/* 필터 */}
+              <div className="flex gap-4 items-center">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => handleStatusFilterChange(e.target.value as ApprovalStatus)}
+                  className="px-4 py-2 focus:outline-none bg-transparent"
+                >
+                  <option value={ApprovalStatus.ALL}>전체</option>
+                  <option value={ApprovalStatus.PENDING}>대기중</option>
+                  <option value={ApprovalStatus.APPROVED}>승인됨</option>
+                  <option value={ApprovalStatus.REJECTED}>거절됨</option>
+                </select>
               </div>
-
+            </div>
+            
+            <a
+              className='flex justify-center items-center font-semibold bg-yellow-400 py-2 px-4 rounded-lg mb-4 hover:bg-yellow-500'
+              href="https://license.kofia.or.kr/scsInquiry/ablNoOrg/getAblNoOrgPage.do"
+              target="_blank"
+              rel="noopener noreferrer">
+                <img src={kofiaLogo} alt="kofia_logo" className='w-5 h-5 mr-3' />
+                금융투자협회 합격증원본대조 바로가기</a>
+            <div className="bg-white">
+              {/* Content Header */}
               {/* Expert List */}
-              <div className="p-6">
+              <div className="py-2">
                 {loading && expertList.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -248,30 +252,21 @@ const AdminPage = () => {
                       <div key={expert.requestId} className="border border-gray-200 rounded-lg p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start space-x-4">
-                            {/* Profile Image - 기본 이미지 사용 */}
-                            <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
-                              <div className="w-16 h-16 bg-gray-300 rounded-lg flex items-center justify-center text-2xl text-gray-500">
-                                👤
-                              </div>
-                            </div>
-
                             {/* Expert Info */}
                             <div className="flex-1">
-                              <div className="mb-4">
+                              <div className="pl-4 h-fit">
                                 <h3 className="text-left text-lg font-bold text-gray-900 mb-1">
                                   {expert.advisorName}
                                 </h3>
-                                <div className="text-left text-sm text-gray-600 space-y-1">
-                                  <p><span className="font-medium">자격증:</span> {expert.certificateInfo.certificateName}</p>
-                                  <p><span className="font-medium">자격증 번호:</span> {expert.certificateInfo.certificateNumber}</p>
-                                  <p><span className="font-medium">이메일:</span> {expert.email}</p>
-                                  <p><span className="font-medium">연락처:</span> {expert.contact}</p>
-                                  <p><span className="font-medium">요청일:</span> {new Date(expert.requestedAt).toLocaleDateString()}</p>
+                                <div className="text-left text-sm text-gray-600 space-y-2">
+                                  <p><span className="font-semibold">자격증명:</span> {expert.certificateInfo.certificateName}</p>
+                                  <p><span className="font-semibold">자격증 번호: </span>
+                                    certificateNumber-birth-serialNumber</p>
+                                  <p><span className="font-semibold">이메일:</span> {expert.email}</p>
+                                  <p><span className="font-semibold">연락처:</span> {expert.contact}</p>
+                                  <p><span className="font-semibold">요청일:</span> {new Date(expert.requestedAt).toLocaleDateString()}</p>
                                 </div>
                               </div>
-                              <p className="text-left text-sm text-gray-700">
-                                자격증 정보: {expert.certificateInfo.certificateName} - {expert.certificateInfo.certificateNumber}
-                              </p>
                             </div>
                           </div>
 
@@ -282,27 +277,27 @@ const AdminPage = () => {
                                 <button
                                   onClick={() => handleApprove(expert.requestId)}
                                   disabled={loading}
-                                  className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                                  className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-blue-500 hover:text-white transition-colors disabled:opacity-50"
                                 >
                                   자격증 승인
                                 </button>
                                 <button
                                   onClick={() => handleReject(expert.requestId)}
                                   disabled={loading}
-                                  className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                                  className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50"
                                 >
                                   자격증 거절
                                 </button>
                               </>
                             )}
                             {expert.status === 'APPROVED' && (
-                              <span className="px-4 py-2 bg-green-100 text-green-800 text-sm font-medium rounded-lg">
-                                승인됨
+                              <span className="px-4 py-2 bg-blue-100 text-blue-800 text-sm font-medium rounded-lg">
+                                승인완료
                               </span>
                             )}
                             {expert.status === 'REJECTED' && (
                               <span className="px-4 py-2 bg-red-100 text-red-800 text-sm font-medium rounded-lg">
-                                거절됨
+                                승인거절
                               </span>
                             )}
                           </div>
