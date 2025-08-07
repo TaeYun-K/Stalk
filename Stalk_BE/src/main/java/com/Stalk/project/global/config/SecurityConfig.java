@@ -48,8 +48,8 @@ public class SecurityConfig {
 
   private final MyUserDetailsService userDetailsService;
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
-  private final JwtAuthenticationEntryPoint jwtEntryPoint;       // 추가
-  private final JwtAccessDeniedHandler jwtAccessDeniedHandler;   // 추가
+  private final JwtAuthenticationEntryPoint jwtEntryPoint;
+  private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
   /**
    * DAO 기반 인증 Provider - UserDetailsService + PasswordEncoder 데이터베이스 접근을 통해 인증을 처리하는 제공자
@@ -171,13 +171,13 @@ public class SecurityConfig {
             .hasAnyRole("ADVISOR")
             .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").permitAll()
 
+            // 비로그인 사용자도 접근 가능 (조회 전용)
             // 커뮤니티 글 목록 및 단일 글 조회
             .requestMatchers(HttpMethod.GET, "/api/community/posts/**").permitAll()
 
             // 댓글 목록 조회
             .requestMatchers(HttpMethod.GET, "/api/community/posts/*/comments").permitAll()
 
-            // 비로그인 사용자도 접근 가능 (조회 전용)
             .requestMatchers(HttpMethod.GET, "/api/experts/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
