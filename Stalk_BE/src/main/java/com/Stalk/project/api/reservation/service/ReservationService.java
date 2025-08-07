@@ -467,4 +467,31 @@ public class ReservationService {
     UserProfileResponseDto profile = userProfileMapper.findUserProfileById(userId);
     return profile != null ? profile.getName() : "Unknown";
   }
+
+  /**
+   * 결제 실패 시 예약 삭제 처리
+   */
+  @Transactional
+  public void handlePaymentFailure(Long reservationId, String failureCode, String failureReason) {
+    log.info("결제 실패로 인한 예약 삭제 처리: reservationId={}, failureCode={}",
+        reservationId, failureCode);
+
+    try {
+      // 예약 삭제
+      int deletedRows = reservationMapper.deleteReservation(reservationId);
+
+      if (deletedRows == 0) {
+        log.warn("삭제할 예약을 찾을 수 없음: reservationId={}", reservationId);
+      } else {
+        log.info("결제 실패 예약 삭제 완료: reservationId={}", reservationId);
+      }
+
+      // 선택사항: 실패 로그 저장
+      // paymentLogService.logFailedPayment(reservationId, failureCode, failureReason);
+
+    } catch (Exception e) {
+      log.error("예약 삭제 중 오류 발생: reservationId={}", reservationId, e);
+      // 삭제 실패해도 예외는 던지지 않음 (이미 결제가 실패한 상황)
+    }
+  }
 }

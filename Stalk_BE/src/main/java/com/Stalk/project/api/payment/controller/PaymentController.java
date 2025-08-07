@@ -1,5 +1,6 @@
 package com.Stalk.project.api.payment.controller;
 
+import com.Stalk.project.api.reservation.dao.ReservationMapper;
 import com.Stalk.project.global.config.TossPaymentConfig;
 import com.Stalk.project.api.payment.dto.in.PaymentConfirmRequestDto;
 import com.Stalk.project.api.payment.dto.in.PaymentPrepareRequestDto;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 public class PaymentController {
 
-    private final TossPaymentConfig tossPaymentConfig;
+    private final ReservationMapper reservationMapper;
     private final PaymentService paymentService;
 
     /**
@@ -98,7 +99,41 @@ public class PaymentController {
         } catch (Exception e) {
             log.error("결제 승인 중 오류: orderId={}, userId={}, error={}",
                 requestDto.getOrderId(), userId, e.getMessage(), e);
+
+            // 🔥 추가: 결제 실패 시 예약 삭제 처리
+            handlePaymentConfirmFailure(requestDto.getOrderId(), e);
+
             throw e;
+        }
+    }
+
+    /**
+     * 결제 승인 실패 시 예약 삭제 처리
+     */
+    private void handlePaymentConfirmFailure(String orderId, Exception e) {
+        try {
+            log.info("결제 승인 실패로 인한 예약 삭제 시작: orderId={}", orderId);
+
+            // 주문 ID로 예약 ID 조회
+            Long reservationId = reservationMapper.getReservationIdByOrderId(orderId);
+
+            if (reservationId != null) {
+                // 예약 삭제
+                int deletedRows = reservationMapper.deleteReservation(reservationId);
+
+                if (deletedRows > 0) {
+                    log.info("결제 실패로 예약 삭제 완료: reservationId={}, orderId={}",
+                        reservationId, orderId);
+                } else {
+                    log.warn("삭제할 예약을 찾을 수 없음: orderId={}", orderId);
+                }
+            } else {
+                log.warn("주문 ID로 예약을 찾을 수 없음: orderId={}", orderId);
+            }
+
+        } catch (Exception deleteException) {
+            log.error("예약 삭제 중 오류 발생: orderId={}", orderId, deleteException);
+            // 삭제 실패해도 원래 예외를 그대로 던지도록 함
         }
     }
 
