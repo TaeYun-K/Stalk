@@ -1,5 +1,6 @@
 package com.Stalk.project.api.user.dao;
 
+import com.Stalk.project.api.signup.entity.User;
 import com.Stalk.project.api.user.dto.in.UserUpdateRequestDto;
 import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
 import org.apache.ibatis.annotations.Mapper;
@@ -18,5 +19,19 @@ public interface UserProfileMapper {
 
   int updateUserProfile(@Param("userId") Long userId,
       @Param("updateDto") UserUpdateRequestDto updateDto);
+
+  /**
+   * ID로 사용자를 조회합니다.
+   * @param userId 사용자 ID
+   * @return User 객체
+   */
+  User findUserById(@Param("userId") Long userId);
+
+  /**
+   * 사용자를 비활성화 처리합니다. (Soft Delete)
+   * @param userId 비활성화할 사용자 ID
+   * @return 업데이트된 행의 수
+   */
+  Long deactivateUser(@Param("userId") Long userId);
 
 }

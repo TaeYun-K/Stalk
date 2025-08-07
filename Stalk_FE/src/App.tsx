@@ -92,6 +92,8 @@ const AppContent: React.FC = () => {
           <main className="flex-1 overflow-auto">
             <Routes>
               {/* Public Routes */}
+              <Route path="/experts" element={<ExpertsPage />} />
+              <Route path="/community" element={<CommunityPage />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/admin" element={
                 <AdminProtectedRoute>
@@ -106,8 +108,7 @@ const AppContent: React.FC = () => {
               <Route path="/SignupChoicePage" element={<SignupChoicePage />} />
               <Route path="/search" element={<SearchPage />} />              
               {/* Protected Routes */}
-              <Route path="/experts" element={<ExpertsPage />} />
-              <Route path="/community" element={<CommunityPage />} />
+              
               <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
               <Route path="/knowledge-board/:postId" element={<KnowledgeBoardPage />} />
 

@@ -1,36 +1,74 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.Stalk.project.api.user.dao.UserProfileMapper">
 
-    <!-- 사용자 프로필 조회 -->
-    <select id="findUserProfileById"
-            resultType="com.Stalk.project.api.user.dto.out.UserProfileResponseDto">
-        SELECT user_id as userId,
-               name,
-               contact,
-               email,
-               image   as profileImage,
-               role
-        FROM users
-        WHERE id = #{userId}
-          AND is_active = 1
-          AND deleted_at IS NULL
-    </select>
+  <!-- 사용자 프로필 조회 -->
+  <select id="findUserProfileById"
+    resultType="com.Stalk.project.api.user.dto.out.UserProfileResponseDto">
+    SELECT user_id as userId,
+           name,
+           contact,
+           email,
+           image   as profileImage,
+           role
+    FROM users
+    WHERE id = #{userId}
+      AND is_active = 1
+      AND deleted_at IS NULL
+  </select>
 
-    <!-- 사용자 정보 업데이트 쿼리 -->
-    <update id="updateUserProfile">
-        UPDATE users
-        <set>
-            <if test="updateDto.name != null and updateDto.name != ''">
-                name = #{updateDto.name},
-            </if>
-            <if test="updateDto.contact != null and updateDto.contact != ''">
-                contact = #{updateDto.contact},
-            </if>
-        </set>
-        WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
-    </update>
+  <!-- ID로 사용자 정보 조회 -->
+  <select id="findUserById" resultType="com.Stalk.project.api.signup.entity.User">
+    SELECT id,
+           name,
+           user_id,
+           email,
+           password,
+           contact,
+           nickname,
+           role,
+           image,
+           is_verified,
+           terms_agreed,
+           is_active,
+           deleted_at,
+           last_login_at,
+           created_at,
+           updated_at,
+           login_type
+    FROM users
+    WHERE id = #{userId}
+  </select>
+
+  <!-- 사용자 비활성화 (Soft Delete) -->
+  <update id="deactivateUser">
+    UPDATE users
+    SET is_active = 0,
+        deleted_at = NOW(),
+        user_id = CONCAT('deactivated_', id, '_', UNIX_TIMESTAMP()),
+        nickname = CONCAT('탈퇴한사용자_', id),
+        email = CONCAT('deactivated_', id, '@deleted.com'),
+        -- 소셜 로그인 사용자의 경우, 연동 해제 등 추가 처리가 필요할 수 있습니다.
+        contact = NULL, -- 연락처 정보 삭제
+        password = NULL -- 비밀번호 정보 삭제
+    WHERE id = #{userId}
+      AND is_active = 1
+  </update>
+
+  <!-- 사용자 정보 업데이트 쿼리 -->
+  <update id="updateUserProfile">
+    UPDATE users
+    <set>
+      <if test="updateDto.name != null and updateDto.name != ''">
+        name = #{updateDto.name},
+      </if>
+      <if test="updateDto.contact != null and updateDto.contact != ''">
+        contact = #{updateDto.contact},
+      </if>
+    </set>
+    WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
+  </update>
 
 </mapper>
