@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import AuthService from '../../services/authService';
 
 interface StockData {
   ticker: string;
@@ -27,14 +27,25 @@ const StockSearch: React.FC<StockSearchProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/stalk/search/${query}`
+      const response = await AuthService.authenticatedRequest(
+        `/api/stalk/search/${query}`
       );
-      if (response.data.success) {
-        setSearchResults(response.data.data);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '검색 실패');
+      }
+
+      const responseData = await response.json();
+      console.log('검색 결과:', responseData);
+      
+      if (responseData.success && responseData.data) {
+        setSearchResults(responseData.data);
+      } else {
+        setSearchResults([]);
       }
     } catch (error) {
-      console.error('Error searching stocks:', error);
+      console.error('주식 검색 오류:', error);
       setSearchResults([]);
     } finally {
       setIsLoading(false);

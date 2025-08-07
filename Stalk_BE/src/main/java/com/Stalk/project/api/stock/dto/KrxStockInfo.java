@@ -30,6 +30,19 @@ public class KrxStockInfo {
     @JsonProperty("LIST_SHRS")
     private String listedShares;
     
+    // Additional fields for historical data
+    @JsonProperty("TRD_DD")
+    private String tradeDate;
+    
+    @JsonProperty("TDD_OPNPRC")
+    private String openPrice;
+    
+    @JsonProperty("TDD_HGPRC")
+    private String highPrice;
+    
+    @JsonProperty("TDD_LWPRC")
+    private String lowPrice;
+    
     // Constructors
     public KrxStockInfo() {}
     
@@ -104,5 +117,37 @@ public class KrxStockInfo {
     
     public void setListedShares(String listedShares) {
         this.listedShares = listedShares;
+    }
+    
+    public String getTradeDate() {
+        return tradeDate;
+    }
+    
+    public void setTradeDate(String tradeDate) {
+        this.tradeDate = tradeDate;
+    }
+    
+    public String getOpenPrice() {
+        return openPrice;
+    }
+    
+    public void setOpenPrice(String openPrice) {
+        this.openPrice = openPrice;
+    }
+    
+    public String getHighPrice() {
+        return highPrice;
+    }
+    
+    public void setHighPrice(String highPrice) {
+        this.highPrice = highPrice;
+    }
+    
+    public String getLowPrice() {
+        return lowPrice;
+    }
+    
+    public void setLowPrice(String lowPrice) {
+        this.lowPrice = lowPrice;
     }
 }
