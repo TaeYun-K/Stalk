@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import Navbar from '@/components/navbar';
 import Sidebar from '@/components/sidebar';
-import Footer from '@/components/footer';
 import ExpertProfileImage from '@/assets/expert_profile_image.png';
 import certificationExample from '@/assets/images/dummy/certification_example.svg';
 import AuthService from '@/services/authService';
@@ -29,6 +28,11 @@ interface QualificationEntry {
   acquisitionDate: string;
   serialNumber: string;
 }
+
+const parseLocalDate = (dateString: string): Date => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
 
 const ExpertsIntroductionRegistrationPage: React.FC = () => {
   const [profileImage, setProfileImage] = useState<File | null>(null);
@@ -111,10 +115,36 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   // 각 날짜별 시간 슬롯 설정 저장
   const [dateTimeSlots, setDateTimeSlots] = useState<Record<string, string[]>>({});
   
-  // 초기 시간 슬롯 설정 (모든 날짜는 기본적으로 차단할 시간 없음)
+  // 초기 시간 슬롯 설정 및 기본 운영 날짜 설정
   React.useEffect(() => {
     // 기본값: 모든 날짜에서 차단할 시간 없음 (빈 배열 = 모든 시간 예약 가능)
     setDateTimeSlots({});
+    
+    // 현재 달의 평일을 기본 운영 날짜로 설정
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    
+    const defaultOperatingDates: Record<string, 'operating' | 'closed' | 'inactive'> = {};
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const todayDate = new Date(today);
+      todayDate.setHours(0, 0, 0, 0);
+      
+      // 오늘 이후의 평일만 기본 운영으로 설정
+      const dayOfWeek = date.getDay();
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= todayDate) {
+        const dateKey = date.toISOString().split('T')[0];
+        defaultOperatingDates[dateKey] = 'operating';
+      }
+    }
+    
+    setDateStatus(defaultOperatingDates);
+    console.log('기본 운영 날짜 설정:', defaultOperatingDates);
   }, []);
   
   // 평일 시간 슬롯 (모두 활성화된 상태로 시작)
@@ -453,11 +483,45 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
   };
 
   const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
+    
+    // 새로운 달로 이동 시 해당 달의 평일을 기본 운영 날짜로 추가
+    updateDefaultOperatingDatesForMonth(newMonth);
   };
 
   const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1);
+    setCurrentMonth(newMonth);
+    
+    // 새로운 달로 이동 시 해당 달의 평일을 기본 운영 날짜로 추가
+    updateDefaultOperatingDatesForMonth(newMonth);
+  };
+
+  const updateDefaultOperatingDatesForMonth = (month: Date) => {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const newOperatingDates: Record<string, 'operating' | 'closed' | 'inactive'> = {};
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, monthIndex, day);
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      
+      // 오늘 이후의 평일만 기본 운영으로 설정
+      const dayOfWeek = date.getDay();
+      const dateKey = date.toISOString().split('T')[0];
+      
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today && !dateStatus[dateKey]) {
+        newOperatingDates[dateKey] = 'operating';
+      }
+    }
+    
+    setDateStatus(prev => ({ ...prev, ...newOperatingDates }));
   };
 
   const handleToday = () => {
@@ -647,9 +711,40 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
 
       // 차단된 시간 설정 저장 (각 운영 날짜별로)
       console.log('Submitting blocked times...');
-      const operatingDates = Object.entries(dateStatus).filter(([_, status]) => status === 'operating');
       
-      if (operatingDates.length === 0) {
+      // 실제 운영 날짜 + 기본 운영 날짜(현재 달 평일) 확인
+      const explicitOperatingDates = Object.entries(dateStatus).filter(([_, status]) => status === 'operating');
+      
+      // 기본 운영 날짜도 추가 (현재 달의 평일 중 dateStatus에 없는 것들)
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth();
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      
+      const implicitOperatingDates: [string, 'operating'][] = [];
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(currentYear, currentMonth, day);
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const todayDate = new Date(today);
+        todayDate.setHours(0, 0, 0, 0);
+        
+        // 오늘 이후의 평일이면서 dateStatus에 명시적으로 설정되지 않은 경우
+        const dayOfWeek = date.getDay();
+        const dateKey = date.toISOString().split('T')[0];
+        
+        if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= todayDate && !dateStatus[dateKey]) {
+          implicitOperatingDates.push([dateKey, 'operating']);
+        }
+      }
+      
+      const allOperatingDates = [...explicitOperatingDates, ...implicitOperatingDates];
+      console.log('명시적 운영 날짜:', explicitOperatingDates);
+      console.log('암시적 운영 날짜:', implicitOperatingDates);
+      console.log('전체 운영 날짜:', allOperatingDates);
+      
+      if (allOperatingDates.length === 0) {
         alert('운영 시간을 설정해주세요. 최소 하나의 날짜는 운영으로 설정되어야 합니다.');
         return;
       }
@@ -658,35 +753,47 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       const allTimeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
       const processedDates = new Set<string>();
 
-      // 1. 운영 날짜들 처리
-      for (const [dateKey, _] of operatingDates) {
+      // 1. 운영 날짜들 처리 (과거 날짜 포함)
+      for (const [dateKey, _] of allOperatingDates) {
         const dateSpecificTimeSlots = dateTimeSlots[dateKey] || [];
-        const date = new Date(dateKey);
+        const date = parseLocalDate(dateKey);
         
-        // 오늘 이후의 현재 달 평일인지 확인
+        // 날짜 검증
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const targetDate = new Date(date);
         targetDate.setHours(0, 0, 0, 0);
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth();
-        const dateYear = date.getFullYear();
-        const dateMonth = date.getMonth();
-        const dayOfWeek = date.getDay();
-        const isCurrentMonthWeekdayAfterToday = dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today;
         
         let blockedTimes: string[];
         const dateStatus = getDateStatus(date);
+        const isPastDate = targetDate < today;
         
-        if (dateStatus === 'operating') {
-          // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
-          blockedTimes = dateSpecificTimeSlots;
+        if (isPastDate) {
+          // 과거 날짜: 잠금된 시간들을 차단 시간으로 처리
+          console.log(`Processing past operating date ${dateKey}: using locked time slots as blocked times`);
+          
+          // 과거 날짜의 현재 시간 설정을 가져와서 차단 시간으로 설정
+          const lockedTimeSlots = dateSpecificTimeSlots.length > 0 ? dateSpecificTimeSlots : [];
+          
+          if (dateStatus === 'operating') {
+            // 과거 운영일: 현재 설정된 시간들이 차단된 시간
+            blockedTimes = lockedTimeSlots;
+          } else {
+            // 과거 휴무일: 모든 시간이 차단됨
+            blockedTimes = allTimeSlots;
+          }
         } else {
-          // 휴무일: 모든 시간이 차단됨
-          blockedTimes = allTimeSlots;
+          // 미래 날짜: 기존 로직 유지
+          if (dateStatus === 'operating') {
+            // 운영일: 선택된 시간들이 차단된 시간 (선택 = 차단, 미선택 = 예약 가능)
+            blockedTimes = dateSpecificTimeSlots;
+          } else {
+            // 휴무일: 모든 시간이 차단됨
+            blockedTimes = allTimeSlots;
+          }
         }
         
-        console.log(`Processing operating date ${dateKey}: blockedTimes =`, blockedTimes);
+        console.log(`Processing ${isPastDate ? 'past' : 'future'} operating date ${dateKey}: blockedTimes =`, blockedTimes);
         
         const success = await submitBlockedTimes(dateKey, blockedTimes);
         if (!success) {
@@ -697,21 +804,31 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
         processedDates.add(dateKey);
       }
 
-      // 2. 비활성화된 날짜들 처리 (모든 시간 차단)
+      // 2. 비활성화된 날짜들 처리 (모든 시간 차단) - 과거 날짜 포함
       for (const [dateKey, status] of Object.entries(dateStatus)) {
         if (status === 'inactive' && !processedDates.has(dateKey)) {
-          console.log(`Processing inactive date ${dateKey}: blocking all times`);
+          const targetDate = parseLocalDate(dateKey);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const isPastDate = targetDate < today;
+          
+          console.log(`Processing ${isPastDate ? 'past' : 'future'} inactive date ${dateKey}: blocking all times`);
           
           const success = await submitBlockedTimes(dateKey, allTimeSlots);
           if (!success) {
             alert(`운영 시간 설정 저장에 실패했습니다: ${dateKey}`);
             return;
           }
+          processedDates.add(dateKey);
         }
       }
       console.log('Blocked times submitted successfully');
 
-      alert('운영 시간 설정이 완료되었습니다!');
+      // 처리된 날짜 수 계산 (과거 날짜 제외)
+      const processedCount = processedDates.size;
+      console.log(`Total processed dates: ${processedCount}`);
+
+      alert(`운영 시간 설정이 완료되었습니다!\n총 ${processedCount}개 날짜의 운영 시간이 설정되었습니다.`);
       
     } catch (error) {
       console.error('Registration error:', error);
@@ -728,11 +845,48 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       console.log(`Current user info before blocked times submission:`, userInfo);
       console.log(`Current user role:`, userInfo?.role);
       
-      // 토큰도 확인
+      // 역할 검증
+      if (userInfo?.role !== 'ADVISOR') {
+        console.error(`Invalid user role for blocked times submission: ${userInfo?.role}`);
+        return false;
+      }
+      
+      // 날짜 정보 로깅
+      const today = parseLocalDate(date);
+      const targetDate = parseLocalDate(date);
+      const isPastDate = targetDate < today;
+      
+      console.log(`Date info - Today: ${today.toISOString()}, Target: ${targetDate.toISOString()}, isPast: ${isPastDate}`);
+      
+      // 토큰 상태 확인
       const token = AuthService.getAccessToken();
-      console.log(`Current access token exists:`, !!token);
+      console.log(`🔑 토큰 존재:`, !!token);
+      
       if (token) {
-        console.log(`Token starts with:`, token.substring(0, 50) + '...');
+        // 토큰이 실제 JWT인지 확인
+        const isJWT = token.includes('.') && token.split('.').length === 3;
+        console.log(`🔍 JWT 형식:`, isJWT);
+        
+        if (isJWT) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log(`👤 사용자:`, payload.sub, '역할:', payload.role);
+            const expired = payload.exp * 1000 < Date.now();
+            console.log(`⏰ 토큰 만료:`, expired ? '만료됨' : '유효함');
+          } catch (e) {
+            console.error('❌ JWT 파싱 실패:', e);
+          }
+        } else {
+          console.warn(`⚠️ Mock 토큰 감지: ${token.substring(0, 30)}...`);
+          console.warn(`📝 해결방법: 로그아웃 후 다시 로그인하여 JWT 토큰을 받으세요.`);
+          
+          // Mock 토큰인 경우 자동으로 로그아웃 처리
+          console.log(`🔄 자동 로그아웃 처리 중...`);
+          AuthService.logout();
+          alert('Mock 토큰이 감지되어 자동으로 로그아웃됩니다. 다시 로그인해주세요.');
+          window.location.href = '/login';
+          return false;
+        }
       }
 
       const blockedTimesData: BlockedTimesRequest = {
@@ -742,17 +896,57 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
       console.log(`Submitting blocked times for ${date}:`, blockedTimes);
       console.log(`Request body:`, blockedTimesData);
 
+      console.log(`Making API call to: /api/advisors/blocked-times?date=${date}`);
+      console.log(`Request method: PUT`);
+      console.log(`Request body:`, JSON.stringify(blockedTimesData, null, 2));
+
       const response = await AuthService.authenticatedRequest(`/api/advisors/blocked-times?date=${date}`, {
         method: 'PUT', // PUT 메서드 사용 (백엔드 API에 맞춤)
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(blockedTimesData)
       });
 
+      console.log(`Response status for ${date}:`, response.status);
+      console.log(`Response ok for ${date}:`, response.ok);
+
       if (response.ok) {
-        console.log(`Blocked times submitted successfully for ${date}`);
+        const responseData = await response.text();
+        console.log(`Blocked times submitted successfully for ${date}:`, responseData);
         return true;
       } else {
         const errorText = await response.text();
         console.error(`Failed to submit blocked times for ${date}:`, response.status, errorText);
+        console.error(`Response headers:`, [...response.headers.entries()]);
+        
+        // 구체적인 에러 메시지 제공
+        let errorMessage = '';
+        switch (response.status) {
+          case 400:
+            if (errorText.includes('과거 날짜')) {
+              errorMessage = `과거 날짜(${date})는 차단할 수 없습니다.`;
+            } else if (errorText.includes('날짜 형식')) {
+              errorMessage = `날짜 형식이 올바르지 않습니다: ${date}`;
+            } else if (errorText.includes('예약된 시간')) {
+              errorMessage = `${date}에 이미 예약된 시간이 있어 차단할 수 없습니다.`;
+            } else {
+              errorMessage = `잘못된 요청입니다: ${errorText}`;
+            }
+            break;
+          case 401:
+            errorMessage = '인증이 필요합니다. 다시 로그인해주세요.';
+            break;
+          case 403:
+            errorMessage = '전문가만 접근 가능합니다.';
+            break;
+          case 404:
+            errorMessage = '존재하지 않거나 승인되지 않은 전문가입니다.';
+            break;
+          default:
+            errorMessage = `서버 오류가 발생했습니다 (${response.status}): ${errorText}`;
+        }
+        
+        console.error(`Detailed error for ${date}:`, errorMessage);
         return false;
       }
     } catch (error) {
@@ -1431,14 +1625,14 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
               </div>
             </div>
           </div>
-                             <button 
-                 onClick={handleSubmitAll}
-                 className="w-full py-3 mt-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
-               >
-                 등록하기
-               </button>
-        </div>
-      </div>
+            <button 
+                onClick={handleSubmitAll}
+                className="w-full py-3 mt-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+              >
+                등록하기
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

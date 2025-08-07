@@ -109,11 +109,8 @@ const ExpertDetailPage: React.FC = () => {
   const [availableTimesError, setAvailableTimesError] = useState<string | null>(null);
   const [availableTimes, setAvailableTimes] = useState<ApiTimeSlot[]>([]);
   
-  // 사용자 정보 (실제로는 API에서 가져올 데이터)
-  const userInfo = {
-    name: '김싸피',
-    contact: '010-0000-0000'
-  };
+  // 현재 전문가의 ID (URL 파라미터의 id)
+  const advisorId = id;
 
   // API 호출
   useEffect(() => {
@@ -164,8 +161,8 @@ const ExpertDetailPage: React.FC = () => {
   }, [id, navigate]);
 
   const [reservationForm, setReservationForm] = useState({
-    name: userInfo.name,
-    phone: userInfo.contact,
+    name: '',
+    phone: '',
     requestDetails: ''
   });
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -391,6 +388,29 @@ const ExpertDetailPage: React.FC = () => {
 
   const handleLoadMoreReviews = () => {
     setDisplayedReviews(prev => prev + 3);
+  };
+
+  const handleDeleteExpert = async () => {
+    if (!window.confirm('정말로 전문가 프로필을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+
+    try {
+      const response = await AuthService.authenticatedRequest(`/api/advisors/${advisorId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        alert('전문가 프로필이 성공적으로 삭제되었습니다.');
+        navigate('/experts');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '전문가 프로필 삭제에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Error deleting expert:', error);
+      alert(error instanceof Error ? error.message : '전문가 프로필 삭제 중 오류가 발생했습니다.');
+    }
   };
 
   // 달력 렌더링
@@ -645,7 +665,29 @@ const ExpertDetailPage: React.FC = () => {
                 </ul>
               </div>
               
-                                                           <button
+              {/* 현재 로그인한 사용자가 이 전문가인지 확인 */}
+              {(() => {
+                const currentUserInfo = AuthService.getUserInfo();
+                return currentUserInfo?.role === 'ADVISOR' && currentUserInfo?.name === expertData?.name;
+              })() ? (
+                <>
+                  {/* 전문가 본인인 경우 수정/삭제 버튼 */}
+                  <button
+                    onClick={() => navigate(`/expert-introduction-update/${advisorId}`)}
+                    className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
+                  >
+                    수정하기
+                  </button>
+                  <button
+                    onClick={handleDeleteExpert}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg"
+                  >
+                    삭제하기
+                  </button>
+                </>
+              ) : (
+                /* 다른 사용자인 경우 예약하기 버튼 */
+                <button
                   onClick={() => {
                     // 토큰 확인
                     const token = AuthService.getAccessToken();
@@ -655,9 +697,10 @@ const ExpertDetailPage: React.FC = () => {
                       return;
                     }
                     
+                    const currentUserInfo = AuthService.getUserInfo();
                     setReservationForm({
-                      name: userInfo.name,
-                      phone: userInfo.contact,
+                      name: currentUserInfo?.name || '',
+                      phone: currentUserInfo?.contact || '',
                       requestDetails: ''
                     });
                     setSelectedDate('');
@@ -671,6 +714,7 @@ const ExpertDetailPage: React.FC = () => {
                 >
                   예약하기
                 </button>
+              )}
             </div>
           </div>
         </div>
