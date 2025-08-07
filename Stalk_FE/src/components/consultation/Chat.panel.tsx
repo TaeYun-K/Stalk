@@ -5,6 +5,7 @@ export interface ChatMessage {
   sender: string;
   message: string;
   timestamp: Date;
+  type?: "system" | "user"; // 추가된 타입
 }
 
 interface ChatPanelProps {
@@ -21,7 +22,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   newMessage,
   setNewMessage,
   sendChatMessage,
-  currentUsername
+  currentUsername,
 }) => {
   return (
     <div className="flex flex-col h-full">
@@ -31,6 +32,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-3">
           {chatMessages.map((msg) => {
+              if (msg.type === "system") {
+                return (
+                <div key={msg.id} className="text-center text-xs text-gray-400 my-2">
+                    {msg.message}
+                </div>
+                );
+            }
             const isMine = msg.sender === currentUsername; // 현재 사용자 이름을 가져오는 함수 필요
 
             return (
