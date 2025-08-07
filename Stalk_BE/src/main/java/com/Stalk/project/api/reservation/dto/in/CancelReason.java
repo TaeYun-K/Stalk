@@ -24,10 +24,17 @@ public enum CancelReason {
         return description;
     }
 
+    /**
+     * 알림이나 UI에 사용할 표시용 이름 반환
+     */
+    public String getDisplayName() {
+        return this.description;
+    }
+
     @JsonCreator
     public static CancelReason fromString(String value) {
         for (CancelReason reason : CancelReason.values()) {
-            if (reason.name().equals(value) || reason.description.equals(value)) {
+            if (reason.name().equalsIgnoreCase(value) || reason.description.equals(value)) {
                 return reason;
             }
         }

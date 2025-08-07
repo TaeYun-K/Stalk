@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export interface ChatMessage {
   id: string;
   sender: string;
   message: string;
   timestamp: Date;
+  type?: "system" | "user"; // 추가된 타입
 }
 
 interface ChatPanelProps {
@@ -12,6 +13,7 @@ interface ChatPanelProps {
   newMessage: string;
   setNewMessage: (value: string) => void;
   sendChatMessage: () => void;
+  currentUsername: string; 
 }
 
 
@@ -20,25 +22,65 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   newMessage,
   setNewMessage,
   sendChatMessage,
+  currentUsername,
 }) => {
-  return (
+
+//채팅 스크롤 유지
+const scrollContainerRef = useRef<HTMLDivElement>(null);
+const messagesEndRef = useRef<HTMLDivElement>(null);
+
+
+// 채팅창 스크롤이 생기면 자동으로 스크롤
+useEffect(() => {
+    const container = scrollContainerRef.current;
+
+    if (!container || !messagesEndRef.current) return;
+
+    const isScrollable = container.scrollHeight > container.clientHeight;
+
+    if (isScrollable) {
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+}, [chatMessages]);
+
+return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-gray-700">
         <h3 className="text-lg font-semibold">채팅</h3>
       </div>
-      <div className="flex-1 p-4 overflow-y-auto">
+      <div className="flex-1 p-4 overflow-y-auto" ref={scrollContainerRef}>
         <div className="space-y-3">
-          {chatMessages.map((msg) => (
-            <div key={msg.id} className="bg-gray-700 rounded-lg p-3">
-              <div className="flex justify-between items-start mb-1">
-                <span className="text-sm font-medium">{msg.sender}</span>
-                <span className="text-xs text-gray-400">
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </span>
-              </div>
-              <p className="text-sm text-gray-200">{msg.message}</p>
-            </div>
-          ))}
+          {chatMessages.map((msg) => {
+              if (msg.type === "system") {
+                return (
+                <div key={msg.id} className="text-center text-xs text-gray-400 my-2">
+                    {msg.message}
+                </div>
+                );
+            }
+            const isMine = msg.sender === currentUsername; // 현재 사용자 이름을 가져오는 함수 필요
+
+            return (
+                <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div
+                    className={`max-w-[70%] px-4 py-2 rounded-lg ${
+                    isMine
+                        ? "bg-blue-600 text-white rounded-br-none"
+                        : "bg-gray-700 text-white rounded-bl-none"
+                    } break-words whitespace-pre-wrap`}
+                >
+                    <div className="text-sm font-medium mb-1">{msg.sender}</div>
+                    <p className="text-sm">{msg.message}</p>
+                    <div className="text-right text-xs text-gray-300 mt-1">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+                </div>
+            );
+            })}
+            <div ref={messagesEndRef} />
         </div>
       </div>
       <div className="p-4 border-t border-gray-700">

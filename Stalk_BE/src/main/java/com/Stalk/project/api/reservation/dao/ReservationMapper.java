@@ -1,6 +1,7 @@
 package com.Stalk.project.api.reservation.dao;
 
 import com.Stalk.project.api.reservation.dto.ReservationCancelCheckDto;
+import com.Stalk.project.api.reservation.dto.ReservationCancelWithPaymentCheckDto;
 import com.Stalk.project.api.reservation.dto.in.CancelReason;
 import com.Stalk.project.api.payment.dto.PaymentReservationDto;
 import com.Stalk.project.api.payment.dto.UserInfoDto;
@@ -139,4 +140,29 @@ public interface ReservationMapper {
       @Param("cancelReason") String cancelReason,
       @Param("canceledAt") String canceledAt
   );
+
+  /**
+   * 예약 상세 조회 (취소용, 결제 정보 포함)
+   */
+  ReservationCancelWithPaymentCheckDto findReservationForCancelWithPayment(@Param("reservationId") Long reservationId);
+
+  /**
+   * 예약 취소 + 결제 정보 업데이트
+   */
+  int cancelReservationWithPayment(
+      @Param("reservationId") Long reservationId,
+      @Param("canceledBy") Long canceledBy,
+      @Param("cancelReason") String cancelReason,
+      @Param("cancelMemo") String cancelMemo,
+      @Param("canceledAt") LocalDateTime canceledAt
+  );
+
+  /**
+   * 예약 삭제
+   */
+  int deleteReservation(@Param("reservationId") Long reservationId);
+
+  Long getReservationIdByOrderId(String orderId);
+
+  boolean isValidPendingReservation(@Param("reservationId") Long reservationId, @Param("userId") Long userId);
 }

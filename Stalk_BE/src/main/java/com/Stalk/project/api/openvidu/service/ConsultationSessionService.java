@@ -25,6 +25,8 @@ public class ConsultationSessionService {
   private final Map<String, Instant> createdAtMap = new ConcurrentHashMap<>();
 
   private final ConsultationSessionMapper consultationSessionMapper;
+  private final VideoRecordingService videoRecordingService;
+
 
   /**
    * 토큰 발급 메서드
@@ -135,6 +137,14 @@ public class ConsultationSessionService {
     String sessionId = session.getSessionId();
 
     try {
+
+      if (session.isBeingRecorded()) {
+        Recording recording = openVidu.stopRecording(sessionId);
+        videoRecordingService.saveStoppedRecording(recording);
+      }
+
+      session.close();
+
       // 1) 메모리에서 세션 정보 제거
       sessionMap.remove(consultationId);
       createdAtMap.remove(consultationId);

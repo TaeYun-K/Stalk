@@ -18,4 +18,5 @@ public class PaymentPrepareResponseDto {
     private String successUrl;       // 성공 URL
     private String failUrl;          // 실패 URL
     private String clientKey;        // 토스 클라이언트 키
+    private Long reservationId;      // ⭐ 추가: 생성된 예약 ID
 }

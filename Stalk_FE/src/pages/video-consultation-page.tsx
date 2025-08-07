@@ -40,6 +40,7 @@ interface ChatMessage {
   sender: string;
   message: string;
   timestamp: Date;
+  type : "system" | "user";
 }
 
 type HoveredButton =
@@ -63,22 +64,25 @@ const TIMER_INTERVAL_MS = 1000;
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
+
+  // OpenVidu 입장 로직 관련 상태
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
-
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [ov, setOv] = useState<OpenVidu | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(true);
 
+  // 상담 관련 상태
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
@@ -86,7 +90,6 @@ const VideoConsultationPage: React.FC = () => {
   const [showChat, setShowChat] = useState<boolean>(false);
   const [showStockChart, setShowStockChart] = useState<boolean>(false);
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
-  const [chartPeriod, setChartPeriod] = useState<number>(30); // Default to 30 days (1 month)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -97,14 +100,143 @@ const VideoConsultationPage: React.FC = () => {
   const [showParticipantFaces, setShowParticipantFaces] =
     useState<boolean>(true);
 
-  // Chart-focused mode states
-  const [isChartFocusedMode, setIsChartFocusedMode] = useState<boolean>(false);
-  const [isVideoMinimized, setIsVideoMinimized] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [searchResults, setSearchResults] = useState<StockData[]>([]);
-  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
-  const [chartTabs, setChartTabs] = useState<{id: string; ticker: string; name: string}[]>([]);
-  const [activeChartTab, setActiveChartTab] = useState<string>("");
+  
+  useEffect(() => {
+    console.log('Component mounted, checking conditions for initialization...');
+    console.log('ovToken exists:', !!ovToken);
+    console.log('consultationId:', consultationId);
+    console.log('userRole:', userInfo?.role);
+
+    // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
+    if (ovToken && consultationId) {
+    const initializeConsultation = async () => {
+      try {
+        console.log('Starting consultation initialization...');
+        
+        // 1. 미디어 권한 확인
+        const hasPermissions = await checkMediaPermissions();
+        if (!hasPermissions) {
+          console.warn('Media permissions denied, cannot proceed');
+          return;
+        }
+
+        // 2. 사용자 정보 가져오기
+        console.log('Fetching user info...');
+        await fetchUserInfo();
+
+        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
+        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
+        
+      } catch (error) {
+        console.error('Error during consultation initialization:', error);
+        alert('상담 초기화 중 오류가 발생했습니다.');
+      }
+    };
+
+    initializeConsultation();
+    } else {
+      console.warn('Missing required data for consultation:', {
+        hasToken: !!ovToken,
+        hasConsultationId: !!consultationId
+    });
+    }
+  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
+
+  // 사용자 로딩 후 OpenVidu 초기화
+  useEffect(() => {
+    console.log('User info state changed:', {
+      isLoadingUserInfo,
+      hasUserInfo: !!userInfo,
+      hasToken: !!ovToken,
+      hasSession: !!session
+    });
+
+    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
+    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
+      console.log('All conditions met, initializing OpenVidu...');
+      initializeOpenVidu();
+    }
+  }, [isLoadingUserInfo, userInfo, ovToken, session]);
+
+  // 타이머 업데이트
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, TIMER_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 로컬 비디오 렌더링을 위한 useEffect
+  useEffect(() => {
+    if (publisher && isVideoEnabled) {
+      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
+      if (videoElement) {
+        videoElement.srcObject = publisher.stream.getMediaStream();
+        videoElement.play().catch((e) => {
+          console.error("Error playing local video:", e);
+        });
+      }
+    }
+  }, [publisher]);
+
+  // 로컬 비디오 연결 & 차트 전환 시 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces)) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100);
+    }
+  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces]);
+
+  // 실시간 채팅 읽음 상태 변경
+  useEffect(() => {
+  if (showChat) {
+    setHasUnreadMessages(false); // ✅ 열자마자 알림 꺼짐
+    }
+  }, [showChat]);
+
+
+
+
+  // 페이지 이탈 방지 훅
+  const usePreventNavigation = (enabled: boolean) => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      if (!enabled) return;
+
+      // 🔒 1. 브라우저 새로고침 / 닫기 방지
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = '';
+      };
+
+      // 🔒 2. 뒤로가기 방지
+      const handlePopState = (e: PopStateEvent) => {
+        e.preventDefault();
+        // 뒤로가기 막고 알림창 보여주기 (선택)
+        const confirmLeave = window.confirm('상담이 종료되지 않았습니다. 정말 나가시겠습니까?');
+        if (confirmLeave) {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          navigate(-1); // 실제 뒤로가기
+        } else {
+          // ❌ 뒤로가기 중단: 앞으로 한 번 더 이동 (뒤로 간 걸 다시 앞으로 감)
+          window.history.pushState(null, '', window.location.href);
+        }
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('popstate', handlePopState);
+      // popstate 트리거를 위해 현재 상태 push (뒤로가기 가능하게 만들어줘야 감지 가능)
+      window.history.pushState(null, '', window.location.href);
+
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, [enabled, navigate]);
+  };
+  usePreventNavigation(true);
 
   // 참가자 역할 구분을 위한 함수들
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -165,72 +297,6 @@ const VideoConsultationPage: React.FC = () => {
     console.log('fetchUserInfo completed');
     }
   };
-
-  useEffect(() => {
-  console.log('Component mounted, checking conditions for initialization...');
-  console.log('ovToken exists:', !!ovToken);
-  console.log('consultationId:', consultationId);
-  console.log('userRole:', userInfo?.role);
-
-  // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
-  if (ovToken && consultationId) {
-    const initializeConsultation = async () => {
-      try {
-        console.log('Starting consultation initialization...');
-        
-        // 1. 미디어 권한 확인
-        const hasPermissions = await checkMediaPermissions();
-        if (!hasPermissions) {
-          console.warn('Media permissions denied, cannot proceed');
-          return;
-        }
-
-        // 2. 사용자 정보 가져오기
-        console.log('Fetching user info...');
-        await fetchUserInfo();
-
-        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
-        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
-        
-      } catch (error) {
-        console.error('Error during consultation initialization:', error);
-        alert('상담 초기화 중 오류가 발생했습니다.');
-      }
-    };
-
-    initializeConsultation();
-  } else {
-    console.warn('Missing required data for consultation:', {
-      hasToken: !!ovToken,
-      hasConsultationId: !!consultationId
-    });
-  }
-  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
-
-  // 사용자 정보 로딩 완료 후 OpenVidu 초기화
-  useEffect(() => {
-    console.log('User info state changed:', {
-      isLoadingUserInfo,
-      hasUserInfo: !!userInfo,
-      hasToken: !!ovToken,
-      hasSession: !!session
-    });
-
-    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
-    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
-      console.log('All conditions met, initializing OpenVidu...');
-      initializeOpenVidu();
-    }
-  }, [isLoadingUserInfo, userInfo, ovToken, session]);
-
-
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, TIMER_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, []);
 
   const getDuration = (): string => {
     const diff = Math.floor(
@@ -308,6 +374,10 @@ const VideoConsultationPage: React.FC = () => {
             return;
           }
 
+          if(!showChat) {
+            setHasUnreadMessages(true);
+          }
+
           try {
             const receivedMessage: ChatMessage = JSON.parse(event.data);
 
@@ -327,12 +397,32 @@ const VideoConsultationPage: React.FC = () => {
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
         });
   
-        session.on('connectionCreated', (event) => {
-          console.log('Connection created:', event.connection.connectionId);
+        session.on('connectionCreated', (event) => { 
+          const raw = event.connection.data;
+          const userData = JSON.parse(raw.split("%/%")[0]);
+          const username = userData.userData || "익명";
+          const msg: ChatMessage = {
+            id: `sys-${Date.now()}`,
+            sender: "system",
+            message: `${username}님이 입장했습니다.`,
+            timestamp: new Date(),
+            type: "system",
+          };
+          setChatMessages((prev) => [...prev, msg]);      
         });
   
         session.on('connectionDestroyed', (event) => {
-          console.log('Connection destroyed:', event.connection.connectionId);
+            const raw = event.connection.data;
+            const userData = JSON.parse(raw.split("%/%")[0]);
+            const username = userData.userData || "익명";          
+            const msg: ChatMessage = {
+              id: `sys-${Date.now()}`,
+              sender: "system",
+              message: `${username}님이 퇴장했습니다.`,
+              timestamp: new Date(),
+              type: "system",
+            };
+            setChatMessages((prev) => [...prev, msg]);
         });
   
         // 사용자 정보를 포함한 연결 데이터 준비
@@ -411,43 +501,6 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 로컬 비디오 렌더링을 위한 useEffect
-  useEffect(() => {
-    if (publisher && isVideoEnabled) {
-      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
-      if (videoElement) {
-        videoElement.srcObject = publisher.stream.getMediaStream();
-        videoElement.play().catch((e) => {
-          console.error("Error playing local video:", e);
-        });
-      }
-    }
-  }, [publisher]);
-
-
-  // 로컬 비디오 연결 & 차트 전환 시 연결
-  useEffect(() => {
-    if (publisher && isVideoEnabled) {
-      setTimeout(() => {
-        if (showStockChart) {
-          // Chart mode - attach to sidebar video
-          const sidebarVideo = document.getElementById("local-video-element-sidebar") as HTMLVideoElement;
-          if (sidebarVideo && publisher.stream) {
-            const mediaStream = publisher.stream.getMediaStream();
-            if (mediaStream) {
-              sidebarVideo.srcObject = mediaStream;
-              sidebarVideo.play().catch(e => console.error('Error playing sidebar video:', e));
-            }
-          }
-        } else {
-          // Normal mode - attach to main video
-          attachLocalVideo(publisher);
-        }
-      }, 100);
-    }
-  }, [publisher, isVideoEnabled, showStockChart]);
-
-
   // 구독자 비디오 연결 함수
   const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
     const videoElement = document.getElementById(`subscriber-video-${index}`) as HTMLVideoElement;
@@ -502,7 +555,8 @@ const VideoConsultationPage: React.FC = () => {
     const token = AuthService.getAccessToken();
     try {
       // 1) 백엔드에 세션 종료 POST 요청
-      await axios.post(`/api/consultations/${consultationId}/session/close`, {
+      await axios.post(`/api/consultations/${consultationId}/session/close`, 
+        {}, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -550,7 +604,7 @@ const VideoConsultationPage: React.FC = () => {
         }
       });
 
-      // 5) 상태 초기화
+      // 4) 상태 초기화
       navigate(`/mypage`);
     }
   };
@@ -613,22 +667,6 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 컴포넌트 언마운트 시 리소스 정리
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      leaveSession();
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (session) {
-        leaveSession();
-      }
-    };
-  }, [session, consultationId, navigate]);
-
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
     try {
@@ -672,6 +710,7 @@ const VideoConsultationPage: React.FC = () => {
         sender: getCurrentUserDisplayName(),
         message: newMessage.trim(),
         timestamp: new Date(),
+        type: "user",
       };
       setChatMessages((prev) => [...prev, message]);
       setNewMessage("");
@@ -749,64 +788,6 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // Chart mode helper functions
-  const handleStockSearch = (query: string) => {
-    setSearchQuery(query);
-    
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    // Use existing stock search functionality - this will be handled by the StockSearch component
-  };
-
-  const handleStockSelect = (stock: StockData) => {
-    const tabId = `${stock.ticker}-${Date.now()}`;
-    const newTab = {
-      id: tabId,
-      ticker: stock.ticker,
-      name: stock.name
-    };
-    
-    setChartTabs(prev => [...prev, newTab]);
-    setActiveChartTab(tabId);
-    setSelectedStock(stock);
-    setSearchQuery("");
-    setSearchResults([]);
-    setIsSearchFocused(false);
-  };
-
-  const closeChartTab = (tabId: string) => {
-    setChartTabs(prev => prev.filter(tab => tab.id !== tabId));
-    if (activeChartTab === tabId) {
-      const remainingTabs = chartTabs.filter(tab => tab.id !== tabId);
-      setActiveChartTab(remainingTabs.length > 0 ? remainingTabs[0].id : "");
-      if (remainingTabs.length > 0) {
-        const activeTab = remainingTabs[0];
-        setSelectedStock({ ticker: activeTab.ticker, name: activeTab.name });
-      } else {
-        setSelectedStock(null);
-      }
-    }
-  };
-
-  const toggleChartFocusedMode = () => {
-    setIsChartFocusedMode(!isChartFocusedMode);
-    if (!isChartFocusedMode) {
-      // Entering chart mode - disable other panels
-      setShowChat(false);
-      setShowParticipants(false);
-      setShowStockChart(true);
-    } else {
-      // Exiting chart mode - reset to normal mode
-      setShowStockChart(false);
-      setIsVideoMinimized(false);
-    }
-  };
-
-  const activeChart = chartTabs.find(tab => tab.id === activeChartTab);
-
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col">
       <div className="bg-gray-800 px-6 py-4 flex items-center justify-between border-b border-gray-700">
@@ -856,56 +837,7 @@ const VideoConsultationPage: React.FC = () => {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {isChartFocusedMode ? (
-          /* Chart-Focused Mode Layout */
-          <div className="flex-1 flex flex-col bg-gray-850">
-            {/* Main Chart Content - Full Screen */}
-            <div className="flex-1 relative">
-              {selectedStock ? (
-                <div className="absolute inset-0">
-                  <div className="h-full flex flex-col overflow-hidden">
-                    {/* Chart Content */}
-                    <div className="flex-1 p-4 overflow-hidden">
-                      <div className="h-full">
-                        <StockChart 
-                          selectedStock={{
-                            ticker: selectedStock.ticker,
-                            name: selectedStock.name
-                          }}
-                          period={chartPeriod}
-                          chartType="line"
-                          darkMode={true} 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <svg className="w-20 h-20 mx-auto mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    <p className="text-gray-400 mb-2">차트를 선택해주세요</p>
-                    <p className="text-sm text-gray-500">하단 검색창에서 종목을 검색하세요</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Chat Panel for Chart Mode */}
-            {showChat && (
-              <div className="w-80 bg-gray-800 border-l border-gray-700">
-                <ChatPanel
-                  chatMessages={chatMessages}
-                  newMessage={newMessage}
-                  setNewMessage={setNewMessage}
-                  sendChatMessage={sendChatMessage}
-                />
-              </div>
-            )}
-          </div>
-        ) : !showStockChart ? (
+        {!showStockChart ? (
           <div className="flex-1 p-4">
             <div className="h-full grid grid-cols-2 gap-4">
               {/* 구독자 비디오 렌더링 */}
@@ -1090,214 +1022,179 @@ const VideoConsultationPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex">
-            {/* Chart Section - Takes most of the space */}
-            <div className="flex-1 flex flex-col p-4">
-              <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col overflow-hidden">
-                {/* Chart Header */}
-                <div className="p-4 border-b border-gray-700">
-                  <div className="space-y-3">
-                    <StockSearch
-                      onStockSelect={setSelectedStock}
-                      darkMode={true}
-                    />
-                    
-                    {/* Period selection buttons */}
-                    {selectedStock && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setChartPeriod(7)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              chartPeriod === 7
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            1주일
-                          </button>
-                          <button
-                            onClick={() => setChartPeriod(30)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              chartPeriod === 30
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            1개월
-                          </button>
-                          <button
-                            onClick={() => setChartPeriod(90)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              chartPeriod === 90
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            3개월
-                          </button>
-                          <button
-                            onClick={() => setChartPeriod(180)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              chartPeriod === 180
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            6개월
-                          </button>
-                          <button
-                            onClick={() => setChartPeriod(365)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              chartPeriod === 365
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            1년
-                          </button>
-                        </div>
-                        <div className="text-sm text-gray-400">
-                          {selectedStock.name} ({selectedStock.ticker})
-                        </div>
-                      </div>
-                    )}
-                  </div>
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 p-4 min-h-0">
+              <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
+                <div className="mb-4">
+                  <StockSearch
+                    onStockSelect={setSelectedStock}
+                    darkMode={true}
+                  />
                 </div>
-                
-                {/* Chart Content */}
-                <div className="flex-1 p-4 overflow-hidden">
-                  {selectedStock ? (
-                    <div className="h-full">
-                      <StockChart 
-                        selectedStock={{
-                          ticker: selectedStock.ticker,
-                          name: selectedStock.name
-                        }}
-                        period={chartPeriod}
-                        chartType="line"
-                        darkMode={true} 
-                      />
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-gray-500">
-                      <div className="text-center">
-                        <svg
-                          className="w-20 h-20 mx-auto mb-4 text-gray-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                          />
-                        </svg>
-                        <p className="text-xl font-medium mb-2 text-gray-300">주식 차트</p>
-                        <p className="text-base text-gray-500">상단 검색창에서 종목을 검색하세요</p>
-                      </div>
-                    </div>
-                  )}
+                <div className="flex-1 overflow-hidden">
+                  <StockChart selectedStock={selectedStock} darkMode={true} />
                 </div>
               </div>
             </div>
 
-            {/* Participants Sidebar */}
-            <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-              <div className="p-4 border-b border-gray-700">
-                <h3 className="text-sm font-semibold text-gray-300">참가자</h3>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div
+              className={`bg-gradient-to-b from-gray-900 to-gray-950 border-t-2 border-gray-700 transition-all duration-300 ease-in-out shadow-inner ${
+                showParticipantFaces ? "h-44" : "h-8"
+              }`}
+            >
+              <div className="relative h-full">
+                {/* Discord-style toggle button */}
+                <button
+                  onClick={() => setShowParticipantFaces(!showParticipantFaces)}
+                  className="absolute left-1/2 transform -translate-x-1/2 -top-4 z-20 bg-gray-800 hover:bg-gray-700 rounded-full p-1.5 border-2 border-gray-600 hover:border-gray-500 transition-all duration-200 group shadow-lg"
+                  title={showParticipantFaces ? "참가자 숨기기" : "참가자 보기"}
+                >
+                  <svg
+                    className={`w-5 h-5 text-gray-300 group-hover:text-white transition-all duration-200 ${
+                      showParticipantFaces ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 15l7-7 7 7"
+                    />
+                  </svg>
+                </button>
 
-                {/* 구독자 비디오 미니뷰 */}
-                {subscribers.map((subscriber) => {
-                  const name = getParticipantName(subscriber);
-                  const role = getParticipantRole(subscriber);
-                  const roleName = getRoleDisplayName(role);
+                {showParticipantFaces && (
+                  <div className="flex items-center justify-between p-4 h-full">
+                    <div className="flex items-center space-x-4 overflow-x-auto flex-1">
+                      {/* 구독자 비디오 미니뷰 */}
+                      {subscribers.map((subscriber) => {
+                      const name = getParticipantName(subscriber);
+                      const role = getParticipantRole(subscriber);
+                      const roleName = getRoleDisplayName(role);
 
                       const connectionId = subscriber.stream.connection.connectionId;
                       const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
 
-                  return (
-                    <div key={subscriber.stream.streamId} className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
-                      <video
-                        ref={(videoElement) => {
-                          if (videoElement && subscriber.stream) {
-                            const stream = subscriber.stream.getMediaStream();
-                            if (videoElement.srcObject !== stream) {
-                              videoElement.srcObject = stream;
-                              videoElement.play().catch(console.error);
-                            }
-                          }
-                        }}
-                        autoPlay
-                        playsInline
-                        muted={false}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-xs font-medium text-white">
-                        {name} ({roleName})
-                      </div>
-                      <div className="absolute top-2 right-2 flex space-x-1">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-                  )})}
-
-                {/* Local Video */}
-                <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
-                  {(publisher || localStream) && (isVideoEnabled || isAudioEnabled) ? (
-                    <div className="w-full h-full">
-                      <video
-                        id="local-video-element-sidebar"
-                        autoPlay
-                        muted
-                        playsInline
-                        className={`w-full h-full object-cover ${!isVideoEnabled ? "hidden" : ""}`}
-                        style={{ transform: "scaleX(-1)" }}
-                      />
-                      {!isVideoEnabled && (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center text-2xl font-bold text-gray-300">
-                            {getCurrentUserDisplayName()[0]}
+                      return (
+                        <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                          <video
+                            ref={(videoElement) => {
+                              if (videoElement && subscriber.stream) {
+                                const stream = subscriber.stream.getMediaStream();
+                                if (videoElement.srcObject !== stream) {
+                                  videoElement.srcObject = stream;
+                                  videoElement.play().catch(console.error);
+                                  console.log(`▶️ 구독자 비디오 최초 연결`);
+                                }
+                              }
+                            }}
+                            id={`subscriber-mini-video-${subscriber.stream.streamId}`}
+                            autoPlay
+                            playsInline
+                            muted={false}
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                          <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
+                            {name} ({roleName})
+                          </div>
+                          <div className="absolute top-2 right-2 flex space-x-1">
+                            <div className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
+                              <svg
+                                className="w-2.5 h-2.5"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </div>
+                            <div className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
+                              <svg
+                                className="w-2.5 h-2.5"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                              </svg>
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center text-2xl font-bold text-gray-300">
-                        {getCurrentUserDisplayName()[0]}
+                      )})}
+
+                      <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                        {(publisher || localStream) &&
+                        (isVideoEnabled || isAudioEnabled) ? (
+                          <div className="w-full h-full bg-gray-800 rounded-lg overflow-hidden">
+                            <video
+                              id="local-video-element"
+                              autoPlay
+                              muted
+                              playsInline
+                              className={`w-full h-full object-cover rounded-lg mirror-video ${
+                                !isVideoEnabled ? "hidden" : ""
+                              }`}
+                              style={{ transform: "scaleX(-1)" }}
+                            />
+                            {!isVideoEnabled && (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-lg font-bold">
+                                  김
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-lg font-bold">
+                              김
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-xs font-medium">
+                          {getCurrentUserDisplayName()} ({getRoleDisplayName( (userInfo?.role  || 'USER') as 'ADVISOR' | 'USER')})
+                        </div>
+                        <div className="absolute top-2 right-2 flex space-x-1">
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                              isAudioEnabled ? "bg-green-500" : "bg-red-500"
+                            }`}
+                          >
+                            <svg
+                              className="w-2.5 h-2.5"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </div>
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                              isVideoEnabled ? "bg-green-500" : "bg-red-500"
+                            }`}
+                          >
+                            <svg
+                              className="w-2.5 h-2.5"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                            </svg>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
-                  <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-xs font-medium text-white">
-                    {getCurrentUserDisplayName()} (나)
                   </div>
-                  <div className="absolute top-2 right-2 flex space-x-1">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isAudioEnabled ? "bg-green-500" : "bg-red-500"}`}>
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isVideoEnabled ? "bg-green-500" : "bg-red-500"}`}>
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -1407,6 +1304,7 @@ const VideoConsultationPage: React.FC = () => {
                 newMessage={newMessage}
                 setNewMessage={setNewMessage}
                 sendChatMessage={sendChatMessage}
+                currentUsername={getCurrentUserDisplayName()}
               />
             )}
           </div>
@@ -1495,39 +1393,14 @@ const VideoConsultationPage: React.FC = () => {
               )}
             </div>
 
-            {/* Video Panel Toggle Button - Only in Chart Mode */}
-            {isChartFocusedMode && (
-              <div className="relative">
-                <button
-                  onClick={() => setIsVideoMinimized(!isVideoMinimized)}
-                  onMouseEnter={() => setHoveredButton("participants")}
-                  onMouseLeave={() => setHoveredButton(null)}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg ${
-                    !isVideoMinimized 
-                      ? 'bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/20 hover:shadow-blue-500/40'
-                      : 'bg-gray-600 hover:bg-gray-500 text-white hover:shadow-gray-500/20'
-                  }`}
-                  title={isVideoMinimized ? "비디오 패널 보기" : "비디오 패널 숨기기"}
-                >
-                  <img src={participantsIcon} alt="참가자" className="w-6 h-6" />
-                </button>
-                {hoveredButton === "participants" && (
-                  <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
-                    {isVideoMinimized ? "비디오 패널 보기" : "비디오 패널 숨기기"}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className="relative">
               <button
-                onClick={() => (!showStockChart && !isChartFocusedMode) && setShowChat(!showChat)}
+                onClick={() => !showStockChart && setShowChat(!showChat)}
                 onMouseEnter={() => setHoveredButton("chat")}
                 onMouseLeave={() => setHoveredButton(null)}
-                disabled={showStockChart || isChartFocusedMode}
+                disabled={showStockChart}
                 className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg ${
-                  showStockChart || isChartFocusedMode
+                  showStockChart
                     ? "bg-gray-700 text-gray-400 cursor-not-allowed opacity-50"
                     : showChat
                     ? "bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/20 hover:shadow-blue-500/40"
@@ -1535,10 +1408,13 @@ const VideoConsultationPage: React.FC = () => {
                 }`}
               >
                 <img src={chatIcon} alt="채팅" className="w-6 h-6" />
+                {hasUnreadMessages && !showChat && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md" />
+                )}
               </button>
               {hoveredButton === "chat" && (
                 <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
-                  {showStockChart || isChartFocusedMode
+                  {showStockChart
                     ? "차트 모드에서 사용 불가"
                     : showChat
                     ? "채팅 닫기"
@@ -1548,22 +1424,21 @@ const VideoConsultationPage: React.FC = () => {
               )}
             </div>
 
-            {!isChartFocusedMode && (
-              <div className="relative">
-                <button
-                  onClick={() =>
-                    !showStockChart && setShowParticipants(!showParticipants)
-                  }
-                  onMouseEnter={() => setHoveredButton("participants")}
-                  onMouseLeave={() => setHoveredButton(null)}
-                  disabled={showStockChart}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-                    showStockChart
-                      ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                      : showParticipants
-                      ? "bg-blue-600 hover:bg-blue-700 text-white"
-                      : "bg-gray-700 hover:bg-gray-600 text-white"
-                  }`}
+            <div className="relative">
+              <button
+                onClick={() =>
+                  !showStockChart && setShowParticipants(!showParticipants)
+                }
+                onMouseEnter={() => setHoveredButton("participants")}
+                onMouseLeave={() => setHoveredButton(null)}
+                disabled={showStockChart}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+                  showStockChart
+                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                    : showParticipants
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "bg-gray-700 hover:bg-gray-600 text-white"
+                }`}
               >
                 <img src={participantsIcon} alt="참가자" className="w-6 h-6" />
               </button>
@@ -1577,21 +1452,27 @@ const VideoConsultationPage: React.FC = () => {
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-              </div>
-            )}
+            </div>
 
             <div className="relative">
               <button
-                onClick={toggleChartFocusedMode}
+                onClick={() => {
+                  const newShowStockChart = !showStockChart;
+                  setShowStockChart(newShowStockChart);
+                  if (newShowStockChart) {
+                    setShowChat(false);
+                    setShowParticipants(false);
+                  }
+                }}
                 onMouseEnter={() => setHoveredButton("stock")}
                 onMouseLeave={() => setHoveredButton(null)}
                 className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg ${
-                  isChartFocusedMode
+                  showStockChart
                     ? "bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/20 hover:shadow-blue-500/40"
                     : "bg-gray-600 hover:bg-gray-500 text-white hover:shadow-gray-500/20"
                 }`}
               >
-                {isChartFocusedMode ? (
+                {showStockChart ? (
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -1623,7 +1504,7 @@ const VideoConsultationPage: React.FC = () => {
               </button>
               {hoveredButton === "stock" && (
                 <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
-                  {isChartFocusedMode ? "비디오 뷰로 전환" : "차트 보기"}
+                  {showStockChart ? "비디오 뷰로 전환" : "차트 보기"}
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
@@ -1647,137 +1528,6 @@ const VideoConsultationPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Bottom Controls - Chart-focused mode */}
-      {isChartFocusedMode && (
-        <div className="bg-gray-800 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Stock Search */}
-            <div className="relative">
-              <StockSearch
-                onStockSelect={handleStockSelect}
-                darkMode={true}
-              />
-            </div>
-
-            {/* Period Selection */}
-            {selectedStock && (
-              <div className="flex space-x-1">
-                <button
-                  onClick={() => setChartPeriod(7)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    chartPeriod === 7
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  1주
-                </button>
-                <button
-                  onClick={() => setChartPeriod(30)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    chartPeriod === 30
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  1개월
-                </button>
-                <button
-                  onClick={() => setChartPeriod(90)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    chartPeriod === 90
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  3개월
-                </button>
-                <button
-                  onClick={() => setChartPeriod(365)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    chartPeriod === 365
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  1년
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Media Controls */}
-            <button
-              onClick={toggleAudio}
-              className={`p-2 rounded-lg transition-colors ${
-                isAudioEnabled 
-                  ? 'bg-gray-700 hover:bg-gray-600' 
-                  : 'bg-red-600 hover:bg-red-700'
-              }`}
-            >
-              <img src={isAudioEnabled ? micOnIcon : micOffIcon} alt="Mic" className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={toggleVideo}
-              className={`p-2 rounded-lg transition-colors ${
-                isVideoEnabled 
-                  ? 'bg-gray-700 hover:bg-gray-600' 
-                  : 'bg-red-600 hover:bg-red-700'
-              }`}
-            >
-              <img src={isVideoEnabled ? cameraOnIcon : cameraOffIcon} alt="Camera" className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={toggleScreenShare}
-              className={`p-2 rounded-lg transition-colors ${
-                isScreenSharing 
-                  ? 'bg-blue-600 hover:bg-blue-700' 
-                  : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              <img src={screenShareIcon} alt="Screen Share" className="w-4 h-4" />
-            </button>
-
-            {/* Chat Button */}
-            <button
-              onClick={() => setShowChat(!showChat)}
-              className={`p-2 rounded-lg transition-colors ${
-                showChat
-                  ? 'bg-blue-600 hover:bg-blue-700'
-                  : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              <img src={chatIcon} alt="채팅" className="w-4 h-4" />
-            </button>
-
-            {/* Video View Toggle */}
-            <button
-              onClick={toggleChartFocusedMode}
-              className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-
-            {/* Settings */}
-            <button className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-              <img src={settingsIcon} alt="설정" className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={leaveSession}
-              className="ml-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              상담 종료
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
