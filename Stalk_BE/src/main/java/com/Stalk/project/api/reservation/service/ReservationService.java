@@ -170,57 +170,6 @@ public class ReservationService {
   }
 
   /**
-   * 주문 ID 생성
-   */
-  private String generateOrderId(Long userId, Long advisorId) {
-    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-    return String.format("CONSULT_%s_%d_%d", timestamp, userId, advisorId);
-  }
-
-  /**
-   * 임시 예약 생성 (결제 대기 상태)
-   */
-  private Long createPendingReservation(Long currentUserId, PaymentReservationRequestDto requestDto,
-      LocalDate requestDate, LocalTime requestTime, String orderId, Integer amount) {
-
-    try {
-      LocalTime endTime = requestTime.plusHours(1);
-
-      PaymentReservationDto reservationDto = PaymentReservationDto.builder()
-          .userId(currentUserId)
-          .advisorId(requestDto.getAdvisorUserId())
-          .date(requestDate.toString())
-          .startTime(requestTime.toString())
-          .endTime(endTime.toString())
-          .requestMessage(requestDto.getRequestMessage())
-          .orderId(orderId)
-          .amount(amount)
-          .build();
-
-      Long insertResult = reservationMapper.createPendingReservation(reservationDto);
-
-      if (insertResult <= 0) {
-        throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
-      }
-
-      if (reservationDto.getId() == null) {
-        throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
-      }
-
-      return reservationDto.getId();
-
-    } catch (DataIntegrityViolationException e) {
-      log.warn("중복 예약 시도 감지: advisorId={}, date={}, time={}",
-          requestDto.getAdvisorUserId(), requestDate, requestTime, e);
-      throw new BaseException(BaseResponseStatus.TIME_SLOT_ALREADY_RESERVED);
-    } catch (BaseException e) {
-      throw e;
-    } catch (Exception e) {
-      log.error("결제 포함 예약 생성 중 예상치 못한 오류", e);
-      throw new BaseException(BaseResponseStatus.RESERVATION_CREATION_FAILED);
-    }
-  }
-  /**
    * 예약 취소 처리 (SecurityUtil 기반 + 결제 연동)
    */
   @Transactional
@@ -298,7 +247,6 @@ public class ReservationService {
    */
   private void validateCancelableStatusWithPayment(ReservationCancelWithPaymentCheckDto reservation) {
     String status = reservation.getStatus();
-    String paymentStatus = reservation.getPaymentStatus();
 
     // 이미 취소된 예약
     if ("CANCELED".equals(status)) {
@@ -397,7 +345,8 @@ public class ReservationService {
             currentUserId
         );
 
-        log.info("결제 취소 완료: paymentKey={}, orderId={}", reservation.getPaymentKey(), reservation.getOrderId());
+        log.info("결제 취소 완료: paymentKey={}, orderId={}",
+            reservation.getPaymentKey(), reservation.getOrderId());
       }
 
       // 2. 예약 상태 업데이트
@@ -413,35 +362,8 @@ public class ReservationService {
         throw new BaseException(CANCEL_REQUEST_FAILED);
       }
 
-      // ✅ 3. 예약 취소 이벤트 발행
-      try {
-        Long targetUserId;
-        String canceledByName;
-
-        if (currentUserId.equals(reservation.getUserId())) {
-          targetUserId = reservation.getAdvisorId();
-          UserProfileResponseDto userProfile = userProfileMapper.findUserProfileById(currentUserId);
-          canceledByName = userProfile != null ? userProfile.getName() : "Unknown";
-        } else {
-          targetUserId = reservation.getUserId();
-          UserProfileResponseDto advisorProfile = userProfileMapper.findUserProfileById(currentUserId);
-          canceledByName = advisorProfile != null ? advisorProfile.getName() : "Unknown";
-        }
-
-        String dateTime = String.format("%s %s", reservation.getDate(), reservation.getStartTime());
-        String reason = requestDto.getCancelReason().getDisplayName();
-
-        eventPublisher.publishEvent(new ReservationCanceledEvent(
-            targetUserId,
-            canceledByName,
-            dateTime,
-            reason
-        ));
-
-        log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}, targetUserId: {}", canceledByName, targetUserId);
-      } catch (Exception e) {
-        log.warn("예약 취소 이벤트 발행 실패 (취소는 성공)", e);
-      }
+      // 3. 예약 취소 이벤트 발행 (중복 코드 제거)
+      publishCancelEvent(reservation, currentUserId, requestDto);
 
     } catch (Exception e) {
       log.error("결제 취소 실패로 인한 예약 취소 롤백: reservationId={}", reservation.getId(), e);
@@ -514,7 +436,7 @@ public class ReservationService {
       }
 
       String dateTime = String.format("%s %s", reservation.getDate(), reservation.getStartTime());
-      String reason = requestDto.getCancelReason().getDisplayName(); // ✅ 사용자에게 친화적인 표현 사용
+      String reason = requestDto.getCancelReason().getDisplayName();
 
       eventPublisher.publishEvent(new ReservationCanceledEvent(
           targetUserId,
@@ -523,7 +445,9 @@ public class ReservationService {
           reason
       ));
 
-      log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}", canceledByName);
+      // 더 상세한 로깅으로 통일
+      log.debug("예약 취소 이벤트 발행 완료 - canceledByName: {}, targetUserId: {}",
+          canceledByName, targetUserId);
     } catch (Exception e) {
       log.warn("예약 취소 이벤트 발행 실패 (취소는 성공)", e);
     }

@@ -1,9 +1,7 @@
 package com.Stalk.project.api.reservation.controller;
 
-import com.Stalk.project.api.reservation.dto.in.ConsultationReservationRequestDto;
 import com.Stalk.project.api.reservation.dto.in.PaymentReservationRequestDto;
 import com.Stalk.project.api.reservation.dto.in.ReservationCancelRequestDto;
-import com.Stalk.project.api.reservation.dto.out.ConsultationReservationResponseDto;
 import com.Stalk.project.api.reservation.dto.out.PaymentReservationResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationCancelResponseDto;
 import com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto;
@@ -49,6 +47,21 @@ public class ReservationController {
     }
 
     /**
+     * 결제를 포함한 상담 예약 생성
+     */
+    @PostMapping("/reservations/with-payment")
+    @Operation(summary = "결제를 포함한 상담 예약 생성", description = "전문가와의 상담 예약을 생성하고 토스페이먼츠 결제 정보를 반환합니다.")
+    @ApiResponse(responseCode = "200", description = "예약 생성 성공")
+    @ApiResponse(responseCode = "400", description = "잘못된 요청")
+    @ApiResponse(responseCode = "403", description = "권한 없음")
+    public BaseResponse<PaymentReservationResponseDto> createReservationWithPayment(
+        @Valid @RequestBody PaymentReservationRequestDto requestDto) {
+
+        PaymentReservationResponseDto response = reservationService.createReservationWithPayment(requestDto);
+        return new BaseResponse<>(response);
+    }
+
+    /**
      * 예약 취소 API (SecurityUtil 기반)
      */
     @PutMapping("/reservations/{reservationId}/cancel")
@@ -63,21 +76,6 @@ public class ReservationController {
         ReservationCancelResponseDto response =
             reservationService.cancelReservation(reservationId, requestDto);
 
-        return new BaseResponse<>(response);
-    }
-
-    /**
-     * 결제를 포함한 상담 예약 생성
-     */
-    @PostMapping("/reservations/with-payment")
-    @Operation(summary = "결제를 포함한 상담 예약 생성", description = "전문가와의 상담 예약을 생성하고 토스페이먼츠 결제 정보를 반환합니다.")
-    @ApiResponse(responseCode = "200", description = "예약 생성 성공")
-    @ApiResponse(responseCode = "400", description = "잘못된 요청")
-    @ApiResponse(responseCode = "403", description = "권한 없음")
-    public BaseResponse<PaymentReservationResponseDto> createReservationWithPayment(
-        @Valid @RequestBody PaymentReservationRequestDto requestDto) {
-
-        PaymentReservationResponseDto response = reservationService.createReservationWithPayment(requestDto);
         return new BaseResponse<>(response);
     }
 }
