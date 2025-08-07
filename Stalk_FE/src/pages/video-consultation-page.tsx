@@ -40,6 +40,7 @@ interface ChatMessage {
   sender: string;
   message: string;
   timestamp: Date;
+  type : "system" | "user";
 }
 
 type HoveredButton =
@@ -357,12 +358,32 @@ const VideoConsultationPage: React.FC = () => {
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
         });
   
-        session.on('connectionCreated', (event) => {
-          console.log('Connection created:', event.connection.connectionId);
+        session.on('connectionCreated', (event) => { 
+          const raw = event.connection.data;
+          const userData = JSON.parse(raw.split("%/%")[0]);
+          const username = userData.userData || "익명";
+          const msg: ChatMessage = {
+            id: `sys-${Date.now()}`,
+            sender: "system",
+            message: `${username}님이 입장했습니다.`,
+            timestamp: new Date(),
+            type: "system",
+          };
+          setChatMessages((prev) => [...prev, msg]);      
         });
   
         session.on('connectionDestroyed', (event) => {
-          console.log('Connection destroyed:', event.connection.connectionId);
+            const raw = event.connection.data;
+            const userData = JSON.parse(raw.split("%/%")[0]);
+            const username = userData.userData || "익명";          
+            const msg: ChatMessage = {
+              id: `sys-${Date.now()}`,
+              sender: "system",
+              message: `${username}님이 퇴장했습니다.`,
+              timestamp: new Date(),
+              type: "system",
+            };
+            setChatMessages((prev) => [...prev, msg]);
         });
   
         // 사용자 정보를 포함한 연결 데이터 준비
@@ -567,7 +588,7 @@ const VideoConsultationPage: React.FC = () => {
           console.error('구독자 트랙 중지 실패:', err);
         }
       });
-      
+
       // 4) 상태 초기화
       navigate(`/mypage`);
     }
@@ -674,6 +695,7 @@ const VideoConsultationPage: React.FC = () => {
         sender: getCurrentUserDisplayName(),
         message: newMessage.trim(),
         timestamp: new Date(),
+        type: "user",
       };
       setChatMessages((prev) => [...prev, message]);
       setNewMessage("");
