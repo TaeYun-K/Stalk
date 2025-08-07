@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PaymentCancelRequestDto {
 
+    private String orderId;
     private String cancelReason;         // 취소 사유
     private Integer cancelAmount;        // 취소 금액 (null이면 전액 취소)
     private Integer refundableAmount;    // 환불 가능 금액 (토스 요구사항)

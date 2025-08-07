@@ -7,6 +7,16 @@ const PaymentFail: React.FC = () => {
   const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
+    // URL 파라미터에서 정보 추출
+    const errorCode = searchParams.get("code");
+    const errorMessage = searchParams.get("message");
+    const orderId = searchParams.get("orderId");
+
+    // 🔥 orderId가 있으면 취소 API 호출
+    if (orderId) {
+      handlePaymentCancel(orderId);
+    }
+
     // 10초 후 홈으로 자동 이동
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -20,7 +30,41 @@ const PaymentFail: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [navigate]);
+  }, [navigate, searchParams]);
+
+  // 🔥 결제 취소 API 호출 함수
+  const handlePaymentCancel = async (orderId: string) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        console.error("토큰이 없어서 취소 API 호출 불가");
+        return;
+      }
+
+      console.log("결제 취소 API 호출:", orderId);
+
+      const response = await fetch("/api/payment/cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.isSuccess) {
+        console.log("예약 취소 완료:", orderId);
+      } else {
+        console.error("예약 취소 실패:", data.message);
+        // 취소 실패해도 사용자에게는 표시하지 않음 (이미 결제 실패 상황이므로)
+      }
+    } catch (error) {
+      console.error("예약 취소 API 호출 중 오류:", error);
+      // 취소 API 실패해도 사용자에게는 보여주지 않음
+    }
+  };
 
   const handleGoToHome = () => {
     navigate("/");

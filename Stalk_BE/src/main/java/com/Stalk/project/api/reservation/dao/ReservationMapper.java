@@ -156,4 +156,13 @@ public interface ReservationMapper {
       @Param("cancelMemo") String cancelMemo,
       @Param("canceledAt") LocalDateTime canceledAt
   );
+
+  /**
+   * 예약 삭제
+   */
+  int deleteReservation(@Param("reservationId") Long reservationId);
+
+  Long getReservationIdByOrderId(String orderId);
+
+  boolean isValidPendingReservation(@Param("reservationId") Long reservationId, @Param("userId") Long userId);
 }
