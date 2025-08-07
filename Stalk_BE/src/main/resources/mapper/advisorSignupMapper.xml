@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.api.signup.dao.AdvisorSignupMapper">
+
+  <insert id="insertAdvisor" parameterType="com.Stalk.project.api.signup.entity.Advisor">
+    INSERT INTO advisor (
+      advisor_id,
+      profile_image_url,
+      certificate_name,
+      certificate_file_sn,
+      birth,
+      certificate_file_number,
+      consultation_fee,
+      public_contact,
+      is_approved,
+      approved_at,
+      is_profile_completed,
+      created_at
+    ) VALUES (
+               #{advisorId},
+               #{profileImageUrl},
+               #{certificateName},
+               #{certificateFileSn},
+               #{birth},
+               #{certificateFileNumber},
+               #{consultationFee},
+               #{publicContact},
+               #{isApproved},
+               #{approvedAt,jdbcType=TIMESTAMP},
+               #{isProfileCompleted},
+               NOW()
+             )
+  </insert>
+
+</mapper>

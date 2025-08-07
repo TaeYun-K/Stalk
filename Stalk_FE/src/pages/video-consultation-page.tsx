@@ -40,6 +40,7 @@ interface ChatMessage {
   sender: string;
   message: string;
   timestamp: Date;
+  type : "system" | "user";
 }
 
 type HoveredButton =
@@ -63,22 +64,25 @@ const TIMER_INTERVAL_MS = 1000;
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
+
+  // OpenVidu 입장 로직 관련 상태
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const {state} = useLocation();
   const { connectionUrl: ovToken, consultationId, sessionId : ovSessionId } = (state as LocationState) || {};
-
   const [session, setSession] = useState<Session | null>(null);
   const [publisher, setPublisher] = useState<Publisher | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [ov, setOv] = useState<OpenVidu | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(true);
 
+  // 상담 관련 상태
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
@@ -95,6 +99,141 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] =
     useState<boolean>(true);
+
+  
+  useEffect(() => {
+    console.log('Component mounted, checking conditions for initialization...');
+    console.log('ovToken exists:', !!ovToken);
+    console.log('consultationId:', consultationId);
+    console.log('userRole:', userInfo?.role);
+
+    // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
+    if (ovToken && consultationId) {
+    const initializeConsultation = async () => {
+      try {
+        console.log('Starting consultation initialization...');
+        
+        // 1. 미디어 권한 확인
+        const hasPermissions = await checkMediaPermissions();
+        if (!hasPermissions) {
+          console.warn('Media permissions denied, cannot proceed');
+          return;
+        }
+
+        // 2. 사용자 정보 가져오기
+        console.log('Fetching user info...');
+        await fetchUserInfo();
+
+        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
+        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
+        
+      } catch (error) {
+        console.error('Error during consultation initialization:', error);
+        alert('상담 초기화 중 오류가 발생했습니다.');
+      }
+    };
+
+    initializeConsultation();
+    } else {
+      console.warn('Missing required data for consultation:', {
+        hasToken: !!ovToken,
+        hasConsultationId: !!consultationId
+    });
+    }
+  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
+
+  // 사용자 로딩 후 OpenVidu 초기화
+  useEffect(() => {
+    console.log('User info state changed:', {
+      isLoadingUserInfo,
+      hasUserInfo: !!userInfo,
+      hasToken: !!ovToken,
+      hasSession: !!session
+    });
+
+    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
+    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
+      console.log('All conditions met, initializing OpenVidu...');
+      initializeOpenVidu();
+    }
+  }, [isLoadingUserInfo, userInfo, ovToken, session]);
+
+  // 타이머 업데이트
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, TIMER_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 로컬 비디오 렌더링을 위한 useEffect
+  useEffect(() => {
+    if (publisher && isVideoEnabled) {
+      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
+      if (videoElement) {
+        videoElement.srcObject = publisher.stream.getMediaStream();
+        videoElement.play().catch((e) => {
+          console.error("Error playing local video:", e);
+        });
+      }
+    }
+  }, [publisher]);
+
+  // 로컬 비디오 연결 & 차트 전환 시 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces)) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100);
+    }
+  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces]);
+
+  // 실시간 채팅 읽음 상태 변경
+  useEffect(() => {
+  if (showChat) {
+    setHasUnreadMessages(false); // ✅ 열자마자 알림 꺼짐
+    }
+  }, [showChat]);
+
+  // 페이지 이탈 방지 훅
+  const usePreventNavigation = (enabled: boolean) => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      if (!enabled) return;
+
+      // 🔒 1. 브라우저 새로고침 / 닫기 방지
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = '';
+      };
+
+      // 🔒 2. 뒤로가기 방지
+      const handlePopState = (e: PopStateEvent) => {
+        e.preventDefault();
+        // 뒤로가기 막고 알림창 보여주기 (선택)
+        const confirmLeave = window.confirm('상담이 종료되지 않았습니다. 정말 나가시겠습니까?');
+        if (confirmLeave) {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          navigate(-1); // 실제 뒤로가기
+        } else {
+          // ❌ 뒤로가기 중단: 앞으로 한 번 더 이동 (뒤로 간 걸 다시 앞으로 감)
+          window.history.pushState(null, '', window.location.href);
+        }
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('popstate', handlePopState);
+      // popstate 트리거를 위해 현재 상태 push (뒤로가기 가능하게 만들어줘야 감지 가능)
+      window.history.pushState(null, '', window.location.href);
+
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, [enabled, navigate]);
+  };
+  usePreventNavigation(true);
 
   // 참가자 역할 구분을 위한 함수들
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -155,72 +294,6 @@ const VideoConsultationPage: React.FC = () => {
     console.log('fetchUserInfo completed');
     }
   };
-
-  useEffect(() => {
-  console.log('Component mounted, checking conditions for initialization...');
-  console.log('ovToken exists:', !!ovToken);
-  console.log('consultationId:', consultationId);
-  console.log('userRole:', userInfo?.role);
-
-  // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
-  if (ovToken && consultationId) {
-    const initializeConsultation = async () => {
-      try {
-        console.log('Starting consultation initialization...');
-        
-        // 1. 미디어 권한 확인
-        const hasPermissions = await checkMediaPermissions();
-        if (!hasPermissions) {
-          console.warn('Media permissions denied, cannot proceed');
-          return;
-        }
-
-        // 2. 사용자 정보 가져오기
-        console.log('Fetching user info...');
-        await fetchUserInfo();
-
-        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
-        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
-        
-      } catch (error) {
-        console.error('Error during consultation initialization:', error);
-        alert('상담 초기화 중 오류가 발생했습니다.');
-      }
-    };
-
-    initializeConsultation();
-  } else {
-    console.warn('Missing required data for consultation:', {
-      hasToken: !!ovToken,
-      hasConsultationId: !!consultationId
-    });
-  }
-  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
-
-  // 사용자 정보 로딩 완료 후 OpenVidu 초기화
-  useEffect(() => {
-    console.log('User info state changed:', {
-      isLoadingUserInfo,
-      hasUserInfo: !!userInfo,
-      hasToken: !!ovToken,
-      hasSession: !!session
-    });
-
-    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
-    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
-      console.log('All conditions met, initializing OpenVidu...');
-      initializeOpenVidu();
-    }
-  }, [isLoadingUserInfo, userInfo, ovToken, session]);
-
-
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, TIMER_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, []);
 
   const getDuration = (): string => {
     const diff = Math.floor(
@@ -298,6 +371,10 @@ const VideoConsultationPage: React.FC = () => {
             return;
           }
 
+          if(!showChat) {
+            setHasUnreadMessages(true);
+          }
+
           try {
             const receivedMessage: ChatMessage = JSON.parse(event.data);
 
@@ -317,12 +394,32 @@ const VideoConsultationPage: React.FC = () => {
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
         });
   
-        session.on('connectionCreated', (event) => {
-          console.log('Connection created:', event.connection.connectionId);
+        session.on('connectionCreated', (event) => { 
+          const raw = event.connection.data;
+          const userData = JSON.parse(raw.split("%/%")[0]);
+          const username = userData.userData || "익명";
+          const msg: ChatMessage = {
+            id: `sys-${Date.now()}`,
+            sender: "system",
+            message: `${username}님이 입장했습니다.`,
+            timestamp: new Date(),
+            type: "system",
+          };
+          setChatMessages((prev) => [...prev, msg]);      
         });
   
         session.on('connectionDestroyed', (event) => {
-          console.log('Connection destroyed:', event.connection.connectionId);
+            const raw = event.connection.data;
+            const userData = JSON.parse(raw.split("%/%")[0]);
+            const username = userData.userData || "익명";          
+            const msg: ChatMessage = {
+              id: `sys-${Date.now()}`,
+              sender: "system",
+              message: `${username}님이 퇴장했습니다.`,
+              timestamp: new Date(),
+              type: "system",
+            };
+            setChatMessages((prev) => [...prev, msg]);
         });
   
         // 사용자 정보를 포함한 연결 데이터 준비
@@ -400,30 +497,6 @@ const VideoConsultationPage: React.FC = () => {
       console.warn('Local video element not found or publisher stream not ready');
     }
   };
-
-  // 로컬 비디오 렌더링을 위한 useEffect
-  useEffect(() => {
-    if (publisher && isVideoEnabled) {
-      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
-      if (videoElement) {
-        videoElement.srcObject = publisher.stream.getMediaStream();
-        videoElement.play().catch((e) => {
-          console.error("Error playing local video:", e);
-        });
-      }
-    }
-  }, [publisher]);
-
-
-  // 로컬 비디오 연결 & 차트 전환 시 연결
-  useEffect(() => {
-    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces)) {
-      setTimeout(() => {
-        attachLocalVideo(publisher);
-      }, 100);
-    }
-  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces]);
-
 
   // 구독자 비디오 연결 함수
   const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
@@ -528,7 +601,7 @@ const VideoConsultationPage: React.FC = () => {
         }
       });
 
-      // 5) 상태 초기화
+      // 4) 상태 초기화
       navigate(`/mypage`);
     }
   };
@@ -591,22 +664,6 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 컴포넌트 언마운트 시 리소스 정리
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      leaveSession();
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (session) {
-        leaveSession();
-      }
-    };
-  }, [session, consultationId, navigate]);
-
   // 카메라와 마이크 권한 확인 함수
   const checkMediaPermissions = async () => {
     try {
@@ -650,6 +707,7 @@ const VideoConsultationPage: React.FC = () => {
         sender: getCurrentUserDisplayName(),
         message: newMessage.trim(),
         timestamp: new Date(),
+        type: "user",
       };
       setChatMessages((prev) => [...prev, message]);
       setNewMessage("");
@@ -1347,6 +1405,9 @@ const VideoConsultationPage: React.FC = () => {
                 }`}
               >
                 <img src={chatIcon} alt="채팅" className="w-6 h-6" />
+                {hasUnreadMessages && !showChat && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md animate-ping" />
+                )}
               </button>
               {hoveredButton === "chat" && (
                 <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">

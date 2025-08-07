@@ -46,6 +46,29 @@ const KnowledgeBoardPage = () => {
     }
   };
 
+
+  const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!window.confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      await CommunityService.deletePost(postId);
+      alert('게시글이 삭제되었습니다.');
+      fetchKnowledgePosts(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('게시글 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleEditPost = (postId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/write-post?edit=${postId}`);
+  };
+  
   const loadComments = async () => {
     if (!postId) return;
     
@@ -202,7 +225,23 @@ const KnowledgeBoardPage = () => {
                     <span className='text-sm text-gray-500'>{formatDate(postDetail.createdAt)}</span>
                   </div>
                 </div>
+                <div className='flex flex-row gap-4'>
                 <span className='text-sm text-gray-500'>조회수 {postDetail.viewCount}</span>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={(e) => handleEditPost(post.postId, e)}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={(e) => handleDeletePost(post.postId, e)}
+                    className="text-sm text-red-600 hover:text-red-800"
+                  >
+                    삭제
+                  </button>
+                  </div>
+                </div>
               </div>
               <span className='pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200'>
                 {postDetail.content}

@@ -6,9 +6,11 @@ import static com.Stalk.project.global.response.BaseResponseStatus.USER_NOT_FOUN
 
 import com.Stalk.project.api.login.service.AuthService;
 import com.Stalk.project.api.signup.entity.User;
+import com.Stalk.project.api.user.dto.in.PasswordChangeRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.Stalk.project.api.user.dao.UserProfileMapper;
@@ -25,6 +27,7 @@ public class UserService {
 
   private final UserProfileMapper userProfileMapper;
   private final AuthService authService;
+  private final PasswordEncoder passwordEncoder;
 
   public UserProfileResponseDto getUserProfile(Long userId) {
     // 기존 메서드 유지
@@ -113,11 +116,13 @@ public class UserService {
 
   /**
    * 사용자 계정을 비활성화(소프트 삭제)합니다.
+   *
    * @param userId 비활성화할 사용자의 ID
    */
   @Transactional
-  public void deactivateUser(Long userId, HttpServletRequest request, HttpServletResponse response) {
-    // 1. 사용자 존재 및 활성 상태 확인
+  public void deactivateUser(Long userId, HttpServletRequest request,
+      HttpServletResponse response) {
+    // 사용자 존재 및 활성 상태 확인
     User user = userProfileMapper.findUserById(userId);
     if (user == null) {
       throw new BaseException(USER_NOT_FOUND);
@@ -142,5 +147,41 @@ public class UserService {
     }
     // 토큰 로그아웃(블랙리스트) 처리
     authService.invalidateTokens(request, response);
+  }
+
+  /**
+   * 비밀번호 변경 로직
+   *
+   * @param userId     현재 사용자 ID
+   * @param requestDto 비밀번호 변경 요청 DTO
+   */
+  @Transactional // 데이터 변경이 있으므로 트랜잭션 처리
+  public void changePassword(Long userId, PasswordChangeRequestDto requestDto) {
+    // 사용자 조회 (없으면 예외 발생)
+    User user = userProfileMapper.findUserById(userId);
+
+    // 소셜 로그인 사용자인지 확인 (users 테이블의 login_type 컬럼 활용) - 추가
+
+    // 계정 상태 확인 (비활성/탈퇴 사용자)
+    if (!user.getIsActive()) { // is_active 컬럼
+      throw new BaseException(BaseResponseStatus.DISABLED_USER); // 비활성화된 계정 에러
+    }
+
+    // 현재 비밀번호 검증
+    if (!passwordEncoder.matches(requestDto.currentPassword(), user.getPassword())) {
+      throw new BaseException(BaseResponseStatus.PASSWORD_NOT_MATCHED); // 기존 비밀번호 불일치 에러
+    }
+
+    // 새 비밀번호가 현재 비밀번호와 동일한지 확인
+    if (passwordEncoder.matches(requestDto.newPassword(), user.getPassword())) {
+      throw new BaseException(BaseResponseStatus.PASSWORD_SAME_AS_CURRENT); // 기존 비밀번호와 동일 에러
+    }
+
+    // 새 비밀번호 암호화 및 업데이트
+    String newEncodedPassword = passwordEncoder.encode(requestDto.newPassword());
+    userProfileMapper.updatePassword(userId, newEncodedPassword); // User 엔티티에 password 업데이트 메소드 추천
+
+    // @Transactional에 의해 메소드 종료 시 변경 감지(Dirty Checking)로 자동 업데이트
+    // userRepository.save(user); // 명시적으로 호출해도 무방
   }
 }
