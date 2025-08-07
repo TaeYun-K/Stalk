@@ -18,10 +18,8 @@ import participantsIcon from "@/assets/images/icons/consultation/participants.sv
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
 import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
-import StockChart from "@/components/chart/stock-chart";
-import StockSearch from "@/components/chart/stock-search";
-import Stream from "stream";
-import { stat } from "fs";
+import StockChart from "@/components/stock/charts/stock-chart";
+import StockSearch from "@/components/stock/stock-search";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -393,29 +391,16 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [publisher]);
 
-  //localStream이 변경될 때마다 로컬 비디오를 연결
+
+  // 로컬 비디오 연결 & 차트 전환 시 연결
   useEffect(() => {
-    if (publisher && isVideoEnabled) {
+    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces)) {
       setTimeout(() => {
         attachLocalVideo(publisher);
       }, 100);
     }
-  }, [showParticipantFaces, publisher, isVideoEnabled]);
+  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces]);
 
-  // 로컬 미니 비디오 연결
-  useEffect(() => {
-    if (publisher && isVideoEnabled && showParticipantFaces) {
-      setTimeout(() => {
-        const video = document.getElementById("local-mini-video-element") as HTMLVideoElement;
-        const stream = publisher.stream.getMediaStream();
-        if (video && stream && video.srcObject !== stream) {
-          video.srcObject = stream;
-          video.play().catch(console.error);
-          console.log("📺 MiniView local video attached");
-        }
-      }, 100);
-    }
-  }, [publisher, isVideoEnabled, showParticipantFaces]);
 
   // 구독자 비디오 연결 함수
   const attachSubscriberVideo = (subscriber: Subscriber, index: number) => {
@@ -1055,7 +1040,7 @@ const VideoConsultationPage: React.FC = () => {
                         (isVideoEnabled || isAudioEnabled) ? (
                           <div className="w-full h-full bg-gray-800 rounded-lg overflow-hidden">
                             <video
-                              id="local-mini-video-element"
+                              id="local-video-element"
                               autoPlay
                               muted
                               playsInline

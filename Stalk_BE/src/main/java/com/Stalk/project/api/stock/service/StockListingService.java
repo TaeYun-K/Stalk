@@ -103,7 +103,9 @@ public class StockListingService {
             
             logger.info("Loaded total {} stocks from KRX API", stockCache.size());
         } catch (Exception e) {
-            logger.error("Failed to load stocks from KRX API", e);
+            logger.error("Failed to load stocks from KRX API - application will continue with empty stock listings cache", e);
+            // Don't rethrow - allow application to start even if KRX API fails
+            // Stock cache will remain empty
         }
     }
     
