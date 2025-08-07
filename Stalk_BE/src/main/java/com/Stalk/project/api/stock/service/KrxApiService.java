@@ -25,6 +25,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -48,10 +49,17 @@ public class KrxApiService {
     // KRX API endpoint identifiers for different data types  
     private static final String MARKET_DATA_BLD = "dbms/MDC/STAT/standard/MDCSTAT01501";
     private static final String INDIVIDUAL_STOCK_BLD = "dbms/MDC/STAT/standard/MDCSTAT01901"; // Individual stock info
+    private static final String HISTORICAL_PRICE_BLD = "dbms/MDC/STAT/standard/MDCSTAT01701"; // Historical daily prices
     private static final String VOLUME_RANKING_BLD = "dbms/MDC/STAT/standard/MDCSTAT02301";
     private static final String TRADE_VALUE_RANKING_BLD = "dbms/MDC/STAT/standard/MDCSTAT02401"; 
     private static final String PRICE_CHANGE_RANKING_BLD = "dbms/MDC/STAT/standard/MDCSTAT02501";
     private static final String INVESTOR_TRADING_BLD = "dbms/MDC/STAT/standard/MDCSTAT02203";
+    
+    // New KRX API endpoints based on official documentation
+    private static final String KOSDAQ_DAILY_TRADING_API = "http://data-dbg.krx.co.kr/svc/apis/sto/ksq_bydd_trd";
+    private static final String KOSPI_DAILY_INDEX_API = "http://data-dbg.krx.co.kr/svc/apis/idx/kospi_dd_trd";
+    // Attempt KOSPI stock trading API (pattern-based, needs verification)
+    private static final String KOSPI_DAILY_TRADING_API = "http://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd";
     
     @Autowired
     private org.springframework.cache.CacheManager cacheManager;
@@ -165,12 +173,15 @@ public class KrxApiService {
     /**
      * Fetch individual stock information with 5-minute caching
      * @param ticker Stock ticker symbol (e.g., "005930" for Samsung Electronics)
-     * @param market Market type ("STK" for KOSPI, "KSQ" for KOSDAQ)
+     * @param market Market type ("KOSPI" for main market, "KOSDAQ" for growth market)
      * @return KrxStockInfo containing detailed stock information
      */
     @Cacheable(value = "individualStockInfo", key = "#ticker + '_' + #market")
     public KrxStockInfo getIndividualStockInfo(String ticker, String market) {
         logger.info("Fetching individual stock info for ticker: {}, market: {}", ticker, market);
+        
+        // Convert user-friendly market names to KRX API codes internally
+        String krxMarketCode = convertToKrxMarketCode(market);
         
         try {
             // Use the individual stock endpoint
@@ -202,14 +213,159 @@ public class KrxApiService {
                 return mapToKrxStockInfo(stockData);
             } else {
                 logger.warn("No stock data found for ticker: {} using individual endpoint, trying market data fallback", ticker);
-                // Fallback to market data endpoint
-                return getIndividualStockInfoFromMarketData(ticker, market);
+                // Fallback to market data endpoint (pass the KRX market code)
+                return getIndividualStockInfoFromMarketData(ticker, krxMarketCode);
             }
             
         } catch (Exception e) {
             logger.error("Failed to fetch individual stock info for ticker: {}, market: {}", ticker, market, e);
             throw new RuntimeException("Failed to fetch stock information: " + e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Fetch historical price data for a stock
+     * Optimized to reduce API calls by fetching current data and generating historical points
+     * @param ticker Stock ticker symbol
+     * @param market Market type (KOSPI/KOSDAQ)
+     * @param periodDays Number of days to fetch (1, 7, 30, 90, 180, 365)
+     * @return List of historical price data
+     */
+    /**
+     * Fetch historical price data using KRX MDCSTAT01701 endpoint
+     * This endpoint provides real historical stock price data
+     */
+    @Cacheable(value = "historicalPrices", key = "#ticker + '_' + #market + '_' + #periodDays")
+    public List<KrxStockInfo> getHistoricalPrices(String ticker, String market, int periodDays) {
+        logger.info("=== getHistoricalPrices called ===");
+        logger.info("Fetching historical prices for ticker: {}, market: {}, period: {} days", ticker, market, periodDays);
+        
+        List<KrxStockInfo> historicalData = new ArrayList<>();
+        
+        try {
+            LocalDate endDate = LocalDate.now();
+            // If it's before market close, use previous day
+            if (LocalDateTime.now().getHour() < 16) {
+                endDate = endDate.minusDays(1);
+            }
+            // Skip weekends
+            while (endDate.getDayOfWeek().getValue() > 5) {
+                endDate = endDate.minusDays(1);
+            }
+            
+            LocalDate startDate = endDate.minusDays(periodDays - 1);
+            // Skip weekends for start date too
+            while (startDate.getDayOfWeek().getValue() > 5) {
+                startDate = startDate.minusDays(1);
+            }
+            
+            String startDateStr = startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+            String endDateStr = endDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+            
+            logger.info("Date range: {} to {} ({} days)", startDateStr, endDateStr, periodDays);
+            
+            // Prepare parameters for MDCSTAT01701 endpoint
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+            params.add("bld", HISTORICAL_PRICE_BLD);
+            params.add("locale", "ko_KR");
+            params.add("isuCd", ticker); // Stock code
+            params.add("mktId", convertToKrxMarketCode(market)); // Add market ID
+            params.add("strtDd", startDateStr); // Start date
+            params.add("endDd", endDateStr); // End date
+            params.add("adjStkPrc_check", "Y"); // Include adjusted price
+            params.add("adjStkPrc", "2"); // Adjustment type
+            params.add("share", "1");
+            params.add("money", "1");
+            params.add("csvxls_isNo", "false");
+            
+            logger.info("Requesting historical data from {} to {} for ticker {}", startDateStr, endDateStr, ticker);
+            
+            String response = executeApiCall(params);
+            JsonNode root = objectMapper.readTree(response);
+            
+            // Log response structure for debugging
+            logger.info("Response has OutBlock_1: {}, has output: {}", 
+                root.has("OutBlock_1"), root.has("output"));
+            
+            // Parse the response - try multiple possible response structures
+            JsonNode dataArray = null;
+            if (root.has("output") && root.path("output").isArray()) {
+                dataArray = root.path("output");
+                logger.info("Using 'output' field with {} items", dataArray.size());
+            } else if (root.has("OutBlock_1") && root.path("OutBlock_1").isArray()) {
+                dataArray = root.path("OutBlock_1");
+                logger.info("Using 'OutBlock_1' field with {} items", dataArray.size());
+            } else if (root.has("result") && root.path("result").isArray()) {
+                dataArray = root.path("result");
+                logger.info("Using 'result' field with {} items", dataArray.size());
+            } else if (root.has("block1") && root.path("block1").isArray()) {
+                dataArray = root.path("block1");
+                logger.info("Using 'block1' field with {} items", dataArray.size());
+            } else {
+                // Log available fields for debugging
+                Iterator<String> fieldNames = root.fieldNames();
+                List<String> fields = new ArrayList<>();
+                while (fieldNames.hasNext()) {
+                    fields.add(fieldNames.next());
+                }
+                logger.warn("No array field found. Available fields: {}", fields);
+                
+                // Log a sample of the response for debugging
+                String responseSnippet = response.substring(0, Math.min(response.length(), 500));
+                logger.info("Response snippet: {}", responseSnippet);
+            }
+            
+            if (dataArray != null && dataArray.isArray() && dataArray.size() > 0) {
+                logger.info("Found {} historical data points", dataArray.size());
+                
+                for (JsonNode dayData : dataArray) {
+                    KrxStockInfo priceInfo = new KrxStockInfo();
+                    
+                    // Map the fields from the response - check multiple possible field names
+                    priceInfo.setTicker(ticker);
+                    priceInfo.setName(dayData.path("ISU_ABBRV").asText(dayData.path("ISU_NM").asText("")));
+                    
+                    // Trade date might be in different fields
+                    String tradeDate = dayData.path("TRD_DD").asText("");
+                    if (tradeDate.isEmpty()) {
+                        tradeDate = dayData.path("BAS_DD").asText("");
+                    }
+                    priceInfo.setTradeDate(tradeDate);
+                    
+                    priceInfo.setOpenPrice(dayData.path("TDD_OPNPRC").asText(dayData.path("OPNPRC").asText("0"))); // Opening price
+                    priceInfo.setHighPrice(dayData.path("TDD_HGPRC").asText(dayData.path("HGPRC").asText("0"))); // High price
+                    priceInfo.setLowPrice(dayData.path("TDD_LWPRC").asText(dayData.path("LWPRC").asText("0"))); // Low price
+                    priceInfo.setClosePrice(dayData.path("TDD_CLSPRC").asText(dayData.path("CLSPRC").asText("0"))); // Closing price
+                    priceInfo.setVolume(dayData.path("ACC_TRDVOL").asText(dayData.path("TRDVOL").asText("0"))); // Trading volume
+                    priceInfo.setTradeValue(dayData.path("ACC_TRDVAL").asText(dayData.path("TRDVAL").asText("0"))); // Trading value
+                    priceInfo.setPriceChange(dayData.path("CMPPREVDD_PRC").asText(dayData.path("PRDYPRC").asText("0"))); // Price change
+                    priceInfo.setChangeRate(dayData.path("FLUC_RT").asText(dayData.path("FLUCRT").asText("0"))); // Change rate
+                    
+                    historicalData.add(priceInfo);
+                }
+                
+                logger.info("Successfully fetched {} historical data points for ticker {}", 
+                    historicalData.size(), ticker);
+            } else {
+                logger.warn("No historical data found in KRX response for ticker: {}, period: {} days", ticker, periodDays);
+                // Return empty list - no mock data
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch historical prices for ticker: {}", ticker, e);
+            // On error, try to return at least current data
+            try {
+                KrxStockInfo currentInfo = getIndividualStockInfo(ticker, market);
+                if (currentInfo != null) {
+                    currentInfo.setTradeDate(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")));
+                    historicalData.add(currentInfo);
+                }
+            } catch (Exception ex) {
+                logger.error("Failed to fetch even current data", ex);
+            }
+        }
+        
+        return historicalData;
     }
     
     /**
@@ -457,6 +613,31 @@ public class KrxApiService {
         } catch (NumberFormatException e) {
             logger.debug("Failed to format large number: {}", value);
             return value;
+        }
+    }
+    
+    /**
+     * Convert user-friendly market names to KRX API codes
+     * @param market User-friendly market name (KOSPI, KOSDAQ)
+     * @return KRX API market code (STK for KOSPI, KSQ for KOSDAQ)
+     */
+    private String convertToKrxMarketCode(String market) {
+        if (market == null) {
+            return "STK"; // Default to KOSPI
+        }
+        
+        switch (market.toUpperCase()) {
+            case "KOSPI":
+                return "STK";
+            case "KOSDAQ":
+                return "KSQ";
+            case "STK":   // Support legacy codes too
+                return "STK";
+            case "KSQ":   // Support legacy codes too
+                return "KSQ";
+            default:
+                logger.warn("Unknown market type: {}, defaulting to STK (KOSPI)", market);
+                return "STK";
         }
     }
     
@@ -775,6 +956,131 @@ public class KrxApiService {
         }
     }
     
+    /**
+     * Fetch historical stock prices using the official KRX API
+     * Calls the API multiple times for different dates to build historical data
+     */
+    @Cacheable(value = "realHistoricalPrices", key = "#ticker + '_' + #market + '_' + #periodDays")
+    public List<KrxStockInfo> getRealHistoricalPrices(String ticker, String market, int periodDays) {
+        logger.info("=== STARTING HISTORICAL DATA FETCH ===");
+        logger.info("Fetching real historical prices for ticker: {}, market: {}, period: {} days", ticker, market, periodDays);
+        
+        List<KrxStockInfo> historicalData = new ArrayList<>();
+        LocalDate endDate = LocalDate.now();
+        
+        // Skip weekends for end date
+        while (endDate.getDayOfWeek().getValue() > 5) {
+            endDate = endDate.minusDays(1);
+        }
+        
+        LocalDate startDate = endDate.minusDays(periodDays);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        
+        logger.info("Date range: {} to {} ({} calendar days)", startDate.format(formatter), endDate.format(formatter), periodDays);
+        
+        // Create separate WebClient for KRX API endpoints
+        WebClient krxWebClient = WebClient.builder()
+            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .defaultHeader(HttpHeaders.USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .build();
+        
+        LocalDate currentDate = startDate;
+        while (!currentDate.isAfter(endDate) && historicalData.size() < periodDays) {
+            // Skip weekends
+            if (currentDate.getDayOfWeek().getValue() <= 5) {
+                try {
+                    String dateStr = currentDate.format(formatter);
+                    logger.debug("Fetching data for date: {}", dateStr);
+                    
+                    // Use KOSDAQ API for all stocks - it may contain both KOSPI and KOSDAQ stocks
+                    String apiEndpoint = KOSDAQ_DAILY_TRADING_API;
+                    String requestBody = String.format("{\"basDd\":\"%s\"}", dateStr);
+                    
+                    logger.debug("Calling {} for date {} with market {}", apiEndpoint, dateStr, market);
+                    
+                    String response = krxWebClient.post()
+                        .uri(apiEndpoint)
+                        .bodyValue(requestBody)
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .block();
+                    
+                    if (response != null) {
+                        logger.debug("Raw API response: {}", response.substring(0, Math.min(response.length(), 500)));
+                        JsonNode root = objectMapper.readTree(response);
+                        JsonNode outBlock = root.path("OutBlock_1");
+                        
+                        logger.debug("OutBlock_1 found: {}, is array: {}, size: {}", 
+                            outBlock != null, outBlock.isArray(), outBlock.size());
+                        
+                        if (outBlock.isArray() && outBlock.size() > 0) {
+                            logger.debug("Searching for ticker {} in {} results", ticker, outBlock.size());
+                            // Find the specific stock in the response
+                            for (JsonNode stockNode : outBlock) {
+                                String stockCode = stockNode.path("ISU_CD").asText("");
+                                logger.debug("Checking stock code: {} vs target: {}", stockCode, ticker);
+                                if (ticker.equals(stockCode)) {
+                                    KrxStockInfo stockInfo = parseKrxStockFromDaily(stockNode);
+                                    if (stockInfo != null) {
+                                        historicalData.add(stockInfo);
+                                        logger.info("Added data point for {} on {} - price: {}", ticker, dateStr, stockInfo.getClosePrice());
+                                    }
+                                    break;
+                                }
+                            }
+                        } else {
+                            logger.warn("No data in OutBlock_1 for date {}", dateStr);
+                        }
+                    }
+                    
+                    // Add delay to prevent rate limiting
+                    Thread.sleep(100);
+                    
+                } catch (Exception e) {
+                    logger.warn("Failed to fetch data for date {}: {}", currentDate, e.getMessage());
+                }
+            }
+            currentDate = currentDate.plusDays(1);
+        }
+        
+        logger.info("=== HISTORICAL DATA FETCH COMPLETE ===");
+        logger.info("Fetched {} historical data points for ticker {}", historicalData.size(), ticker);
+        
+        if (historicalData.isEmpty()) {
+            logger.warn("NO HISTORICAL DATA FOUND - returning empty list");
+        } else {
+            logger.info("Historical data dates: {}", 
+                historicalData.stream().map(info -> info.getTradeDate()).limit(5).toArray());
+        }
+        
+        return historicalData;
+    }
+    
+    /**
+     * Parse KrxStockInfo from KOSDAQ daily trading API response
+     */
+    private KrxStockInfo parseKrxStockFromDaily(JsonNode stockNode) {
+        try {
+            KrxStockInfo stockInfo = new KrxStockInfo();
+            stockInfo.setTicker(stockNode.path("ISU_CD").asText(""));
+            stockInfo.setName(stockNode.path("ISU_NM").asText(""));
+            stockInfo.setClosePrice(stockNode.path("TDD_CLSPRC").asText("0"));
+            stockInfo.setPriceChange(stockNode.path("CMPPREVDD_PRC").asText("0"));
+            stockInfo.setChangeRate(stockNode.path("FLUC_RT").asText("0"));
+            stockInfo.setOpenPrice(stockNode.path("TDD_OPNPRC").asText("0"));
+            stockInfo.setHighPrice(stockNode.path("TDD_HGPRC").asText("0"));
+            stockInfo.setLowPrice(stockNode.path("TDD_LWPRC").asText("0"));
+            stockInfo.setVolume(stockNode.path("ACC_TRDVOL").asText("0"));
+            stockInfo.setTradeValue(stockNode.path("ACC_TRDVAL").asText("0"));
+            stockInfo.setMarketCap(stockNode.path("MKTCAP").asText("0"));
+            stockInfo.setTradeDate(stockNode.path("BAS_DD").asText(""));
+            return stockInfo;
+        } catch (Exception e) {
+            logger.error("Error parsing stock data from daily API", e);
+            return null;
+        }
+    }
+
     /**
      * Helper method to parse numeric strings with commas
      */

@@ -20,7 +20,7 @@ jspm_packages/
 
 # Keep these for Docker environment
 # .env.development
-# .env.test  
+# .env.test
 # .env.production
 
 # ===========================
@@ -211,3 +211,7 @@ chrome-profiler-events*.json
 # Add any project-specific ignores here
 /uploads/
 /public/uploads/
+
+# Claude
+.Claude
+CLAUDE.md

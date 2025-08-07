@@ -1,9 +1,7 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import StockChart from "../components/chart/stock-chart";
-import StockDetailHeader from "../components/stock-detail-header";
-import StockRankingTable from "../components/stock-ranking-table";
+import { StockDetailHeader, StockRankingTable, StockSearch, StockChart } from "../components/stock";
 import {
   useMarketIndices,
   useStockBasicInfo,
@@ -31,6 +29,7 @@ interface RankingStock {
   change: number;
   changeRate: number;
   marketCap: string;
+  volume: string;
   logo?: string;
 }
 
@@ -42,8 +41,8 @@ interface MarketIndex {
 }
 
 type ViewMode = "detail" | "ranking";
-type TimeRange = "1d" | "1w" | "1m";
-type RankingType = "volume" | "rising" | "falling";
+type TimeRange = "1w" | "1m" | "3m" | "6m" | "1y";
+type RankingType = "volume" | "gainers" | "losers";
 type MarketType = "전체" | "kospi" | "kosdaq";
 
 const ProductsPage = () => {
@@ -60,7 +59,7 @@ const ProductsPage = () => {
   const [marketType, setMarketType] = useState<MarketType>(marketTypeFromUrl);
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(tickerFromUrl);
-  const [timeRange, setTimeRange] = useState<TimeRange>("1d");
+  const [timeRange, setTimeRange] = useState<TimeRange>("1w");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -112,7 +111,7 @@ const ProductsPage = () => {
     error: basicInfoError,
   } = useStockBasicInfo(
     selectedTicker,
-    selectedStock?.marketType === "KOSDAQ" ? "KSQ" : "STK"
+    selectedStock?.ticker?.startsWith('900') || selectedStock?.ticker?.startsWith('300') ? "KOSDAQ" : "KOSPI"
   );
   */
 
@@ -168,7 +167,7 @@ const ProductsPage = () => {
 
       try {
         // First try to get basic info from KRX
-        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KSQ' : 'STK';
+        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
         const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
@@ -181,11 +180,24 @@ const ProductsPage = () => {
           }
         });
 
+        // Handle both wrapped {success, data} format and direct object format
+        let stockData;
         if (response.data) {
-  
+          if (response.data.success !== undefined) {
+            // Wrapped format
+            if (response.data.success && response.data.data) {
+              stockData = response.data.data;
+            }
+          } else if (response.data.ISU_SRT_CD || response.data.ticker) {
+            // Direct KrxStockInfo object format
+            stockData = response.data;
+          }
+        }
+
+        if (stockData) {
 
           // Check if we got data for the correct ticker
-          const returnedTicker = response.data.ISU_SRT_CD || response.data.ticker;
+          const returnedTicker = stockData.ticker || stockData.ISU_SRT_CD;
           if (returnedTicker !== selectedTicker) {
             console.error(`TICKER MISMATCH! Requested: ${selectedTicker}, Received: ${returnedTicker}`);
             console.error("This indicates a backend caching issue");
@@ -193,14 +205,14 @@ const ProductsPage = () => {
 
           // Map KRX API field names to our expected format
           const mappedData = {
-            ticker: response.data.ISU_SRT_CD || response.data.ticker,
-            name: response.data.ISU_ABBRV || response.data.name,
-            closePrice: (response.data.TDD_CLSPRC || response.data.closePrice || "0").toString().replace(/,/g, ''),
-            priceChange: (response.data.CMPPREVDD_PRC || response.data.priceChange || "0").toString().replace(/,/g, ''),
-            changeRate: (response.data.FLUC_RT || response.data.changeRate || "0").toString().replace(/,/g, ''),
-            volume: formatVolume(response.data.ACC_TRDVOL || response.data.volume || "0"),
-            tradeValue: response.data.ACC_TRDVAL || response.data.tradeValue,
-            marketCap: response.data.MKTCAP || response.data.marketCap,
+            ticker: stockData.ticker || stockData.ISU_SRT_CD,
+            name: stockData.name || stockData.ISU_ABBRV,
+            closePrice: (stockData.closePrice || stockData.TDD_CLSPRC || "0").toString().replace(/,/g, ''),
+            priceChange: (stockData.priceChange || stockData.CMPPREVDD_PRC || "0").toString().replace(/,/g, ''),
+            changeRate: (stockData.changeRate || stockData.FLUC_RT || "0").toString().replace(/,/g, ''),
+            volume: formatVolume(stockData.volume || stockData.ACC_TRDVOL || "0"),
+            tradeValue: stockData.tradeValue || stockData.ACC_TRDVAL,
+            marketCap: stockData.marketCap || stockData.MKTCAP,
           };
 
   
@@ -213,21 +225,38 @@ const ProductsPage = () => {
             console.error("Skipping wrong ticker data, will try fallback");
             // Continue to fallback below
           }
+        } else {
+          console.log("No stock data in response, trying fallback");
         }
       } catch (err) {
         console.error("Failed to fetch real-time price:", err);
       }
 
-      // Fallback: Try to get data from daily endpoint
+      // Fallback: Use our public KRX endpoint instead
       
       try {
-        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/stock/daily/${selectedTicker}?period=2`);
-        if (dailyResponse.data.success && dailyResponse.data.data.length > 0) {
-          const latestData = dailyResponse.data.data[0];
-          const prevData = dailyResponse.data.data[1] || latestData;
+        const fallbackMarketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
+        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${fallbackMarketType}`);
+        
+        // Handle both wrapped and direct format
+        let stockData;
+        if (dailyResponse.data) {
+          if (dailyResponse.data.success !== undefined) {
+            // Wrapped format
+            if (dailyResponse.data.success && dailyResponse.data.data) {
+              stockData = dailyResponse.data.data;
+            }
+          } else if (dailyResponse.data.ISU_SRT_CD || dailyResponse.data.ticker) {
+            // Direct KrxStockInfo object format
+            stockData = dailyResponse.data;
+          }
+        }
+        
+        if (stockData) {
 
-          const change = latestData.close - prevData.close;
-          const changeRate = prevData.close > 0 ? ((change / prevData.close) * 100) : 0;
+          const price = parseFloat(stockData.closePrice?.replace(/,/g, '')) || 0;
+          const change = parseFloat(stockData.priceChange?.replace(/,/g, '')) || 0;
+          const changeRate = parseFloat(stockData.changeRate?.replace(/,/g, '')) || 0;
 
           // Try to get name from search
           let stockName = "";
@@ -258,11 +287,11 @@ const ProductsPage = () => {
 
           const fallbackData = {
             ticker: selectedTicker,
-            name: stockName,
-            closePrice: latestData.close.toString(),
+            name: stockData.name || stockName,
+            closePrice: price.toString(),
             priceChange: change.toString(),
             changeRate: changeRate.toFixed(2),
-            volume: formatVolume(latestData.volume.toString())
+            volume: formatVolume(stockData.volume || "0")
           };
 
 
@@ -361,9 +390,9 @@ const ProductsPage = () => {
     setRealtimePriceData({
       ticker: stock.ticker,
       name: stock.name,
-      closePrice: stock.price.toString(),
-      priceChange: stock.change.toString(),
-      changeRate: stock.changeRate.toString(),
+      closePrice: (stock.price || 0).toString(),
+      priceChange: (stock.change || 0).toString(),
+      changeRate: (stock.changeRate || 0).toString(),
       volume: stock.volume || "0"
     });
 
@@ -410,9 +439,11 @@ const ProductsPage = () => {
   };
 
   const periodToDays: Record<TimeRange, number> = {
-    "1d": 30,  // Show 30 days of daily data
-    "1w": -14, // Show 14 weeks of weekly data (negative indicates weekly aggregation)
-    "1m": -12, // Show 12 months of monthly data (negative indicates monthly aggregation)
+    "1w": 7,    // Show 7 days of daily data
+    "1m": 30,   // Show 30 days of daily data
+    "3m": 90,   // Show 90 days of daily data
+    "6m": 180,  // Show 180 days of daily data
+    "1y": 365,  // Show 365 days of daily data
   };
 
 
@@ -490,79 +521,16 @@ const ProductsPage = () => {
                   </div>
                 )}
 
-                {/* Integrated Chart Box with Period Navigation */}
-                <div className="bg-white rounded-lg shadow-sm">
-                  {/* Period Navigation Bar */}
-                  <div className="border-b border-gray-200 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      {/* Time Range Selector */}
-                      <div className="flex space-x-2">
-                        {(
-                          ["1d", "1w", "1m"] as TimeRange[]
-                        ).map((range) => {
-                          const displayLabel = {
-                            "1d": "일",
-                            "1w": "주",
-                            "1m": "월"
-                          }[range] || range;
-                          
-                          return (
-                            <button
-                              key={range}
-                              onClick={() => setTimeRange(range)}
-                              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                                timeRange === range
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                              }`}
-                            >
-                              {displayLabel}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Chart Type and Refresh Controls */}
-                      <div className="flex items-center space-x-4">
-                        
-                        {/* Refresh Button */}
-                        <button
-                          onClick={() => window.location.reload()}
-                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
-                        >
-                          새로고침
-                        </button>
-                        
-                        {/* Drawing Mode Button */}
-                        <button 
-                          onClick={() => setDrawingMode(!drawingMode)}
-                          className={`px-3 py-2 rounded-lg transition-colors text-sm ${
-                            drawingMode 
-                              ? 'bg-blue-600 text-white' 
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {drawingMode ? '그리기 종료' : '그리기'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Chart Component */}
-                  <div style={{ height: "600px", padding: "20px" }}>
-                    <StockChart
-                      selectedStock={{
-                        ticker: selectedTicker || "",
-                        name: selectedStock?.name || realtimePriceData?.name || "",
-                      }}
-                      darkMode={false}
-                      realTimeUpdates={false}
-                      period={periodToDays[timeRange]}
-                      chartType={chartType}
-                      drawingMode={drawingMode}
-                    />
-                  </div>
-                </div>
+                {/* Enhanced Chart with Candlestick */}
+                <StockChart
+                  selectedStock={{
+                    ticker: selectedTicker || "",
+                    name: selectedStock?.name || realtimePriceData?.name || "",
+                  }}
+                  period={periodToDays[timeRange]}
+                  chartType="line"
+                  darkMode={false}
+                />
 
               </div>
             </div>
