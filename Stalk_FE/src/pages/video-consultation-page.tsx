@@ -402,6 +402,16 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [showParticipantFaces, publisher, isVideoEnabled]);
 
+  // 차트 전환 시 로컬 비디오 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled && !showStockChart) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100); // DOM이 렌더링된 후 연결
+    }
+  }, [showStockChart, isVideoEnabled, publisher]);
+
+
   // 로컬 미니 비디오 연결
   useEffect(() => {
     if (publisher && isVideoEnabled && showParticipantFaces) {
