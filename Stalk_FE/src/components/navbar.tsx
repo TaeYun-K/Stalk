@@ -10,7 +10,7 @@ import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isLoggedIn, logout, isLoggingOut, userInfo } = useAuth();
+  const { isLoggedIn, logout, isLoggingOut, userInfo, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -87,76 +87,78 @@ const Navbar: React.FC = () => {
           </div>
 
           {/* Navigation Menu */}
-          <div className="hidden md:flex items-center space-x-8">
-            <button 
-              onClick={() => navigate('/experts')}
-              className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
-            >
-              투자 전문가
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </button>
-            <button 
-              onClick={() => navigate('/products')}
-              className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
-            >
-              상품 조회
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </button>
-            
-            <div 
-              className="relative group"
-              onMouseEnter={() => {
-                if (communityMenuTimeout) {
-                  clearTimeout(communityMenuTimeout);
-                  setCommunityMenuTimeout(null);
-                }
-                setShowCommunityMenu(true);
-              }}
-              onMouseLeave={() => {
-                const timeout = setTimeout(() => {
-                  setShowCommunityMenu(false);
-                }, 200);
-                setCommunityMenuTimeout(timeout);
-              }}
-            >
+          
+            <div className="hidden md:flex items-center space-x-8">
               <button 
-                onClick={() => navigate('/community')}
-                className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative flex items-center space-x-1"
+                onClick={() => navigate('/experts')}
+                className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
               >
-                <span>커뮤니티</span>
-               
+                투자 전문가
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
+              </button>
+              <button 
+                onClick={() => navigate('/products')}
+                className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
+              >
+                상품 조회
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
               </button>
               
-              {/* Community Dropdown Menu */}
-              {showCommunityMenu && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
-                  {/* Invisible bridge to prevent gap */}
-                  <div className="h-4 -mt-4"></div>
-                  <button
-                    onClick={() => {
-                      navigate('/community?tab=news');
-                      setShowCommunityMenu(false);
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                  >
-                    <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
-                    <span>뉴스</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/community?tab=knowledge');
-                      setShowCommunityMenu(false);
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                  >
-                    <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
-                    <span>투자 지식iN</span>
-                  </button>
-                </div>
-              )}
+              <div 
+                className="relative group"
+                onMouseEnter={() => {
+                  if (communityMenuTimeout) {
+                    clearTimeout(communityMenuTimeout);
+                    setCommunityMenuTimeout(null);
+                  }
+                  setShowCommunityMenu(true);
+                }}
+                onMouseLeave={() => {
+                  const timeout = setTimeout(() => {
+                    setShowCommunityMenu(false);
+                  }, 200);
+                  setCommunityMenuTimeout(timeout);
+                }}
+              >
+                <button 
+                  onClick={() => navigate('/community')}
+                  className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative flex items-center space-x-1"
+                >
+                  <span>커뮤니티</span>
+                 
+                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
+                </button>
+                
+                {/* Community Dropdown Menu */}
+                {showCommunityMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
+                    {/* Invisible bridge to prevent gap */}
+                    <div className="h-4 -mt-4"></div>
+                    <button
+                      onClick={() => {
+                        navigate('/community?tab=news');
+                        setShowCommunityMenu(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                    >
+                      <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
+                      <span>뉴스</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate('/community?tab=knowledge');
+                        setShowCommunityMenu(false);
+                      }}
+                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                    >
+                      <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
+                      <span>투자 지식iN</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          
 
           {/* Search Bar and User Actions */}
           <div className="flex items-center space-x-4">
@@ -216,21 +218,23 @@ const Navbar: React.FC = () => {
                 {/* Profile Dropdown Menu */}
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
-                    
-                    <button
-                      onClick={() => {
-                        navigate('/mypage');
-                        setShowProfileMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>마이 페이지</span>
-                    </button>
-                    {!isMyPage && (
+                    {/* ADMIN이 아닐 때만 표시되는 메뉴들 */}
+                    {userRole !== 'ADMIN' && !isMyPage && (
+                      <button
+                        onClick={() => {
+                          navigate('/mypage');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>마이 페이지</span>
+                      </button>
+                    )}
+                    {userRole !== 'ADMIN' && !isMyPage && (
                       <button
                         onClick={() => {
                           navigate('/mypage?tab=내 상담 내역');
@@ -244,7 +248,9 @@ const Navbar: React.FC = () => {
                         <span>상담 내역</span>
                       </button>
                     )}
-                    {isAdmin && (
+                    
+                    {/* ADMIN일 때만 표시되는 관리자 페이지 메뉴 */}
+                    {userRole === 'ADMIN' && (
                       <button
                         onClick={() => {
                           navigate('/admin');
@@ -258,7 +264,13 @@ const Navbar: React.FC = () => {
                         <span>관리자 페이지</span>
                       </button>
                     )}
-                    <div className="border-t border-gray-200 my-1"></div>
+                    
+                    {/* 구분선 - ADMIN이 아니고 마이페이지가 아닐 때만 표시 */}
+                    {(userRole !== 'ADMIN' && !isMyPage) || userRole === 'ADMIN' ? (
+                      <div className="border-t border-gray-200 my-1"></div>
+                    ) : null}
+                    
+                    {/* 로그아웃 버튼 - 모든 role에서 표시 */}
                     <button
                       onClick={async () => {
                         try {

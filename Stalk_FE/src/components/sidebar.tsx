@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { useNavigate, useLocation } from 'react-router-dom';
 import tossLogoBlue from '@/assets/images/logos/Toss_logo_blue.svg';
 import checkIcon from '@/assets/images/icons/check_icon.svg';
 import sidebarSlideupIcon from '@/assets/images/icons/sidebar_slideup_icon.svg';
@@ -10,6 +11,7 @@ import NotificationService from '@/services/notificationService';
 import ReservationService from '@/services/reservationService';
 import CommunityService from '@/services/communityService';
 import AuthService from '@/services/authService';
+import kofiaLogo from '@/assets/images/logos/kofia_logo.png';
 
 interface MenuItem {
   id: string;
@@ -50,6 +52,9 @@ interface KnowledgePost {
 
 const Sidebar: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { userRole } = useAuth();
+  const isHomePage = location.pathname === '/';
   const { watchlist, removeFromWatchlist } = useWatchlist();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
   const [selectedMenu, setSelectedMenu] = useState<string>('notifications');
@@ -58,12 +63,18 @@ const Sidebar: React.FC = () => {
   const [knowledgePosts, setKnowledgePosts] = useState<KnowledgePost[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const menuItems: MenuItem[] = [
+  const getAllMenuItems = (): MenuItem[] => [
     {
       id: 'notifications',
       label: '알림',
       path: '/notifications',
       icon: '🔔'
+    },
+    {
+      id: 'certification',
+      label: '자격인증',
+      path: '/admin',
+      icon: 'kofia' // 특별한 값으로 kofia 로고 사용
     },
     {
       id: 'watchlist',
@@ -90,6 +101,16 @@ const Sidebar: React.FC = () => {
       icon: '📚'
     }
   ];
+
+  const menuItems: MenuItem[] = getAllMenuItems().filter((item) => {
+    if (userRole === 'ADMIN') {
+      // ADMIN은 알림과 자격인증만 보이게
+      return item.id === 'notifications' || item.id === 'certification';
+    } else {
+      // USER, ADVISOR는 자격인증을 제외한 모든 메뉴
+      return item.id !== 'certification';
+    }
+  });
 
   // 알림 데이터 로드
   const loadNotifications = async () => {
@@ -155,6 +176,12 @@ const Sidebar: React.FC = () => {
 
   // 메뉴 클릭 시 데이터 로드
   const handleMenuClick = (menuId: string) => {
+    // 자격인증 클릭 시 admin 페이지로 이동
+    if (menuId === 'certification') {
+      navigate('/admin');
+      return;
+    }
+
     if (selectedMenu === menuId && !isCollapsed) {
       setIsCollapsed(true);
     } else {
@@ -406,6 +433,9 @@ const Sidebar: React.FC = () => {
 
   // Push content style for body and navbar
   useEffect(() => {
+    // 홈페이지에서는 margin을 적용하지 않음
+    if (isHomePage) return;
+    
     const navbar = document.querySelector('nav');
     
     // 초기 렌더링 시에도 collapsed 상태에 맞는 margin 설정
@@ -433,10 +463,13 @@ const Sidebar: React.FC = () => {
         navbar.style.transition = '';
       }
     };
-  }, [isCollapsed]);
+  }, [isCollapsed, isHomePage]);
 
   // 컴포넌트 마운트 시 초기 margin 설정
   useEffect(() => {
+    // 홈페이지에서는 margin을 적용하지 않음
+    if (isHomePage) return;
+    
     const navbar = document.querySelector('nav');
     
     // 사이드바가 collapsed 상태일 때의 초기 margin 설정
@@ -456,10 +489,13 @@ const Sidebar: React.FC = () => {
         navbar.style.transition = '';
       }
     };
-  }, []); // 빈 의존성 배열로 마운트 시에만 실행
+  }, [isHomePage]); // isHomePage 의존성 추가
 
   // 페이지 이동 시 navbar margin 재설정
   useEffect(() => {
+    // 홈페이지에서는 margin을 적용하지 않음
+    if (isHomePage) return;
+    
     const navbar = document.querySelector('nav');
     if (navbar) {
       // 현재 collapsed 상태에 맞는 margin 설정
@@ -498,7 +534,7 @@ const Sidebar: React.FC = () => {
   return (
     <>
       {/* Collapsed Sidebar */}
-      <div className="sidebar-container fixed right-0 top-0 h-full bg-white border-l border-gray-200 w-20 z-50 flex flex-col">
+      <div className="sidebar-container fixed right-0 top-0 h-full bg-white border-l border-gray-200 w-20 z-[9999] flex flex-col">
         {/* Toggle Button */}
         <div className="py-4 flex justify-center">
           <button
@@ -527,7 +563,11 @@ const Sidebar: React.FC = () => {
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                <span className="text-xl">{item.icon}</span>
+                {item.icon === 'kofia' ? (
+                  <img src={kofiaLogo} alt="kofia" className="w-5 h-5" />
+                ) : (
+                  <span className="text-xl">{item.icon}</span>
+                )}
               </button>
               <span className="text-xs text-gray-500 font-medium">{item.label}</span>
             </div>
@@ -538,13 +578,13 @@ const Sidebar: React.FC = () => {
         <div className="pb-4 flex flex-col items-center space-y-2">
           <button 
             onClick={() => window.open('https://www.tossinvest.com/', '_blank')}
-            className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors border border-gray-200"
+            className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors border border-gray-200"
           >
             <img src={tossLogoBlue} alt="Toss" className="w-6 h-6" />
           </button>
           <button 
             onClick={scrollToTop}
-            className="w-10 h-10 border border-gray-300 bg-white rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+            className="w-10 h-10 border border-gray-200 bg-white rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <img src={sidebarSlideupIcon} alt="scroll to top" className="w-5 h-5" />
           </button>
@@ -553,7 +593,7 @@ const Sidebar: React.FC = () => {
 
       {/* Expanded Content Panel */}
       {!isCollapsed && (
-        <div className="sidebar-container fixed right-20 top-0 h-full bg-white shadow-xl border-l border-gray-200 w-80 z-40">
+        <div className="sidebar-container fixed right-20 top-0 h-full bg-white shadow-xl border-l border-gray-200 w-80 z-[9998]">
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">{getCurrentMenuLabel()}</h2>
             {selectedMenu === 'notifications' && (
