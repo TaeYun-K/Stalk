@@ -23,6 +23,7 @@ public class AdvisorDetailResponseDto {
     private String contact;
     private Double avg_rating;
     private Integer review_count;
+    private Integer consultation_fee;
     
     // 경력사항 목록
     private List<CareerDto> careers;
