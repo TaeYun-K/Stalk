@@ -43,6 +43,7 @@ import CommunityPage from "@/pages/community-page";
 import WritePostPage from "@/pages/write-post-page";
 import KnowledgeBoardPage from "@/pages/knowledge-board-page";
 import MyPage from "@/pages/my-page";
+
 import SearchPage from "@/pages/search-page";
 import VideoConsultationPage from "@/pages/video-consultation-page";
 import AdminPage from "@/pages/admin-page";

@@ -292,8 +292,69 @@ const SignupPage = () => {
       const result = await response.json();
 
       if (result.userId || result.success) {
-        alert('회원가입이 완료되었습니다!');
-        navigate('/signup-complete');
+        // 전문가 회원가입 성공 시 자동 로그인 시도
+        if (userType === 'expert') {
+          try {
+            // 자동 로그인 시도
+            const loginResponse = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: formData.userId,
+                password: formData.password
+              }),
+            });
+
+            if (loginResponse.ok) {
+              const loginResult = await loginResponse.json();
+              
+              // 로그인 성공 시 토큰 저장
+              if (loginResult.accessToken) {
+                localStorage.setItem('accessToken', loginResult.accessToken);
+                
+                // 자격증 인증요청 API 호출
+                try {
+                  const qualificationResponse = await fetch('/api/advisors/certificate-approval', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${loginResult.accessToken}`
+                    },
+                    body: JSON.stringify({
+                      certificateName: formData.qualification.certificateName,
+                      certificateFileSn: formData.qualification.certificateFileSn,
+                      birth: formData.qualification.birth,
+                      certificateFileNumber: formData.qualification.certificateFileNumber
+                    }),
+                  });
+
+                  if (qualificationResponse.ok) {
+                    alert('회원가입이 완료되었습니다! 자동 로그인되었고 자격증 인증요청이 접수되었습니다.');
+                  } else {
+                    alert('회원가입이 완료되었습니다! 자동 로그인되었습니다. (자격증 인증요청은 별도로 진행해주세요)');
+                  }
+                } catch (qualificationError) {
+                  console.error('자격증 인증요청 실패:', qualificationError);
+                  alert('회원가입이 완료되었습니다! 자동 로그인되었습니다. (자격증 인증요청은 별도로 진행해주세요)');
+                }
+              } else {
+                alert('회원가입이 완료되었습니다! 로그인 후 자격증 인증요청을 진행해주세요.');
+              }
+            } else {
+              alert('회원가입이 완료되었습니다! 로그인 후 자격증 인증요청을 진행해주세요.');
+            }
+          } catch (loginError) {
+            console.error('자동 로그인 실패:', loginError);
+            alert('회원가입이 완료되었습니다! 로그인 후 자격증 인증요청을 진행해주세요.');
+          }
+        } else {
+          // 일반 사용자는 기존과 동일
+          alert('회원가입이 완료되었습니다!');
+        }
+        
+        navigate('/signup-complete', { state: { name: formData.name, userType } });
       } else {
         setErrorMessage(result.message || '회원가입에 실패했습니다.');
       }
