@@ -43,7 +43,7 @@ import CommunityPage from "@/pages/community-page";
 import WritePostPage from "@/pages/write-post-page";
 import KnowledgeBoardPage from "@/pages/knowledge-board-page";
 import MyPage from "@/pages/my-page";
-import FavoritesPage from "@/pages/favorites-page";
+
 import SearchPage from "@/pages/search-page";
 import VideoConsultationPage from "@/pages/video-consultation-page";
 import AdminPage from "@/pages/admin-page";
@@ -159,7 +159,7 @@ const AppContent: React.FC = () => {
                 }
               />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
+              
               <Route
                 path="/expert-registration/:advisorId"
                 element={<ExpertsIntroductionRegistrationPage />}
