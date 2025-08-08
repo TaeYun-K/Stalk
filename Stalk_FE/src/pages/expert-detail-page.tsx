@@ -1187,11 +1187,8 @@ const ExpertDetailPage: React.FC = () => {
                     >
                       예약하기
                     </button>
-<<<<<<< HEAD
                     )}
-=======
-
->>>>>>> 4298075477818dd4fab47ce5e437ebecaa922269
+                    
                     {/* 전문가 간 예약 제한 오류 메시지 */}
                     {expertReservationError && (
                       <div className="w-full mb-3 p-3 border border-red-300 bg-red-50 text-red-600 rounded-lg text-sm text-center">
