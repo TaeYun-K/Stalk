@@ -5,7 +5,7 @@ import {
   Subscriber,
 } from "openvidu-browser";
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useBlocker, useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
 
@@ -42,6 +42,7 @@ interface ChatMessage {
   timestamp: Date;
   type : "system" | "user";
 }
+
 
 type HoveredButton =
   | "audio"
@@ -195,48 +196,114 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [showChat]);
 
-
-
-
   // 페이지 이탈 방지 훅
-  const usePreventNavigation = (enabled: boolean) => {
-    const navigate = useNavigate();
-
-    useEffect(() => {
-      if (!enabled) return;
-
-      // 🔒 1. 브라우저 새로고침 / 닫기 방지
-      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+  const usePreventNavigation = (leaveSession: () => Promise<void>) => {
+  useEffect(() => {
+    // 새로고침 / 창 닫기
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const confirmLeave = window.confirm('상담을 종료하고 나가시겠습니까?');
+      if (!confirmLeave) {
         e.preventDefault();
         e.returnValue = '';
-      };
+      } else {
+        // 창닫기/새로고침 시 비동기 axios는 실패 가능 → sendBeacon 권장
+        leaveSession();
+      }
+    };
 
-      // 🔒 2. 뒤로가기 방지
-      const handlePopState = (e: PopStateEvent) => {
-        e.preventDefault();
-        // 뒤로가기 막고 알림창 보여주기 (선택)
-        const confirmLeave = window.confirm('상담이 종료되지 않았습니다. 정말 나가시겠습니까?');
-        if (confirmLeave) {
-          window.removeEventListener('beforeunload', handleBeforeUnload);
-          navigate(-1); // 실제 뒤로가기
-        } else {
-          // ❌ 뒤로가기 중단: 앞으로 한 번 더 이동 (뒤로 간 걸 다시 앞으로 감)
-          window.history.pushState(null, '', window.location.href);
-        }
-      };
+    // 뒤로가기
+    const handlePopState = async (e: PopStateEvent) => {
+      e.preventDefault();
+      const confirmLeave = window.confirm('상담을 종료하고 나가시겠습니까?');
+      if (confirmLeave) {
+        await leaveSession();
+      } else {
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
 
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      window.addEventListener('popstate', handlePopState);
-      // popstate 트리거를 위해 현재 상태 push (뒤로가기 가능하게 만들어줘야 감지 가능)
-      window.history.pushState(null, '', window.location.href);
+    // pushState로 popstate 감지 준비
+    window.history.pushState(null, '', window.location.href);
 
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        window.removeEventListener('popstate', handlePopState);
-      };
-    }, [enabled, navigate]);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [leaveSession]);
   };
-  usePreventNavigation(true);
+
+  // 상담 ID를 세션 스토리지에 저장
+  useEffect(() => {
+  if (consultationId) {
+    sessionStorage.setItem('consultationId', consultationId.toString());
+  }
+  }, [consultationId]);
+
+    // 상담 종료 함수
+  const leaveSession = async (): Promise<void> => {
+
+    const token = AuthService.getAccessToken();
+    const id = sessionStorage.getItem('consultationId');
+    try {
+      // 1) 백엔드에 세션 종료 POST 요청
+      await axios.post(`/api/consultations/${id}/session/close`,
+        {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      console.error('상담 종료 API 실패:', error);
+    } finally {
+      // 2) OpenVidu 세션 해제
+      if (session) {
+        try {
+          session.disconnect();
+        } catch (err) {
+          console.error('세션 disconnect 중 오류:', err);
+        }
+      }
+
+      // 3) 로컬 퍼블리셔(내 미디어) 트랙 정지 및 객체 파괴
+      if (publisher) {
+        try {
+          publisher.stream
+            .getMediaStream()
+            .getTracks()
+            .forEach(track => track.stop());
+        } catch (err) {
+          console.error('퍼블리셔 정리 중 오류:', err);
+        }
+      }
+
+      // 4) 모든 구독자 스트림 언구독 및 트랙 정지
+      subscribers.forEach(sub => {
+        // 언구독
+        try {
+          session?.unsubscribe(sub);
+        } catch (err) {
+          console.error('구독 해제 실패:', err);
+        }
+        // 미디어 트랙 중지
+        try {
+          sub.stream
+            .getMediaStream()
+            .getTracks()
+            .forEach(track => track.stop());
+        } catch (err) {
+          console.error('구독자 트랙 중지 실패:', err);
+        }
+      });
+
+      // 4) 상태 초기화
+      navigate(`/mypage`);
+    }
+  };
+
+  usePreventNavigation(leaveSession);
 
   // 참가자 역할 구분을 위한 함수들
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -546,66 +613,6 @@ const VideoConsultationPage: React.FC = () => {
     } catch (error) {
       console.error("Error starting media:", error);
       alert("카메라 또는 마이크에 접근할 수 없습니다. 브라우저 권한을 확인해주세요.");
-    }
-  };
-
-  // 상담 종료 함수
-  const leaveSession = async (): Promise<void> => {
-
-    const token = AuthService.getAccessToken();
-    try {
-      // 1) 백엔드에 세션 종료 POST 요청
-      await axios.post(`/api/consultations/${consultationId}/session/close`, 
-        {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-    } catch (error) {
-      console.error('상담 종료 API 실패:', error);
-    } finally {
-      // 2) OpenVidu 세션 해제
-      if (session) {
-        try {
-          session.disconnect();
-        } catch (err) {
-          console.error('세션 disconnect 중 오류:', err);
-        }
-      }
-
-      // 3) 로컬 퍼블리셔(내 미디어) 트랙 정지 및 객체 파괴
-      if (publisher) {
-        try {
-          publisher.stream
-            .getMediaStream()
-            .getTracks()
-            .forEach(track => track.stop());
-        } catch (err) {
-          console.error('퍼블리셔 정리 중 오류:', err);
-        }
-      }
-
-      // 4) 모든 구독자 스트림 언구독 및 트랙 정지
-      subscribers.forEach(sub => {
-        // 언구독
-        try {
-          session?.unsubscribe(sub);
-        } catch (err) {
-          console.error('구독 해제 실패:', err);
-        }
-        // 미디어 트랙 중지
-        try {
-          sub.stream
-            .getMediaStream()
-            .getTracks()
-            .forEach(track => track.stop());
-        } catch (err) {
-          console.error('구독자 트랙 중지 실패:', err);
-        }
-      });
-
-      // 4) 상태 초기화
-      navigate(`/mypage`);
     }
   };
 
