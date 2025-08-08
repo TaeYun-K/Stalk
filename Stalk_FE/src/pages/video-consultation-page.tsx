@@ -97,8 +97,7 @@ const VideoConsultationPage: React.FC = () => {
   const [consultationStartTime] = useState<Date>(new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
-  const [showParticipantFaces, setShowParticipantFaces] =
-    useState<boolean>(true);
+  const [showParticipantFaces, setShowParticipantFaces] = useState<boolean>(true);
 
   
   useEffect(() => {
@@ -790,296 +789,258 @@ const VideoConsultationPage: React.FC = () => {
 
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col">
-      <div className="bg-gray-800 px-6 py-4 flex items-center justify-between border-b border-gray-700">
-        <div className="flex items-center space-x-6">
-          <img src={stalkLogoWhite} alt="Stalk Logo" className="h-8" />
-
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 bg-blue-600 px-3 py-1.5 rounded-full">
-              <div className="w-2 h-2 bg-white rounded-full"></div>
-              <span className="text-sm font-medium">상담 진행중</span>
+      {/* Header navbar */}
+      <div className="bg-gray-800 px-6 py-3 flex items-center justify-between border-b border-gray-700">
+        <div className="flex items-center space-x-4 flex-1">
+          <img src={stalkLogoWhite} alt="Stalk Logo" className="h-6" />
+          
+          {/* Thin search bar in header for chart mode */}
+          {showStockChart && (
+            <div className="flex-1 max-w-md [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0">
+              <StockSearch
+                onStockSelect={setSelectedStock}
+                darkMode={true}
+              />
             </div>
-            <div className="text-sm text-gray-400">
-              상담 시간: {getDuration()}
+          )}
+
+          {/* Compact status indicators */}
+          <div className="flex items-center space-x-3 ml-auto">
+            <div className="flex items-center space-x-1.5 bg-blue-600/20 border border-blue-500/30 px-2 py-1 rounded-full">
+              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium">상담중</span>
+            </div>
+            <div className="text-xs text-gray-400">
+              {getDuration()}
             </div>
             {isRecording && (
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-red-400">녹화 중</span>
+              <div className="flex items-center space-x-1.5">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-red-400">REC</span>
               </div>
             )}
+            <span className="text-xs text-gray-500">
+              #{consultationId?.slice(-6) || "DEMO"}
+            </span>
           </div>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-400">
-            상담 ID: {consultationId || "DEMO-001"}
-          </span>
-          <button
-            onClick={isRecording ? handleStopRecording : handleStartRecording}
-            title={isRecording ? "녹화 중지" : "녹화 시작"}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              isRecording
-                ? "bg-red-600 hover:bg-red-700 text-white"
-                : "bg-gray-700 hover:bg-gray-600 text-gray-300"
-            }`}
-          >
-            {isRecording ? "녹화 중지" : "녹화 시작"}
-          </button>
-          <button
-            onClick={leaveSession}
-            title="상담 종료"
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            상담 종료
-          </button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {!showStockChart ? (
-          <div className="flex-1 p-4">
-            <div className="h-full grid grid-cols-2 gap-4">
-              {/* 구독자 비디오 렌더링 */}
-              {subscribers.length > 0 ? (
-                subscribers.map((subscriber, index) => {
-                  const name = getParticipantName(subscriber);
-                  const role = getParticipantRole(subscriber);
-                  const roleName = getRoleDisplayName(role);
+          <div className="flex-1 p-2">
+            <div className="h-full grid grid-cols-2 gap-2">
+                {/* 구독자 비디오 렌더링 */}
+                {subscribers.length > 0 ? (
+                  subscribers.map((subscriber, index) => {
+                    const name = getParticipantName(subscriber);
+                    const role = getParticipantRole(subscriber);
+                    const roleName = getRoleDisplayName(role);
 
-                  const connectionId = subscriber.stream.connection.connectionId;
-                  const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
+                    const connectionId = subscriber.stream.connection.connectionId;
+                    const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
 
-                  return (
-                  <div key={index} className="bg-gray-800 rounded-2xl overflow-hidden relative group">
-                    <div className="w-full h-full flex-1">
-                      <video
-                        ref={(videoElement) => {
-                          if (videoElement && subscriber.stream) {
-                            const stream = subscriber.stream.getMediaStream();
-                            if (videoElement.srcObject !== stream) {
-                              videoElement.srcObject = stream;
-                              videoElement.play().catch(console.error);
-                              console.log(`▶️ 구독자 비디오 ${index} 최초 연결`);
+                    return (
+                    <div key={index} className="bg-gray-800 rounded-lg overflow-hidden relative group">
+                      <div className="w-full h-full flex items-center justify-center">
+                        <video
+                          ref={(videoElement) => {
+                            if (videoElement && subscriber.stream) {
+                              const stream = subscriber.stream.getMediaStream();
+                              if (videoElement.srcObject !== stream) {
+                                videoElement.srcObject = stream;
+                                videoElement.play().catch(console.error);
+                                console.log(`▶️ 구독자 비디오 ${index} 최초 연결`);
+                              }
                             }
-                          }
-                        }}
-                        autoPlay
-                        playsInline 
-                        muted={false}
-                        id={`subscriber-video-${index}`}
-                        className="w-full h-full object-cover rounded-2xl"
-                      />
-                    </div>
-                    <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                      <span className="text-sm font-medium">
-                        {name} ({roleName})
-                      </span>
-                    </div>
-
-
-                    <div className="absolute bottom-4 right-4 flex space-x-2">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500' : 'bg-red-500'}`}>
-                        <svg
-                          className="w-4 h-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                          }}
+                          autoPlay
+                          playsInline 
+                          muted={false}
+                          id={`subscriber-video-${index}`}
+                          className="w-full h-full object-contain"
+                        />
                       </div>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${mediaStatus.video ? 'bg-green-500' : 'bg-red-500'}`}>
-                        <svg
-                          className="w-4 h-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                        </svg>
+                      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg">
+                        <span className="text-xs font-medium">
+                          {name} ({roleName})
+                        </span>
                       </div>
-                    </div>
-                  </div>
-                  );
-                })
-              ) : (
-                // 구독자가 없을 때 기본 표시
-                <div className="bg-gray-800 rounded-2xl overflow-hidden relative group">
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-32 h-32 bg-blue-600 rounded-full flex items-center justify-center text-4xl font-bold">
-                      대기
-                    </div>
-                  </div>
-                  <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                    <span className="text-sm font-medium">{getRoleDisplayName(userInfo?.role === 'ADVISOR' ? 'USER' : 'ADVISOR')} 대기 중</span>
-                  </div>
-                </div>
-              )}
 
-              <div className="bg-gray-800 rounded-2xl overflow-hidden relative">
-                <div className="w-full h-full">
-                  {(publisher || localStream) &&
-                  (isVideoEnabled || isAudioEnabled) ? (
-                    <div
-                      id="local-video"
-                      className="w-full h-full bg-gray-700 rounded-2xl overflow-hidden"
-                    >
-                      <video
-                        id="local-video-element"
-                        autoPlay
-                        muted
-                        playsInline
-                        className={`w-full h-full object-cover rounded-2xl mirror-video ${
-                          !isVideoEnabled ? "hidden" : ""
-                        }`}
-                        style={{ transform: "scaleX(-1)" }}
-                      />
-                      {!isVideoEnabled && (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-20 h-20 bg-gray-600 rounded-full flex items-center justify-center text-2xl font-bold">
-                            김
-                          </div>
+                      <div className="absolute bottom-3 right-3 flex space-x-1.5">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${mediaStatus.audio ? 'bg-green-500/80' : 'bg-red-500/80'}`}>
+                          <svg
+                            className="w-3 h-3"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
-                      <div className="w-20 h-20 bg-gray-600 rounded-full flex items-center justify-center text-2xl font-bold">
-                        김
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${mediaStatus.video ? 'bg-green-500/80' : 'bg-red-500/80'}`}>
+                          <svg
+                            className="w-3 h-3"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                          </svg>
+                        </div>
                       </div>
-                      <button
-                        onClick={startMedia}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        카메라/마이크 시작
-                      </button>
                     </div>
-                  )}
-                </div>
-                <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <span className="text-sm font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName((userInfo?.role || 'USER') as 'ADVISOR' || 'USER')})</span>
-                </div>
-                <div className="absolute bottom-4 right-4 flex space-x-2">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isAudioEnabled ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    );
+                  })
+                ) : (
+                  // 구독자가 없을 때 기본 표시
+                  <div className="bg-gray-800 rounded-lg overflow-hidden relative">
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="w-32 h-32 bg-blue-600/20 border-2 border-blue-500/40 rounded-full flex items-center justify-center mb-4 mx-auto">
+                          <svg className="w-16 h-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <p className="text-lg text-gray-300">{getRoleDisplayName(userInfo?.role === 'ADVISOR' ? 'USER' : 'ADVISOR')} 대기 중</p>
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isVideoEnabled ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {isScreenSharing && (
-                <div className="bg-gray-800 rounded-2xl overflow-hidden relative flex items-center justify-center">
-                  <div className="text-center">
-                    <svg
-                      className="w-16 h-16 mx-auto mb-4 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <p className="text-gray-400">화면 공유 중</p>
+                {/* Local video */}
+                <div className="bg-gray-800 rounded-lg overflow-hidden relative">
+                  <div className="w-full h-full">
+                    {(publisher || localStream) &&
+                    (isVideoEnabled || isAudioEnabled) ? (
+                      <div
+                        id="local-video"
+                        className="w-full h-full bg-gray-700 overflow-hidden flex items-center justify-center"
+                      >
+                        <video
+                          id="local-video-element"
+                          autoPlay
+                          muted
+                          playsInline
+                          className={`w-full h-full object-contain mirror-video ${
+                            !isVideoEnabled ? "hidden" : ""
+                          }`}
+                          style={{ transform: "scaleX(-1)" }}
+                        />
+                        {!isVideoEnabled && (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+                            <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-xl font-bold">
+                              {getCurrentUserDisplayName()[0] || '나'}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+                        <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-xl font-bold mb-3">
+                          {getCurrentUserDisplayName()[0] || '나'}
+                        </div>
+                        <button
+                          onClick={startMedia}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                        >
+                          카메라/마이크 시작
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                    화면 공유
+                  <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg">
+                    <span className="text-xs font-medium">{getCurrentUserDisplayName()} ({getRoleDisplayName((userInfo?.role || 'USER') as 'ADVISOR' || 'USER')})</span>
+                  </div>
+                  <div className="absolute bottom-3 right-3 flex space-x-1.5">
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                        isAudioEnabled ? "bg-green-500/80" : "bg-red-500/80"
+                      }`}
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                        isVideoEnabled ? "bg-green-500/80" : "bg-red-500/80"
+                      }`}
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
-              )}
+
+                {isScreenSharing && (
+                  <div className="bg-gray-800 rounded-lg overflow-hidden relative flex items-center justify-center">
+                    <div className="text-center">
+                      <svg
+                        className="w-20 h-20 mx-auto mb-4 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <p className="text-lg text-gray-300">화면 공유 중</p>
+                    </div>
+                    <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg text-xs">
+                      화면 공유
+                    </div>
+                  </div>
+                )}
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 p-4 min-h-0">
-              <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
-                <div className="mb-4">
-                  <StockSearch
-                    onStockSelect={setSelectedStock}
-                    darkMode={true}
-                  />
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <StockChart selectedStock={selectedStock} darkMode={true} />
+          <div className="flex-1 flex">
+            {/* Main Chart Area - Takes most of the space */}
+            <div className="flex-1 flex flex-col">
+              <div className="flex-1 p-4 min-h-0">
+                <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
+                  <div className="flex-1 overflow-hidden">
+                    <StockChart selectedStock={selectedStock} darkMode={true} />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div
-              className={`bg-gradient-to-b from-gray-900 to-gray-950 border-t-2 border-gray-700 transition-all duration-300 ease-in-out shadow-inner ${
-                showParticipantFaces ? "h-44" : "h-8"
-              }`}
-            >
-              <div className="relative h-full">
-                {/* Discord-style toggle button */}
-                <button
-                  onClick={() => setShowParticipantFaces(!showParticipantFaces)}
-                  className="absolute left-1/2 transform -translate-x-1/2 -top-4 z-20 bg-gray-800 hover:bg-gray-700 rounded-full p-1.5 border-2 border-gray-600 hover:border-gray-500 transition-all duration-200 group shadow-lg"
-                  title={showParticipantFaces ? "참가자 숨기기" : "참가자 보기"}
-                >
-                  <svg
-                    className={`w-5 h-5 text-gray-300 group-hover:text-white transition-all duration-200 ${
-                      showParticipantFaces ? "rotate-180" : ""
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 15l7-7 7 7"
-                    />
-                  </svg>
-                </button>
+            {/* Side Panel for Videos - Shows when participants are enabled */}
+            {showParticipants && (
+              <div className="w-80 bg-gray-800 border-l border-gray-700 p-4 flex flex-col">
+                <h3 className="text-sm font-semibold text-gray-300 mb-4">참가자</h3>
+                <div className="flex-1 space-y-3 overflow-y-auto">
+                  {/* Subscriber videos */}
+                  {subscribers.map((subscriber) => {
+                    const name = getParticipantName(subscriber);
+                    const role = getParticipantRole(subscriber);
+                    const roleName = getRoleDisplayName(role);
+                    const connectionId = subscriber.stream.connection.connectionId;
+                    const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
 
-                {showParticipantFaces && (
-                  <div className="flex items-center justify-between p-4 h-full">
-                    <div className="flex items-center space-x-4 overflow-x-auto flex-1">
-                      {/* 구독자 비디오 미니뷰 */}
-                      {subscribers.map((subscriber) => {
-                      const name = getParticipantName(subscriber);
-                      const role = getParticipantRole(subscriber);
-                      const roleName = getRoleDisplayName(role);
-
-                      const connectionId = subscriber.stream.connection.connectionId;
-                      const mediaStatus = subscriberStatusMap[connectionId] || { audio: false, video: true };
-
-                      return (
-                        <div key={subscriber.stream.streamId} className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                    return (
+                      <div key={subscriber.stream.streamId} className="w-full aspect-video bg-gray-700 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                           <video
                             ref={(videoElement) => {
                               if (videoElement && subscriber.stream) {
@@ -1125,9 +1086,10 @@ const VideoConsultationPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      )})}
+                    )})}
 
-                      <div className="flex-shrink-0 w-40 h-28 bg-gray-800 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
+                  {/* Local video */}
+                  <div className="w-full aspect-video bg-gray-700 rounded-lg overflow-hidden relative shadow-lg hover:shadow-xl transition-shadow duration-200">
                         {(publisher || localStream) &&
                         (isVideoEnabled || isAudioEnabled) ? (
                           <div className="w-full h-full bg-gray-800 rounded-lg overflow-hidden">
@@ -1191,12 +1153,10 @@ const VideoConsultationPage: React.FC = () => {
                             </svg>
                           </div>
                         </div>
-                      </div>
-                    </div>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1311,221 +1271,182 @@ const VideoConsultationPage: React.FC = () => {
         )}
       </div>
 
-      <div className="relative flex-shrink-0" style={{ zIndex: 100 }}>
-        {/* Modern glassmorphism background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90 backdrop-blur-xl border-t border-white/10"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-blue-500/5 to-transparent"></div>
+      {/* Bottom navigation bar */}
+      <div className="bg-gray-800 border-t border-gray-700 px-6 py-3">
+        <div className="flex items-center justify-between">
+          {/* Left side - Recording button */}
+          <button
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+              isRecording
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+            }`}
+          >
+            {isRecording && <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>}
+            <span>{isRecording ? "녹화 중지" : "녹화 시작"}</span>
+          </button>
 
-        <div className="relative px-6 py-4">
-          <div className="flex items-center justify-center space-x-6">
-            <div className="relative">
-              <button
-                onClick={toggleAudio}
-                onMouseEnter={() => setHoveredButton("audio")}
-                onMouseLeave={() => setHoveredButton(null)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 ${
-                  isAudioEnabled
-                    ? "bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-500/20 hover:shadow-green-500/40"
-                    : "bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/20 hover:shadow-red-500/40"
-                }`}
-              >
-                <img
-                  src={isAudioEnabled ? micOnIcon : micOffIcon}
-                  alt={isAudioEnabled ? "마이크 켜짐" : "마이크 꺼짐"}
-                  className="w-6 h-6"
-                />
-              </button>
+          {/* Center - Media Controls */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={toggleAudio}
+              onMouseEnter={() => setHoveredButton("audio")}
+              onMouseLeave={() => setHoveredButton(null)}
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isAudioEnabled
+                  ? "bg-gray-700 hover:bg-gray-600"
+                  : "bg-red-500 hover:bg-red-600"
+              }`}
+            >
+              <img
+                src={isAudioEnabled ? micOnIcon : micOffIcon}
+                alt={isAudioEnabled ? "마이크 켜짐" : "마이크 꺼짐"}
+                className="w-6 h-6"
+              />
               {hoveredButton === "audio" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
                   {isAudioEnabled ? "마이크 끄기" : "마이크 켜기"}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-            </div>
+            </button>
 
-            <div className="relative">
-              <button
-                onClick={toggleVideo}
-                onMouseEnter={() => setHoveredButton("video")}
-                onMouseLeave={() => setHoveredButton(null)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 ${
-                  isVideoEnabled
-                    ? "bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-500/20 hover:shadow-green-500/40"
-                    : "bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/20 hover:shadow-red-500/40"
-                }`}
-              >
-                <img
-                  src={isVideoEnabled ? cameraOnIcon : cameraOffIcon}
-                  alt={isVideoEnabled ? "카메라 켜짐" : "카메라 꺼짐"}
-                  className="w-6 h-6"
-                />
-              </button>
+            <button
+              onClick={toggleVideo}
+              onMouseEnter={() => setHoveredButton("video")}
+              onMouseLeave={() => setHoveredButton(null)}
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isVideoEnabled
+                  ? "bg-gray-700 hover:bg-gray-600"
+                  : "bg-red-500 hover:bg-red-600"
+              }`}
+            >
+              <img
+                src={isVideoEnabled ? cameraOnIcon : cameraOffIcon}
+                alt={isVideoEnabled ? "카메라 켜짐" : "카메라 꺼짐"}
+                className="w-6 h-6"
+              />
               {hoveredButton === "video" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
                   {isVideoEnabled ? "카메라 끄기" : "카메라 켜기"}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-            </div>
+            </button>
 
-            <div className="relative">
-              <button
-                onClick={toggleScreenShare}
-                onMouseEnter={() => setHoveredButton("screen")}
-                onMouseLeave={() => setHoveredButton(null)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 ${
-                  isScreenSharing
-                    ? "bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
-                    : "bg-gray-600 hover:bg-gray-500 text-white shadow-lg hover:shadow-gray-500/20"
-                }`}
-              >
-                <img
-                  src={screenShareIcon}
-                  alt="화면 공유"
-                  className="w-6 h-6"
-                />
-              </button>
+            <button
+              onClick={toggleScreenShare}
+              onMouseEnter={() => setHoveredButton("screen")}
+              onMouseLeave={() => setHoveredButton(null)}
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                isScreenSharing
+                  ? "bg-blue-500 hover:bg-blue-600"
+                  : "bg-gray-700 hover:bg-gray-600"
+              }`}
+            >
+              <img src={screenShareIcon} alt="화면 공유" className="w-6 h-6" />
               {hoveredButton === "screen" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
                   {isScreenSharing ? "화면 공유 중지" : "화면 공유"}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-            </div>
+            </button>
 
-            <div className="relative">
-              <button
-                onClick={() => !showStockChart && setShowChat(!showChat)}
-                onMouseEnter={() => setHoveredButton("chat")}
-                onMouseLeave={() => setHoveredButton(null)}
-                disabled={showStockChart}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg ${
-                  showStockChart
-                    ? "bg-gray-700 text-gray-400 cursor-not-allowed opacity-50"
-                    : showChat
-                    ? "bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/20 hover:shadow-blue-500/40"
-                    : "bg-gray-600 hover:bg-gray-500 text-white hover:shadow-gray-500/20"
-                }`}
-              >
-                <img src={chatIcon} alt="채팅" className="w-6 h-6" />
-                {hasUnreadMessages && !showChat && (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md" />
-                )}
-              </button>
+            <button
+              onClick={() => !showStockChart && setShowChat(!showChat)}
+              onMouseEnter={() => setHoveredButton("chat")}
+              onMouseLeave={() => setHoveredButton(null)}
+              disabled={showStockChart}
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                showStockChart
+                  ? "bg-gray-800 text-gray-500 cursor-not-allowed opacity-50"
+                  : showChat
+                  ? "bg-blue-500 hover:bg-blue-600"
+                  : "bg-gray-700 hover:bg-gray-600"
+              }`}
+            >
+              <img src={chatIcon} alt="채팅" className="w-6 h-6" />
+              {hasUnreadMessages && !showChat && (
+                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-800" />
+              )}
               {hoveredButton === "chat" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
-                  {showStockChart
-                    ? "차트 모드에서 사용 불가"
-                    : showChat
-                    ? "채팅 닫기"
-                    : "채팅 열기"}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
+                  {showStockChart ? "차트 모드에서 사용 불가" : showChat ? "채팅 닫기" : "채팅 열기"}
                 </div>
               )}
-            </div>
+            </button>
 
-            <div className="relative">
-              <button
-                onClick={() =>
-                  !showStockChart && setShowParticipants(!showParticipants)
-                }
-                onMouseEnter={() => setHoveredButton("participants")}
-                onMouseLeave={() => setHoveredButton(null)}
-                disabled={showStockChart}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-                  showStockChart
-                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                    : showParticipants
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-gray-700 hover:bg-gray-600 text-white"
-                }`}
-              >
-                <img src={participantsIcon} alt="참가자" className="w-6 h-6" />
-              </button>
+            <button
+              onClick={() => setShowParticipants(!showParticipants)}
+              onMouseEnter={() => setHoveredButton("participants")}
+              onMouseLeave={() => setHoveredButton(null)}
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                showParticipants
+                  ? "bg-blue-500 hover:bg-blue-600"
+                  : "bg-gray-700 hover:bg-gray-600"
+              }`}
+            >
+              <img src={participantsIcon} alt="참가자" className="w-6 h-6" />
               {hoveredButton === "participants" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
-                  {showStockChart
-                    ? "차트 모드에서 사용 불가"
-                    : showParticipants
-                    ? "참가자 목록 닫기"
-                    : "참가자 목록 열기"}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
+                  {showParticipants ? "참가자 숨기기" : "참가자 보기"}
                 </div>
               )}
-            </div>
+            </button>
 
-            <div className="relative">
-              <button
-                onClick={() => {
-                  const newShowStockChart = !showStockChart;
-                  setShowStockChart(newShowStockChart);
-                  if (newShowStockChart) {
-                    setShowChat(false);
-                    setShowParticipants(false);
-                  }
-                }}
-                onMouseEnter={() => setHoveredButton("stock")}
-                onMouseLeave={() => setHoveredButton(null)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg ${
-                  showStockChart
-                    ? "bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/20 hover:shadow-blue-500/40"
-                    : "bg-gray-600 hover:bg-gray-500 text-white hover:shadow-gray-500/20"
-                }`}
-              >
-                {showStockChart ? (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                    />
-                  </svg>
-                )}
-              </button>
+            <button
+              onClick={() => {
+                const newShowStockChart = !showStockChart;
+                setShowStockChart(newShowStockChart);
+                if (newShowStockChart) {
+                  setShowChat(false);
+                  setShowParticipants(false);
+                }
+              }}
+              onMouseEnter={() => setHoveredButton("stock")}
+              onMouseLeave={() => setHoveredButton(null)}
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                showStockChart
+                  ? "bg-blue-500 hover:bg-blue-600"
+                  : "bg-gray-700 hover:bg-gray-600"
+              }`}
+            >
+              {showStockChart ? (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+              )}
               {hoveredButton === "stock" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
                   {showStockChart ? "비디오 뷰로 전환" : "차트 보기"}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-            </div>
+            </button>
 
-            <div className="relative">
-              <button
-                onMouseEnter={() => setHoveredButton("settings")}
-                onMouseLeave={() => setHoveredButton(null)}
-                className="w-12 h-12 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg hover:shadow-gray-500/20"
-              >
-                <img src={settingsIcon} alt="설정" className="w-6 h-6" />
-              </button>
+            <button
+              onMouseEnter={() => setHoveredButton("settings")}
+              onMouseLeave={() => setHoveredButton(null)}
+              className="relative w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-all duration-200"
+            >
+              <img src={settingsIcon} alt="설정" className="w-6 h-6" />
               {hoveredButton === "settings" && (
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap z-50 border border-gray-600">
+                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
                   설정
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-            </div>
+            </button>
           </div>
+
+          {/* Right side - End Call button */}
+          <button
+            onClick={leaveSession}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+          >
+            상담 종료
+          </button>
         </div>
       </div>
     </div>

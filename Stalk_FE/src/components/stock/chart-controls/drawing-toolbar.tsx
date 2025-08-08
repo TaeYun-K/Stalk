@@ -50,16 +50,13 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   const widths = [1, 2, 3, 5, 8];
 
   return (
-    <div className={`flex items-center gap-4 p-4 border-b ${
-      darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-    }`}>
-      <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          도구:
-        </span>
+    <div className={`flex flex-wrap items-center gap-3 p-2 ${
+      darkMode ? 'bg-gray-800' : 'bg-gray-50'
+    } rounded-md`}>
+      <div className="flex items-center gap-1">
         <button
           onClick={() => handleToolChange('pen')}
-          className={`px-3 py-1 rounded ${
+          className={`px-2 py-1 text-xs rounded ${
             selectedTool === 'pen'
               ? 'bg-blue-600 text-white'
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
@@ -69,7 +66,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </button>
         <button
           onClick={() => handleToolChange('trendline')}
-          className={`px-3 py-1 rounded ${
+          className={`px-2 py-1 text-xs rounded ${
             selectedTool === 'trendline'
               ? 'bg-blue-600 text-white'
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
@@ -79,7 +76,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </button>
         <button
           onClick={() => handleToolChange('vertical')}
-          className={`px-3 py-1 rounded ${
+          className={`px-2 py-1 text-xs rounded ${
             selectedTool === 'vertical'
               ? 'bg-blue-600 text-white'
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
@@ -89,7 +86,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </button>
         <button
           onClick={() => handleToolChange('rectangle')}
-          className={`px-3 py-1 rounded ${
+          className={`px-2 py-1 text-xs rounded ${
             selectedTool === 'rectangle'
               ? 'bg-blue-600 text-white'
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
@@ -99,7 +96,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </button>
         <button
           onClick={() => handleToolChange('arrow')}
-          className={`px-3 py-1 rounded ${
+          className={`px-2 py-1 text-xs rounded ${
             selectedTool === 'arrow'
               ? 'bg-blue-600 text-white'
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
@@ -109,7 +106,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </button>
         <button
           onClick={() => handleToolChange('fibonacci')}
-          className={`px-3 py-1 rounded ${
+          className={`px-2 py-1 text-xs rounded ${
             selectedTool === 'fibonacci'
               ? 'bg-blue-600 text-white'
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
@@ -119,10 +116,9 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          색상:
-        </span>
+      <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+
+      <div className="flex items-center gap-1">
         {colors.map(color => (
           <button
             key={color}
@@ -135,10 +131,9 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          두께:
-        </span>
+      <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+
+      <div className="flex items-center gap-1">
         {widths.map(width => (
           <button
             key={width}
@@ -154,20 +149,20 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-1 ml-auto">
         <button
           onClick={onDelete}
-          className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700"
+          className="px-2 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
           title="마지막에 그린 도형을 삭제합니다"
         >
-          실행 취소
+          실행취소
         </button>
         <button
           onClick={onClear}
-          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+          className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
           title="모든 도형을 삭제합니다"
         >
-          모두 지우기
+          전체 지우기
         </button>
       </div>
     </div>
