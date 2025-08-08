@@ -49,6 +49,7 @@
     INNER JOIN users u ON a.advisor_id = u.id
     LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
     WHERE a.is_approved = 1
+    AND a.is_profile_completed = 1
     <if test="preferredTradeStyle != null and preferredTradeStyle.size() > 0">
       AND adi.preferred_trade_style IN
       <foreach item="style" collection="preferredTradeStyle" open="(" separator="," close=")">
