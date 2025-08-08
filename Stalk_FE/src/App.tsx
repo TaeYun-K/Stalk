@@ -97,7 +97,7 @@ const AppContent: React.FC = () => {
     showSidebarRoutes.includes(location.pathname) ||
     location.pathname.startsWith("/expert-detail/") ||
     location.pathname.startsWith("/community/post/");
-  const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
+  const showFooter: boolean = !hideFooterRoutes.some(route => location.pathname.startsWith(route));
   const isVideoPage = location.pathname.startsWith("/video-consultation");
 
   return (

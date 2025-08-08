@@ -199,23 +199,38 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
 
   const clearCanvas = useCallback(() => {
     const layer = layerRef.current;
-    const transformer = transformerRef.current;
-    if (!layer || !transformer) return;
-
-    // Transformer를 제외한 모든 도형 제거
-    const children = layer.getChildren();
-    children.forEach(child => {
-      if (child !== transformer) {
-        child.destroy();
-      }
-    });
+    const stage = stageRef.current;
     
-    transformer.nodes([]);
-    transformer.visible(false);
+    if (!layer || !stage) return;
+
+    // Remove the layer and create a new one
+    layer.destroy();
+    
+    // Create new layer
+    const newLayer = new Konva.Layer();
+    stage.add(newLayer);
+    
+    // Create new transformer
+    const newTransformer = new Konva.Transformer({
+      borderStroke: '#1e40af',
+      borderStrokeWidth: 2,
+      anchorStroke: '#1e40af',
+      anchorFill: 'white',
+      anchorSize: 8,
+      anchorCornerRadius: 4,
+    });
+    newLayer.add(newTransformer);
+    
+    // Update refs
+    layerRef.current = newLayer;
+    transformerRef.current = newTransformer;
     selectedShapeRef.current = null;
-    shapeHistoryRef.current = []; // Clear history
-    layer.batchDraw();
-    console.log('모든 도형 삭제됨');
+    shapeHistoryRef.current = [];
+    lastLineRef.current = null;
+    currentShapeRef.current = null;
+    
+    // Redraw
+    stage.batchDraw();
   }, []);
 
   const undoLastShape = useCallback(() => {

@@ -162,7 +162,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
           title="모든 도형을 삭제합니다"
         >
-          모두지우기
+          전체 지우기
         </button>
       </div>
     </div>

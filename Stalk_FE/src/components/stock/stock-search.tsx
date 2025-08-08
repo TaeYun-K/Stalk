@@ -28,17 +28,12 @@ const StockSearch: React.FC<StockSearchProps> = ({
 
     setIsLoading(true);
     try {
-      // Try the backend search first
-      const response = await AuthService.authenticatedRequest(
-        `${import.meta.env.VITE_API_URL}/api/krx/search`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query: query.trim() })
+      const response = await fetch(`/api/krx/search?query=${encodeURIComponent(query.trim())}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
         }
-      );
+      });
       
       if (response.ok) {
         const responseData = await response.json();
@@ -46,12 +41,13 @@ const StockSearch: React.FC<StockSearchProps> = ({
         
         if (responseData.isSuccess && responseData.result) {
           setSearchResults(responseData.result.slice(0, 10));
-          return;
+        } else {
+          setSearchResults([]);
         }
+      } else {
+        console.error('Search failed with status:', response.status);
+        setSearchResults([]);
       }
-      
-      // If backend search fails, show fallback message
-      throw new Error('Backend search unavailable');
       
     } catch (error) {
       console.error('Stock search error:', error);
@@ -150,18 +146,6 @@ const StockSearch: React.FC<StockSearchProps> = ({
         </div>
       )}
       
-      {searchQuery.trim() && !isLoading && searchResults.length === 0 && (
-        <div className={`absolute top-full left-0 right-0 ${
-          darkMode 
-            ? 'bg-gray-800 border-gray-600 text-gray-400' 
-            : 'bg-white border-gray-300 text-gray-500'
-        } border border-t-0 rounded-b-lg p-4 shadow-md`}>
-          <div className="text-center">
-            <div>검색 서비스 일시 중단</div>
-            <div className="text-xs mt-1">주식 코드를 직접 입력해보세요 (예: 005930)</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

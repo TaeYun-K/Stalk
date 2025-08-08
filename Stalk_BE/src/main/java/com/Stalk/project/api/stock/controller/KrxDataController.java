@@ -94,6 +94,107 @@ public class KrxDataController {
         }
     }
     
+    /**
+     * Search stocks by name or ticker
+     */
+    @GetMapping("/search")
+    public ResponseEntity<Map<String, Object>> searchStocks(@RequestParam(required = false) String query) {
+        Map<String, Object> response = new HashMap<>();
+        List<Map<String, String>> results = new ArrayList<>();
+        
+        try {
+            logger.info("Searching stocks with query: {}", query);
+            
+            // Return empty results for empty query
+            if (query == null || query.trim().isEmpty()) {
+                response.put("isSuccess", true);
+                response.put("message", "Empty query");
+                response.put("result", results);
+                return ResponseEntity.ok(response);
+            }
+            
+            // Try using StockListingService if available
+            if (stockListingService != null) {
+                try {
+                    List<StockListingService.StockListing> searchResults = stockListingService.searchStocks(query.trim());
+                    if (searchResults != null) {
+                        for (StockListingService.StockListing stock : searchResults) {
+                            if (stock != null && stock.getTicker() != null && stock.getCompanyName() != null) {
+                                Map<String, String> stockData = new HashMap<>();
+                                stockData.put("ticker", stock.getTicker());
+                                stockData.put("name", stock.getCompanyName());
+                                results.add(stockData);
+                                if (results.size() >= 10) break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("StockListingService search failed: {}", e.getMessage());
+                }
+            }
+            
+            // If no results yet, try KrxApiService
+            if (results.isEmpty() && krxApiService != null) {
+                try {
+                    logger.info("Trying KrxApiService for search");
+                    // Get stocks from volume ranking and filter
+                    List<KrxRankingStock> kospiStocks = krxApiService.getKospiVolumeRanking(100);
+                    List<KrxRankingStock> kosdaqStocks = krxApiService.getKosdaqVolumeRanking(100);
+                    
+                    String searchQuery = query.trim().toLowerCase();
+                    
+                    // Search in KOSPI stocks
+                    if (kospiStocks != null) {
+                        for (KrxRankingStock stock : kospiStocks) {
+                            if (stock != null && stock.getName() != null && stock.getTicker() != null) {
+                                if (stock.getName().toLowerCase().contains(searchQuery) ||
+                                    stock.getTicker().contains(query.trim())) {
+                                    Map<String, String> stockData = new HashMap<>();
+                                    stockData.put("ticker", stock.getTicker());
+                                    stockData.put("name", stock.getName());
+                                    results.add(stockData);
+                                    if (results.size() >= 10) break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Search in KOSDAQ stocks if needed
+                    if (results.size() < 10 && kosdaqStocks != null) {
+                        for (KrxRankingStock stock : kosdaqStocks) {
+                            if (stock != null && stock.getName() != null && stock.getTicker() != null) {
+                                if (stock.getName().toLowerCase().contains(searchQuery) ||
+                                    stock.getTicker().contains(query.trim())) {
+                                    Map<String, String> stockData = new HashMap<>();
+                                    stockData.put("ticker", stock.getTicker());
+                                    stockData.put("name", stock.getName());
+                                    results.add(stockData);
+                                    if (results.size() >= 10) break;
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("KrxApiService search failed: {}", e.getMessage());
+                }
+            }
+            
+            response.put("isSuccess", true);
+            response.put("result", results);
+            response.put("message", "Found " + results.size() + " results");
+            
+            logger.info("Search returned {} results for query: {}", results.size(), query);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Stock search failed for query: " + query, e);
+            response.put("isSuccess", false);
+            response.put("message", "Search error");
+            response.put("result", new ArrayList<>());
+            return ResponseEntity.ok(response);
+        }
+    }
+    
     // ========== KRX Open API Endpoints ==========
     
     /**
@@ -478,6 +579,28 @@ public class KrxDataController {
     /**
      * Diagnose KRX API connectivity and data issues
      */
+    @GetMapping("/debug-search")
+    public ResponseEntity<Map<String, Object>> debugSearch() {
+        Map<String, Object> debug = new HashMap<>();
+        
+        debug.put("stockListingService_available", stockListingService != null);
+        if (stockListingService != null) {
+            debug.put("stock_count", stockListingService.getStockCount());
+            debug.put("sample_search_samsung", stockListingService.searchStocks("삼성").size());
+        }
+        
+        debug.put("krxApiService_available", krxApiService != null);
+        if (krxApiService != null) {
+            try {
+                debug.put("krx_connection", krxApiService.testConnection());
+            } catch (Exception e) {
+                debug.put("krx_connection_error", e.getMessage());
+            }
+        }
+        
+        return ResponseEntity.ok(debug);
+    }
+    
     @GetMapping("/diagnose")
     public ResponseEntity<Map<String, Object>> diagnoseKrxApi() {
         Map<String, Object> diagnosis = new HashMap<>();
