@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/navbar';
 import Sidebar from '@/components/sidebar';
-import Footer from '@/components/footer';
-import ExpertProfileImage from '@/assets/expert_profile_image.png';
-import certificationExample from '@/assets/images/dummy/certification_example.svg';
+// import Footer from '@/components/footer';
+// import ExpertProfileImage from '@/assets/expert_profile_image.png';
+// import certificationExample from '@/assets/images/dummy/certification_example.svg';
 import AuthService from '@/services/authService';
 
 // API 인터페이스 정의
@@ -34,7 +34,7 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
   
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>('');
-  const [expertName, setExpertName] = useState<string>('');
+  // const [expertName, setExpertName] = useState<string>(''); // 현재 사용하지 않음
   const [expertContact, setExpertContact] = useState<string>('');
 
   // 기존 데이터 로딩 상태
@@ -66,6 +66,7 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
   };
   const [expertTitle, setExpertTitle] = useState<string>('');
   const [expertIntroduction, setExpertIntroduction] = useState<string>('');
+  // const [preferredTradeStyle, setPreferredTradeStyle] = useState<string>(''); // 현재 사용하지 않음
   
   // 경력사항 상태
   const [careerEntries, setCareerEntries] = useState<CareerEntry[]>([]);
@@ -79,6 +80,23 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
   // 자격사항 상태
   const [qualificationEntries, setQualificationEntries] = useState<QualificationEntry[]>([]);
   
+  // 캘린더 상태
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
+  
+  // 날짜별 운영 상태 관리 (운영: 'operating', 휴무: 'closed', 미운영: 'inactive')
+  const [dateStatus, setDateStatus] = useState<Record<string, 'operating' | 'closed' | 'inactive'>>({});
+  
+  // 각 날짜별 시간 슬롯 설정 저장
+  const [dateTimeSlots, setDateTimeSlots] = useState<Record<string, string[]>>({});
+  
+  // 평일 시간 슬롯 (모두 활성화된 상태로 시작)
+  const [weekdayTimeSlots, setWeekdayTimeSlots] = useState<string[]>([
+    '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
+  ]);
+  const [currentDateStatus, setCurrentDateStatus] = useState<'operating' | 'closed' | 'inactive'>('inactive');
+  
   // 기존 자격사항 항목들의 초기 상태 설정
   React.useEffect(() => {
     const initialStates: Record<string, 'saved' | 'editing' | 'deleting'> = {};
@@ -91,6 +109,38 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
       setQualificationItemStates(prev => ({ ...prev, ...initialStates }));
     }
   }, [qualificationEntries]);
+
+  // 초기 시간 슬롯 설정 및 기본 운영 날짜 설정
+  React.useEffect(() => {
+    // 기본값: 모든 날짜에서 차단할 시간 없음 (빈 배열 = 모든 시간 예약 가능)
+    setDateTimeSlots({});
+    
+    // 현재 달의 평일을 기본 운영 날짜로 설정
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    
+    const defaultOperatingDates: Record<string, 'operating' | 'closed' | 'inactive'> = {};
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const todayDate = new Date(today);
+      todayDate.setHours(0, 0, 0, 0);
+      
+      // 오늘 이후의 평일만 기본 운영으로 설정
+      const dayOfWeek = date.getDay();
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= todayDate) {
+        const dateKey = date.toISOString().split('T')[0];
+        defaultOperatingDates[dateKey] = 'operating';
+      }
+    }
+    
+    setDateStatus(defaultOperatingDates);
+    console.log('기본 운영 날짜 설정:', defaultOperatingDates);
+  }, []);
   
   // 새로운 자격사항 입력을 위한 상태 (인증번호 입력용)
   const [newQualificationEntry, setNewQualificationEntry] = useState<Omit<QualificationEntry, 'id'>>({
@@ -104,29 +154,6 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
   const [newCertificationNumber1, setNewCertificationNumber1] = useState<string>('');
   const [newCertificationNumber2, setNewCertificationNumber2] = useState<string>('');
   const [newCertificationNumber3, setNewCertificationNumber3] = useState<string>('');
-
-  // 캘린더 상태
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
-  
-  // 날짜별 운영 상태 관리 (운영: 'operating', 휴무: 'closed', 미운영: 'inactive')
-  const [dateStatus, setDateStatus] = useState<Record<string, 'operating' | 'closed' | 'inactive'>>({});
-  
-  // 각 날짜별 시간 슬롯 설정 저장
-  const [dateTimeSlots, setDateTimeSlots] = useState<Record<string, string[]>>({});
-  
-  // 초기 시간 슬롯 설정 (모든 날짜는 기본적으로 차단할 시간 없음)
-  React.useEffect(() => {
-    // 기본값: 모든 날짜에서 차단할 시간 없음 (빈 배열 = 모든 시간 예약 가능)
-    setDateTimeSlots({});
-  }, []);
-  
-  // 평일 시간 슬롯 (모두 활성화된 상태로 시작)
-  const [weekdayTimeSlots, setWeekdayTimeSlots] = useState<string[]>([
-    '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
-  ]);
-  const [currentDateStatus, setCurrentDateStatus] = useState<'operating' | 'closed' | 'inactive'>('inactive');
   const [editingQualificationId, setEditingQualificationId] = useState<string | null>(null);
   const [editingCareerId, setEditingCareerId] = useState<string | null>(null);
   const [editingQualificationData, setEditingQualificationData] = useState<QualificationEntry | null>(null);
@@ -167,17 +194,33 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
           const expert = data.result;
           
           // 기존 데이터로 폼 채우기
-          setExpertName(expert.name || '');
+          // setExpertName(expert.name || ''); // 현재 사용하지 않음
           setExpertContact(expert.contact || '');
-          setExpertTitle(expert.title || '');
-          setExpertIntroduction(expert.shortIntro || '');
+          setExpertTitle(expert.short_intro || '');      // ✅ 올바른 필드 매핑
+          setExpertIntroduction(expert.long_intro || ''); // ✅ 올바른 필드 매핑
+          
+          // 선호 투자 스타일 설정
+          // if (expert.preferred_trade_style) {
+          //   setPreferredTradeStyle(expert.preferred_trade_style);
+          // }
           
           // 프로필 이미지 URL이 있다면 표시
-          if (expert.profileImageUrl) {
-            setFileName(expert.profileImageUrl.split('/').pop() || '');
+          if (expert.profile_image_url) {
+            setFileName(expert.profile_image_url.split('/').pop() || '');
           }
           
-          // TODO: 경력 사항과 자격증 정보도 로드 (백엔드 API가 제공하면)
+          // 경력 정보 로드
+          if (expert.careers && expert.careers.length > 0) {
+            const loadedCareers = expert.careers.map((career: any, index: number) => ({
+              id: career.id || index,
+              startDate: career.started_at ? career.started_at.substring(0, 10).replace(/-/g, '.') : '',
+              endDate: career.ended_at ? career.ended_at.substring(0, 10).replace(/-/g, '.') : '',
+              company: career.title || '',        // title → company
+              position: career.description || ''  // description → position
+            }));
+            setCareerEntries(loadedCareers);
+          }
+
           
         } else {
           throw new Error(data.message || '전문가 정보를 불러오는데 실패했습니다.');
@@ -192,6 +235,277 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
 
     loadExpertData();
   }, [advisorId]);
+
+  // 영업시간 관리 함수들
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const handleDateClick = (date: Date) => {
+    // 이전 날짜의 시간 설정 저장
+    if (selectedDate) {
+      const prevDateKey = getDateKey(selectedDate);
+      setDateTimeSlots(prev => ({
+        ...prev,
+        [prevDateKey]: selectedTimeSlots
+      }));
+    }
+    
+    setSelectedDate(date);
+    // 선택된 날짜의 현재 상태를 currentDateStatus에 설정
+    const status = getDateStatus(date);
+    setCurrentDateStatus(status);
+    
+    // 해당 날짜의 저장된 시간 슬롯 불러오기
+    const dateKey = getDateKey(date);
+    const savedTimeSlots = dateTimeSlots[dateKey];
+    
+    // 저장된 시간 슬롯 불러오기 (기본값: 빈 배열 = 차단할 시간 없음)
+    if (savedTimeSlots !== undefined) {
+      setSelectedTimeSlots(savedTimeSlots);
+    } else {
+      // 기본값: 차단할 시간 없음 (모든 시간 예약 가능)
+      setSelectedTimeSlots([]);
+    }
+  };
+
+  const handlePrevMonth = () => {
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
+    
+    // 새로운 달로 이동 시 해당 달의 평일을 기본 운영 날짜로 추가
+    updateDefaultOperatingDatesForMonth(newMonth);
+  };
+
+  const handleNextMonth = () => {
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1);
+    setCurrentMonth(newMonth);
+    
+    // 새로운 달로 이동 시 해당 달의 평일을 기본 운영 날짜로 추가
+    updateDefaultOperatingDatesForMonth(newMonth);
+  };
+
+  const updateDefaultOperatingDatesForMonth = (month: Date) => {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const newOperatingDates: Record<string, 'operating' | 'closed' | 'inactive'> = {};
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, monthIndex, day);
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      
+      // 오늘 이후의 평일만 기본 운영으로 설정
+      const dayOfWeek = date.getDay();
+      const dateKey = date.toISOString().split('T')[0];
+      
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today && !dateStatus[dateKey]) {
+        newOperatingDates[dateKey] = 'operating';
+      }
+    }
+    
+    setDateStatus(prev => ({ ...prev, ...newOperatingDates }));
+  };
+
+  const handleToday = () => {
+    const today = new Date();
+    setCurrentMonth(today);
+    setSelectedDate(today);
+  };
+
+  const isSelected = (date: Date) => {
+    return selectedDate && date.toDateString() === selectedDate.toDateString();
+  };
+
+  // 날짜 상태 관리 함수들
+  const getDateKey = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  // 오늘 이후 날짜인지 확인하는 함수
+  const isDateEditableOrToday = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+    return targetDate >= today;
+  };
+
+  const getDateStatus = (date: Date) => {
+    const dateKey = getDateKey(date);
+    const savedStatus = dateStatus[dateKey];
+    
+    if (savedStatus) {
+      return savedStatus;
+    }
+    
+    // 기본값 설정: 현재 달의 평일만 운영, 나머지는 모두 비활성화
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 시간을 00:00:00으로 설정하여 날짜만 비교
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    // 오늘을 포함한 이전 날짜는 모두 비활성화
+    if (targetDate <= today) {
+      return 'inactive';
+    }
+    
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const dateYear = date.getFullYear();
+    const dateMonth = date.getMonth();
+    const dayOfWeek = date.getDay();
+    
+    // 현재 달이고 오늘 이후의 평일인 경우만 운영
+    if (dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today) {
+      return 'operating';
+    } else {
+      return 'inactive';
+    }
+  };
+
+  const handleDateStatusChange = (status: 'operating' | 'closed' | 'inactive') => {
+    if (selectedDate) {
+      const dateKey = getDateKey(selectedDate);
+      if (currentDateStatus === status) {
+        // 같은 상태를 다시 선택하면 미운영으로 변경
+        setDateStatus(prev => ({ ...prev, [dateKey]: 'inactive' }));
+        setCurrentDateStatus('inactive');
+      } else {
+        // 다른 상태로 변경
+        setDateStatus(prev => ({ ...prev, [dateKey]: status }));
+        setCurrentDateStatus(status);
+      }
+    }
+  };
+
+  const getStatusColor = (status: 'operating' | 'closed' | 'inactive') => {
+    switch (status) {
+      case 'operating':
+        return 'bg-blue-100';
+      case 'closed':
+        return 'bg-red-200';
+      case 'inactive':
+      default:
+        return 'bg-gray-300';
+    }
+  };
+
+  const getStatusText = (status: 'operating' | 'closed' | 'inactive') => {
+    switch (status) {
+      case 'operating':
+        return '운영';
+      case 'closed':
+        return '휴무';
+      case 'inactive':
+      default:
+        return '미운영';
+    }
+  };
+
+  const isTimeSlotPast = (time: string, date: Date) => {
+    const [hour, minute] = time.split(':').map(Number);
+    const slotDate = new Date(date);
+    slotDate.setHours(hour, minute, 0, 0);
+    return slotDate < new Date();
+  };
+  
+  // 시간 슬롯 토글
+  const toggleTimeSlot = (time: string) => {
+    // 운영 상태일 때만 시간 슬롯 선택 가능
+    if (currentDateStatus !== 'operating') {
+      return;
+    }
+    
+    // 과거 시간은 클릭할 수 없음
+    if (selectedDate && isTimeSlotPast(time, selectedDate)) {
+      return;
+    }
+    
+    // 단순한 토글 방식: 선택된 시간 = 차단할 시간
+    if (selectedDate) {
+      if (selectedTimeSlots.includes(time)) {
+        // 이미 선택된 시간을 클릭하면 선택 해제 (차단 해제)
+        setSelectedTimeSlots(selectedTimeSlots.filter(t => t !== time));
+      } else {
+        // 선택되지 않은 시간을 클릭하면 선택 (차단)
+        setSelectedTimeSlots([...selectedTimeSlots, time]);
+      }
+    }
+  };
+
+  // 캘린더 렌더링 함수
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentMonth);
+    const firstDay = getFirstDayOfMonth(currentMonth);
+    const days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 이전 달의 마지막 날들
+    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
+    const daysInPrevMonth = getDaysInMonth(prevMonth);
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const date = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), daysInPrevMonth - i);
+      days.push(
+        <div key={`prev-${i}`} className="text-gray-300 text-center py-2">
+          {date.getDate()}
+        </div>
+      );
+    }
+
+    // 현재 달의 날들
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+      const isSelectedDate = isSelected(date);
+      const isToday = date.toDateString() === today.toDateString();
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+      const isEditable = isDateEditableOrToday(date);
+      const dateStatus = getDateStatus(date);
+      
+      days.push(
+                <div
+          key={day}
+          onClick={() => handleDateClick(date)}
+          className={`text-center py-2 cursor-pointer ${
+            isSelectedDate
+              ? 'bg-blue-500 text-white rounded-full'
+              : dateStatus === 'operating'
+              ? 'bg-blue-100 text-blue-600 rounded-full'
+              : dateStatus === 'closed'
+              ? 'bg-red-200 text-red-600 rounded-full'
+              : isWeekend
+              ? 'bg-gray-100 text-red-500 rounded-full'
+              : 'bg-gray-100 text-gray-900 rounded-full'
+          } ${!isEditable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50'}
+          ${isToday ? 'ring-2 ring-blue-300' : ''}`}
+        >
+          {day}
+        </div>
+      );
+    }
+
+    // 다음 달의 첫 날들
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, i);
+      days.push(
+        <div key={`next-${i}`} className="text-gray-300 text-center py-2">
+          {date.getDate()}
+        </div>
+      );
+    }
+
+    return days;
+  };
 
   // 날짜 포맷팅 함수
   const formatDate = (value: string) => {
@@ -467,192 +781,6 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
     setEditingCareerData(null);
   };
 
-  // 캘린더 관련 함수들
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
-
-  const handleDateClick = (date: Date) => {
-    // 이전 날짜의 시간 설정 저장
-    if (selectedDate) {
-      const prevDateKey = getDateKey(selectedDate);
-      setDateTimeSlots(prev => ({
-        ...prev,
-        [prevDateKey]: selectedTimeSlots
-      }));
-    }
-    
-    setSelectedDate(date);
-    // 선택된 날짜의 현재 상태를 currentDateStatus에 설정
-    const status = getDateStatus(date);
-    setCurrentDateStatus(status);
-    
-    // 해당 날짜의 저장된 시간 슬롯 불러오기
-    const dateKey = getDateKey(date);
-    const savedTimeSlots = dateTimeSlots[dateKey];
-    
-    // 저장된 시간 슬롯 불러오기 (기본값: 빈 배열 = 차단할 시간 없음)
-    if (savedTimeSlots !== undefined) {
-      setSelectedTimeSlots(savedTimeSlots);
-    } else {
-      // 기본값: 차단할 시간 없음 (모든 시간 예약 가능)
-      setSelectedTimeSlots([]);
-    }
-  };
-
-  const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-  };
-
-  const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-  };
-
-  const handleToday = () => {
-    const today = new Date();
-    setCurrentMonth(today);
-    setSelectedDate(today);
-  };
-
-  const isSelected = (date: Date) => {
-    return selectedDate && date.toDateString() === selectedDate.toDateString();
-  };
-
-  // 날짜 상태 관리 함수들
-  const getDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
-  };
-
-  // 오늘 이후 날짜인지 확인하는 함수
-  const isDateEditableOrToday = (date: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    return targetDate >= today;
-  };
-
-  // 오늘 날짜에서 현재 시간 이전인지 확인하는 함수
-  const isTimeSlotPast = (timeSlot: string, date: Date) => {
-    const now = new Date();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    
-    // 오늘 날짜가 아니면 과거 시간이 아님
-    if (targetDate.getTime() !== today.getTime()) {
-      return false;
-    }
-    
-    // 오늘 날짜인 경우 현재 시간과 비교
-    const [hours, minutes] = timeSlot.split(':').map(Number);
-    const slotTime = new Date();
-    slotTime.setHours(hours, minutes, 0, 0);
-    
-    return slotTime <= now;
-  };
-
-  const getDateStatus = (date: Date) => {
-    const dateKey = getDateKey(date);
-    const savedStatus = dateStatus[dateKey];
-    
-    if (savedStatus) {
-      return savedStatus;
-    }
-    
-    // 기본값 설정: 현재 달의 평일만 운영, 나머지는 모두 비활성화
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // 시간을 00:00:00으로 설정하여 날짜만 비교
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    
-    // 오늘 이전 날짜는 모두 비활성화
-    if (targetDate < today) {
-      return 'inactive';
-    }
-    
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const dateYear = date.getFullYear();
-    const dateMonth = date.getMonth();
-    const dayOfWeek = date.getDay();
-    
-    // 현재 달이고 오늘 이후의 평일인 경우만 운영
-    if (dateYear === currentYear && dateMonth === currentMonth && dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today) {
-      return 'operating';
-    } else {
-      return 'inactive';
-    }
-  };
-
-  const handleDateStatusChange = (status: 'operating' | 'closed' | 'inactive') => {
-    if (selectedDate) {
-      const dateKey = getDateKey(selectedDate);
-      if (currentDateStatus === status) {
-        // 같은 상태를 다시 선택하면 미운영으로 변경
-        setDateStatus(prev => ({ ...prev, [dateKey]: 'inactive' }));
-        setCurrentDateStatus('inactive');
-      } else {
-        // 다른 상태로 변경
-        setDateStatus(prev => ({ ...prev, [dateKey]: status }));
-        setCurrentDateStatus(status);
-      }
-    }
-  };
-
-  const getStatusColor = (status: 'operating' | 'closed' | 'inactive') => {
-    switch (status) {
-      case 'operating':
-        return 'bg-blue-100';
-      case 'closed':
-        return 'bg-red-200';
-      case 'inactive':
-      default:
-        return 'bg-gray-300';
-    }
-  };
-
-  const getStatusText = (status: 'operating' | 'closed' | 'inactive') => {
-    switch (status) {
-      case 'operating':
-        return '운영';
-      case 'closed':
-        return '휴무';
-      case 'inactive':
-      default:
-        return '미운영';
-    }
-  };
-
-  // 시간 슬롯 토글
-  const toggleTimeSlot = (time: string) => {
-    // 운영 상태일 때만 시간 슬롯 선택 가능
-    if (currentDateStatus !== 'operating') {
-      return;
-    }
-    
-    // 과거 시간은 클릭할 수 없음
-    if (selectedDate && isTimeSlotPast(time, selectedDate)) {
-      return;
-    }
-    
-    // 단순한 토글 방식: 선택된 시간 = 차단할 시간
-    if (selectedDate) {
-      if (selectedTimeSlots.includes(time)) {
-        // 이미 선택된 시간을 클릭하면 선택 해제 (차단 해제)
-        setSelectedTimeSlots(selectedTimeSlots.filter(t => t !== time));
-      } else {
-        // 선택되지 않은 시간을 클릭하면 선택 (차단)
-        setSelectedTimeSlots([...selectedTimeSlots, time]);
-      }
-    }
-  };
-
   // 각 항목별 입력 완료 상태 확인 함수들
   const isProfileImageComplete = () => {
     return profileImage !== null || fileName !== '';
@@ -814,67 +942,7 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
     }
   };
 
-  // 캘린더 렌더링
-  const renderCalendar = () => {
-    const daysInMonth = getDaysInMonth(currentMonth);
-    const firstDay = getFirstDayOfMonth(currentMonth);
-    const days = [];
-
-    // 이전 달의 마지막 날들
-    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1);
-    const daysInPrevMonth = getDaysInMonth(prevMonth);
-    for (let i = firstDay - 1; i >= 0; i--) {
-      const date = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), daysInPrevMonth - i);
-      days.push(
-        <div key={`prev-${i}`} className="text-gray-300 text-center py-2">
-          {date.getDate()}
-        </div>
-      );
-    }
-
-    // 현재 달의 날들
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      const isSelectedDate = isSelected(date);
-      const dateStatus = getDateStatus(date);
-      
-      days.push(
-                 <div
-           key={day}
-           onClick={() => handleDateClick(date)}
-           className={`text-center py-2 cursor-pointer ${
-             isSelectedDate
-               ? 'bg-blue-500 text-white rounded-full'
-               : dateStatus === 'operating'
-               ? 'bg-blue-100 text-blue-600 rounded-full'
-               : dateStatus === 'closed'
-               ? 'bg-red-200 text-red-600 rounded-full'
-               : isWeekend
-               ? 'bg-gray-100 text-red-500 rounded-full'
-               : 'bg-gray-100 text-gray-900 rounded-full'
-           } ${!isSelectedDate ? 'hover:bg-blue-500 hover:text-white hover:rounded-full' : ''} transition-colors`}
-        >
-          {day}
-        </div>
-      );
-    }
-
-    // 다음 달의 첫 날들
-    const remainingDays = 42 - days.length;
-    for (let i = 1; i <= remainingDays; i++) {
-      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, i);
-      days.push(
-        <div key={`next-${i}`} className="text-gray-300 text-center py-2">
-          {date.getDate()}
-        </div>
-      );
-    }
-
-    return days;
-  };
-
-  const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+    const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
 
   if (loading) {
     return (
