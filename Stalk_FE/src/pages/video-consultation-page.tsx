@@ -119,6 +119,7 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [ovToken, consultationId]);
 
+  // ovToken과 consultationId가 변경될 때 openvidu 초기화
   useEffect(() => {
     console.log('Component mounted, checking conditions for initialization...');
     console.log('ovToken exists:', !!ovToken);
@@ -158,7 +159,7 @@ const VideoConsultationPage: React.FC = () => {
         hasConsultationId: !!consultationId
     });
     }
-  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
+  }, [ovToken, consultationId]); 
 
   // 사용자 로딩 후 OpenVidu 초기화
   useEffect(() => {
@@ -210,6 +211,13 @@ const VideoConsultationPage: React.FC = () => {
   useEffect(() => {
   if (showChat) {
     setHasUnreadMessages(false); // ✅ 열자마자 알림 꺼짐
+    }
+  }, [showChat]);
+
+  // 채팅 창이 닫힐 때 읽음 상태 초기화
+  useEffect(() => {
+    if (!showChat) {
+      setHasUnreadMessages(false);
     }
   }, [showChat]);
 
@@ -1411,6 +1419,7 @@ const VideoConsultationPage: React.FC = () => {
                 console.log("Chat button clicked - showStockChart:", showStockChart, "showChat:", showChat);
                 if (showChat) {
                   setShowChat(false);
+                  setHasUnreadMessages(false);
                 } else {
                   setShowChat(true);
                   setShowParticipants(false); // Close participants when opening chat
