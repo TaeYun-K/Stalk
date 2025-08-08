@@ -252,6 +252,12 @@ const ProductsPage = () => {
             tradeValue: stockData.tradeValue || stockData.ACC_TRDVAL,
             marketCap: stockData.marketCap || stockData.MKTCAP,
           };
+          
+          // Debug logging for IT Chem
+          if (selectedTicker === '309710') {
+            console.log(`🔍 IT Chem API response:`, stockData);
+            console.log(`📊 Mapped data:`, mappedData);
+          }
 
   
 

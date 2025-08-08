@@ -121,6 +121,17 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
           prevClose: currentPrice - priceChange,
           volume: formatVolume(parseInt(stockInfo.ACC_TRDVOL?.replace(/,/g, '') || stockInfo.volume?.replace(/,/g, '') || '0'))
         });
+        
+        // Debug logging for IT Chem
+        if (ticker === '309710') {
+          console.log(`🔍 IT Chem raw API data:`, stockInfo);
+          console.log(`📊 Parsed values:`, {
+            price: currentPrice,
+            change: priceChange,
+            changeRate: changePct,
+            isNegative: changePct < 0
+          });
+        }
       }
     } catch (error) {
       console.error('주식 상세 정보 로드 오류:', error);
@@ -141,6 +152,7 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
   };
 
   const isNegative = stockData.changeRate < 0;
+  // Korean market convention: Red for up, Blue for down
   const changeColor = isNegative ? 'text-blue-600' : 'text-red-600';
   const changeIcon = isNegative ? '▼' : stockData.changeRate > 0 ? '▲' : '';
 
