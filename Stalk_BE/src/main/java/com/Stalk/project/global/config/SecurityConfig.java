@@ -182,6 +182,7 @@ public class SecurityConfig {
 
             // 주식 조회
             .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/stock/**").permitAll()
 
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()

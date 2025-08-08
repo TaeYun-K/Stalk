@@ -31,29 +31,21 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
       return null;
     }
 
-    // 기존 캔버스가 있으면 제거
-    const existingCanvas = container.querySelector('#drawing-canvas');
-    if (existingCanvas) {
-      existingCanvas.remove();
+    // Use the existing drawing-canvas div from React
+    const canvasContainer = document.getElementById('drawing-canvas');
+    if (!canvasContainer) {
+      console.error('Drawing canvas element not found');
+      return null;
     }
-
-    // Konva 컨테이너 생성
-    const canvasContainer = document.createElement('div');
-    canvasContainer.id = 'drawing-canvas';
-    canvasContainer.style.position = 'absolute';
-    canvasContainer.style.top = '0';
-    canvasContainer.style.left = '0';
-    canvasContainer.style.width = '100%';
-    canvasContainer.style.height = '100%';
-    canvasContainer.style.pointerEvents = 'none';
-    canvasContainer.style.zIndex = '10';
-    container.appendChild(canvasContainer);
+    
+    // Clear any existing Konva content
+    canvasContainer.innerHTML = '';
 
     console.log('Konva Stage 생성 중...', { width, height });
 
-    // Konva Stage 생성
+    // Konva Stage 생성 - use container ID string
     const stage = new Konva.Stage({
-      container: canvasContainer,
+      container: 'drawing-canvas',
       width: width,
       height: height,
     });
@@ -207,23 +199,38 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
 
   const clearCanvas = useCallback(() => {
     const layer = layerRef.current;
-    const transformer = transformerRef.current;
-    if (!layer || !transformer) return;
-
-    // Transformer를 제외한 모든 도형 제거
-    const children = layer.getChildren();
-    children.forEach(child => {
-      if (child !== transformer) {
-        child.destroy();
-      }
-    });
+    const stage = stageRef.current;
     
-    transformer.nodes([]);
-    transformer.visible(false);
+    if (!layer || !stage) return;
+
+    // Remove the layer and create a new one
+    layer.destroy();
+    
+    // Create new layer
+    const newLayer = new Konva.Layer();
+    stage.add(newLayer);
+    
+    // Create new transformer
+    const newTransformer = new Konva.Transformer({
+      borderStroke: '#1e40af',
+      borderStrokeWidth: 2,
+      anchorStroke: '#1e40af',
+      anchorFill: 'white',
+      anchorSize: 8,
+      anchorCornerRadius: 4,
+    });
+    newLayer.add(newTransformer);
+    
+    // Update refs
+    layerRef.current = newLayer;
+    transformerRef.current = newTransformer;
     selectedShapeRef.current = null;
-    shapeHistoryRef.current = []; // Clear history
-    layer.batchDraw();
-    console.log('모든 도형 삭제됨');
+    shapeHistoryRef.current = [];
+    lastLineRef.current = null;
+    currentShapeRef.current = null;
+    
+    // Redraw
+    stage.batchDraw();
   }, []);
 
   const undoLastShape = useCallback(() => {
