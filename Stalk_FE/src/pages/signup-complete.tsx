@@ -1,10 +1,13 @@
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 
 
 const SignupComplete = () => {
   const navigate = useNavigate();
+  const location = useLocation() as { state?: { name?: string; userType?: 'general' | 'expert' } };
+  const displayName = location.state?.name || '회원';
+  const suffix = location.state?.userType === 'expert' ? '전문가님!' : '님!';
 
   return (
     <div className="relative flex flex-col min-h-screen bg-gradient-to-b from-blue-100 to-white">
@@ -26,7 +29,7 @@ const SignupComplete = () => {
 
             {/* Welcome Message */}
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              환영합니다. 김싸피 전문가님!
+              환영합니다. {displayName} {suffix}
             </h1>
 
             {/* Instructions */}
