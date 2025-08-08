@@ -43,7 +43,7 @@ const PaymentFail: React.FC = () => {
 
       console.log("결제 취소 API 호출:", orderId);
 
-      const response = await fetch("/api/payment/cancel", {
+      const response = await fetch("/api/cancel", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
