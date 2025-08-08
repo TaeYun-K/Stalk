@@ -4,7 +4,7 @@ import {
   Session,
   Subscriber,
 } from "openvidu-browser";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
@@ -28,7 +28,6 @@ interface LocationState {
   userRole?: 'ADVISOR' | 'USER';  // 사용자 역할 추가
 }
 
-
 interface StockData {
   ticker: string;
   name: string;
@@ -41,6 +40,7 @@ interface ChatMessage {
   timestamp: Date;
   type : "system" | "user";
 }
+
 
 type HoveredButton =
   | "audio"
@@ -74,6 +74,10 @@ const VideoConsultationPage: React.FC = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [isInSession] = useState(true);
+  
+  const ovTokenRef = useRef<string | null>(ovToken ?? sessionStorage.getItem("ovToken"));
+  const consultationIdRef = useRef<string | null>(consultationId ?? sessionStorage.getItem("consultationId"));
 
 
   // 사용자 정보 상태 추가
@@ -97,7 +101,24 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] = useState<boolean>(true);
 
-  
+  // 상태 변화를 추적하는 ref 추가
+  const isInSessionRef = useRef(isInSession);
+  useEffect(() => {
+    isInSessionRef.current = isInSession;
+  }, [isInSession]);
+
+  // session storage에 상담 ID 저장
+  useEffect(() => {
+    if (ovToken) {
+      ovTokenRef.current = ovToken;
+      sessionStorage.setItem("ovToken", ovToken);
+    }
+    if (consultationId) {
+      consultationIdRef.current = consultationId;
+      sessionStorage.setItem("consultationId", consultationId);
+    }
+  }, [ovToken, consultationId]);
+
   useEffect(() => {
     console.log('Component mounted, checking conditions for initialization...');
     console.log('ovToken exists:', !!ovToken);
@@ -192,48 +213,144 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [showChat]);
 
+  // 상담 종료 함수
+  const leaveSession = async (): Promise<void> => {
+
+    const token = AuthService.getAccessToken();
+    const id =
+    consultationIdRef.current ||
+    sessionStorage.getItem("consultationId") ||
+    consultationId || null;
 
 
-
-  // 페이지 이탈 방지 훅
-  const usePreventNavigation = (enabled: boolean) => {
-    const navigate = useNavigate();
-
-    useEffect(() => {
-      if (!enabled) return;
-
-      // 🔒 1. 브라우저 새로고침 / 닫기 방지
-      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-        e.preventDefault();
-        e.returnValue = '';
-      };
-
-      // 🔒 2. 뒤로가기 방지
-      const handlePopState = (e: PopStateEvent) => {
-        e.preventDefault();
-        // 뒤로가기 막고 알림창 보여주기 (선택)
-        const confirmLeave = window.confirm('상담이 종료되지 않았습니다. 정말 나가시겠습니까?');
-        if (confirmLeave) {
-          window.removeEventListener('beforeunload', handleBeforeUnload);
-          navigate(-1); // 실제 뒤로가기
-        } else {
-          // ❌ 뒤로가기 중단: 앞으로 한 번 더 이동 (뒤로 간 걸 다시 앞으로 감)
-          window.history.pushState(null, '', window.location.href);
+    try {
+      // 1) 백엔드에 세션 종료 POST 요청
+      await axios.post(`/api/consultations/${id}/session/close`,
+        {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      console.error('상담 종료 API 실패:', error);
+    } finally {
+      // 2) OpenVidu 세션 해제
+      if (session) {
+        try {
+          session.disconnect();
+        } catch (err) {
+          console.error('세션 disconnect 중 오류:', err);
         }
-      };
+      }
 
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      window.addEventListener('popstate', handlePopState);
-      // popstate 트리거를 위해 현재 상태 push (뒤로가기 가능하게 만들어줘야 감지 가능)
+      // 3) 로컬 퍼블리셔(내 미디어) 트랙 정지 및 객체 파괴
+      if (publisher) {
+        try {
+          publisher.stream
+            .getMediaStream()
+            .getTracks()
+            .forEach(track => track.stop());
+        } catch (err) {
+          console.error('퍼블리셔 정리 중 오류:', err);
+        }
+      }
+
+      // 4) 모든 구독자 스트림 언구독 및 트랙 정지
+      subscribers.forEach(sub => {
+        // 언구독
+        try {
+          session?.unsubscribe(sub);
+        } catch (err) {
+          console.error('구독 해제 실패:', err);
+        }
+        // 미디어 트랙 중지
+        try {
+          sub.stream
+            .getMediaStream()
+            .getTracks()
+            .forEach(track => track.stop());
+        } catch (err) {
+          console.error('구독자 트랙 중지 실패:', err);
+        }
+      });
+
+      // 4) 상태 초기화
+      navigate(`/mypage`);
+    }
+  };
+
+  // 🔹 새로고침으로 떠났다면, 재로드 직후 마이페이지로
+  useEffect(() => {
+    const flag = sessionStorage.getItem('navigateToMyPageAfterReload');
+    if (flag === '1') {
+      sessionStorage.removeItem('navigateToMyPageAfterReload');
+      navigate('/mypage', { replace: true });
+    }
+  }, [navigate]);
+
+  // 브라우저 뒤로가기 버튼 처리
+  useEffect(() => {
+    const handlePopState = async (_e: PopStateEvent) => {
+      // 뒤로가기를 눌러도 결국 현재 URL로 고정
       window.history.pushState(null, '', window.location.href);
 
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        window.removeEventListener('popstate', handlePopState);
-      };
-    }, [enabled, navigate]);
-  };
-  usePreventNavigation(true);
+      const ok = window.confirm('상담을 종료하고 나가시겠습니까?');
+      if (!ok) return;
+
+      // 🔸 leaveSession 내부에서 이미 /mypage 로 navigate 하므로,
+      // 여기서 따로 navigate(-1) 호출하지 않습니다.
+      await leaveSession();
+    };
+
+    // 🔹 처음 마운트 시 더미 state 하나 넣어, 첫 뒤로가기를 우리가 가로챔
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
+
+  // 새로고침/창 닫기 경고 및 처리 로직 추가
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isInSessionRef.current) {
+        // 사용자에게 경고 메시지를 표시
+        e.preventDefault();
+        e.returnValue = ""; 
+        
+        sessionStorage.setItem('navigateToMyPageAfterReload', '1');
+      }
+    };
+
+    const handleUnload = async () => {
+      // 창이 닫히거나 새로고침될 때 leaveSession 호출
+      // 이 부분은 브라우저에 따라 비동기 API가 실행되지 않을 수 있음.
+      // 하지만, 최대한 시도하는 것이 좋음.
+      if (isInSessionRef.current) {
+        // Navigator.sendBeacon 또는 동기 XHR 요청을 사용하면 더 확실하지만
+        // 간단한 fetch/axios 요청도 시도해 볼 수 있음.
+        const id = consultationIdRef.current;
+        const token = AuthService.getAccessToken();
+
+        if (id && token) {
+          // 동기 XHR 요청 예시 (브라우저가 닫히기 전에 완료되도록)
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/consultations/${id}/session/close`, false); // 'false'로 동기 설정
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.send();
+          console.log("동기 요청으로 상담 종료 API 시도 완료");
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("unload", handleUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("unload", handleUnload);
+    };
+  }, []); // 의존성 배열을 비워 한 번만 실행되도록 함
+
 
   // 참가자 역할 구분을 위한 함수들
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -543,66 +660,6 @@ const VideoConsultationPage: React.FC = () => {
     } catch (error) {
       console.error("Error starting media:", error);
       alert("카메라 또는 마이크에 접근할 수 없습니다. 브라우저 권한을 확인해주세요.");
-    }
-  };
-
-  // 상담 종료 함수
-  const leaveSession = async (): Promise<void> => {
-
-    const token = AuthService.getAccessToken();
-    try {
-      // 1) 백엔드에 세션 종료 POST 요청
-      await axios.post(`/api/consultations/${consultationId}/session/close`, 
-        {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-    } catch (error) {
-      console.error('상담 종료 API 실패:', error);
-    } finally {
-      // 2) OpenVidu 세션 해제
-      if (session) {
-        try {
-          session.disconnect();
-        } catch (err) {
-          console.error('세션 disconnect 중 오류:', err);
-        }
-      }
-
-      // 3) 로컬 퍼블리셔(내 미디어) 트랙 정지 및 객체 파괴
-      if (publisher) {
-        try {
-          publisher.stream
-            .getMediaStream()
-            .getTracks()
-            .forEach(track => track.stop());
-        } catch (err) {
-          console.error('퍼블리셔 정리 중 오류:', err);
-        }
-      }
-
-      // 4) 모든 구독자 스트림 언구독 및 트랙 정지
-      subscribers.forEach(sub => {
-        // 언구독
-        try {
-          session?.unsubscribe(sub);
-        } catch (err) {
-          console.error('구독 해제 실패:', err);
-        }
-        // 미디어 트랙 중지
-        try {
-          sub.stream
-            .getMediaStream()
-            .getTracks()
-            .forEach(track => track.stop());
-        } catch (err) {
-          console.error('구독자 트랙 중지 실패:', err);
-        }
-      });
-
-      // 4) 상태 초기화
-      navigate(`/mypage`);
     }
   };
 
