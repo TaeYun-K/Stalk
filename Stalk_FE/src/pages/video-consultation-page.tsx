@@ -4,8 +4,8 @@ import {
   Session,
   Subscriber,
 } from "openvidu-browser";
-import React, { useEffect, useState } from "react";
-import { useBlocker, useLocation, useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
 
@@ -28,7 +28,6 @@ interface LocationState {
   sessionId: string;        // OpenVidu 세션 ID
   userRole?: 'ADVISOR' | 'USER';  // 사용자 역할 추가
 }
-
 
 interface StockData {
   ticker: string;
@@ -77,6 +76,10 @@ const VideoConsultationPage: React.FC = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [isInSession] = useState(true);
+  
+  const ovTokenRef = useRef<string | null>(ovToken ?? sessionStorage.getItem("ovToken"));
+  const consultationIdRef = useRef<string | null>(consultationId ?? sessionStorage.getItem("consultationId"));
 
 
   // 사용자 정보 상태 추가
@@ -100,7 +103,24 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] = useState<boolean>(true);
 
-  
+  // 상태 변화를 추적하는 ref 추가
+  const isInSessionRef = useRef(isInSession);
+  useEffect(() => {
+    isInSessionRef.current = isInSession;
+  }, [isInSession]);
+
+  // session storage에 상담 ID 저장
+  useEffect(() => {
+    if (ovToken) {
+      ovTokenRef.current = ovToken;
+      sessionStorage.setItem("ovToken", ovToken);
+    }
+    if (consultationId) {
+      consultationIdRef.current = consultationId;
+      sessionStorage.setItem("consultationId", consultationId);
+    }
+  }, [ovToken, consultationId]);
+
   useEffect(() => {
     console.log('Component mounted, checking conditions for initialization...');
     console.log('ovToken exists:', !!ovToken);
@@ -195,57 +215,16 @@ const VideoConsultationPage: React.FC = () => {
     }
   }, [showChat]);
 
-  // 페이지 이탈 방지 훅
-  const usePreventNavigation = (leaveSession: () => Promise<void>) => {
-  useEffect(() => {
-    // 새로고침 / 창 닫기
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const confirmLeave = window.confirm('상담을 종료하고 나가시겠습니까?');
-      if (!confirmLeave) {
-        e.preventDefault();
-        e.returnValue = '';
-      } else {
-        // 창닫기/새로고침 시 비동기 axios는 실패 가능 → sendBeacon 권장
-        leaveSession();
-      }
-    };
-
-    // 뒤로가기
-    const handlePopState = async (e: PopStateEvent) => {
-      e.preventDefault();
-      const confirmLeave = window.confirm('상담을 종료하고 나가시겠습니까?');
-      if (confirmLeave) {
-        await leaveSession();
-      } else {
-        window.history.pushState(null, '', window.location.href);
-      }
-    };
-
-    // pushState로 popstate 감지 준비
-    window.history.pushState(null, '', window.location.href);
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [leaveSession]);
-  };
-
-  // 상담 ID를 세션 스토리지에 저장
-  useEffect(() => {
-  if (consultationId) {
-    sessionStorage.setItem('consultationId', consultationId.toString());
-  }
-  }, [consultationId]);
-
-    // 상담 종료 함수
+  // 상담 종료 함수
   const leaveSession = async (): Promise<void> => {
 
     const token = AuthService.getAccessToken();
-    const id = sessionStorage.getItem('consultationId');
+    const id =
+    consultationIdRef.current ||
+    sessionStorage.getItem("consultationId") ||
+    consultationId || null;
+
+
     try {
       // 1) 백엔드에 세션 종료 POST 요청
       await axios.post(`/api/consultations/${id}/session/close`,
@@ -302,7 +281,78 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  usePreventNavigation(leaveSession);
+  // 🔹 새로고침으로 떠났다면, 재로드 직후 마이페이지로
+  useEffect(() => {
+    const flag = sessionStorage.getItem('navigateToMyPageAfterReload');
+    if (flag === '1') {
+      sessionStorage.removeItem('navigateToMyPageAfterReload');
+      navigate('/mypage', { replace: true });
+    }
+  }, [navigate]);
+
+  // 브라우저 뒤로가기 버튼 처리
+  useEffect(() => {
+    const handlePopState = async (_e: PopStateEvent) => {
+      // 뒤로가기를 눌러도 결국 현재 URL로 고정
+      window.history.pushState(null, '', window.location.href);
+
+      const ok = window.confirm('상담을 종료하고 나가시겠습니까?');
+      if (!ok) return;
+
+      // 🔸 leaveSession 내부에서 이미 /mypage 로 navigate 하므로,
+      // 여기서 따로 navigate(-1) 호출하지 않습니다.
+      await leaveSession();
+    };
+
+    // 🔹 처음 마운트 시 더미 state 하나 넣어, 첫 뒤로가기를 우리가 가로챔
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
+
+  // 새로고침/창 닫기 경고 및 처리 로직 추가
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isInSessionRef.current) {
+        // 사용자에게 경고 메시지를 표시
+        e.preventDefault();
+        e.returnValue = ""; 
+        
+        sessionStorage.setItem('navigateToMyPageAfterReload', '1');
+      }
+    };
+
+    const handleUnload = async () => {
+      // 창이 닫히거나 새로고침될 때 leaveSession 호출
+      // 이 부분은 브라우저에 따라 비동기 API가 실행되지 않을 수 있음.
+      // 하지만, 최대한 시도하는 것이 좋음.
+      if (isInSessionRef.current) {
+        // Navigator.sendBeacon 또는 동기 XHR 요청을 사용하면 더 확실하지만
+        // 간단한 fetch/axios 요청도 시도해 볼 수 있음.
+        const id = consultationIdRef.current;
+        const token = AuthService.getAccessToken();
+
+        if (id && token) {
+          // 동기 XHR 요청 예시 (브라우저가 닫히기 전에 완료되도록)
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/consultations/${id}/session/close`, false); // 'false'로 동기 설정
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.send();
+          console.log("동기 요청으로 상담 종료 API 시도 완료");
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("unload", handleUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("unload", handleUnload);
+    };
+  }, []); // 의존성 배열을 비워 한 번만 실행되도록 함
+
 
   // 참가자 역할 구분을 위한 함수들
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
