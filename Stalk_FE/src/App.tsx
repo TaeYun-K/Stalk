@@ -72,7 +72,6 @@ const showSidebarRoutes: string[] = [
   "/settings",
   "/write-post",
   "/consultations",
-  "/favorites",
   "/search",
   "/notifications",
   "/watchlist",
@@ -159,7 +158,6 @@ const AppContent: React.FC = () => {
                 }
               />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
-              
               <Route
                 path="/expert-registration/:advisorId"
                 element={<ExpertsIntroductionRegistrationPage />}

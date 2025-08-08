@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
@@ -7,20 +7,19 @@ import newsIcon from '@/assets/images/icons/news_icon.png';
 import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 
+
+
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { isLoggedIn, logout, isLoggingOut, userInfo, userRole } = useAuth();
+  // const location = useLocation();
+  const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
+  const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   
-  // mypage에서는 상담내역 드롭다운 숨기기
-  const isMyPage = location.pathname === '/mypage';
-  // 관리자 권한 확인
-  const isAdmin = userInfo?.role === 'ADMIN';
 
   // 사용자 프로필 이미지 가져오기
   const fetchUserProfileImage = async () => {
@@ -68,12 +67,20 @@ const Navbar: React.FC = () => {
     }
   };
 
+  const handleMouseEnter = (): void => {
+    setIsInputActive(true); // 입력창에 마우스가 올라왔을 때 활성화
+  };
+
+  const handleMouseLeave = (): void => {
+    setIsInputActive(false); // 입력창에서 마우스가 빠져나갔을 때 비활성화
+  };
+
   // 로그인 상태는 AuthContext에서 관리
 
   return (
     <nav className="bg-white fixed top-0 left-0 right-0 z-[60]">
       <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16">
-      <div className="flex justify-between items-center h-20">
+        <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
             <button 
@@ -163,27 +170,24 @@ const Navbar: React.FC = () => {
           {/* Search Bar and User Actions */}
           <div className="flex items-center space-x-4">
             {/* Search Bar */}
-            <div className="relative group">
-              <div className="bg-gray-50 hover:bg-white border border-gray-200 hover:border-blue-300 rounded-full px-4 py-2 flex items-center space-x-3 w-80 transition-all duration-300 shadow-soft group-hover:shadow-modern">
-                
-                <input
-                  type="text"
-                  placeholder="핀톡을 검색해보세요"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  className="bg-transparent outline-none text-gray-600 placeholder-gray-400 text-sm flex-1"
-                />
-                
-                <button
-                  onClick={handleSearch}
-                  className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-300"
-                >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              </div>
+            <div className="bg-gray-50 hover:bg-white border border-gray-200 hover:border-blue-300 rounded-full px-4 py-2 flex items-center space-x-3 w-80 transition-all duration-300 shadow-soft group-hover:shadow-modern" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+              <input
+                type="text"
+                placeholder="원하는 검색어를 입력하세요"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
+                className={`ml-2 bg-transparent outline-none text-gray-600 placeholder-gray-400 text-sm flex-1 border-none focus:outline-none focus:ring-0 ${isInputActive ? '' : 'pointer-events-none'}`}
+                readOnly={!isInputActive}
+              />
+              <button 
+                onClick={handleSearch} 
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-300 inline-flex item-center justify-center"
+              >
+                <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
             </div>
 
             {/* User Actions */}
@@ -197,7 +201,7 @@ const Navbar: React.FC = () => {
                     <img
                       src={userProfileImage}
                       alt="프로필"
-                      className="w-8 h-8 rounded-full object-cover"
+                      className="w-12 h-12 rounded-full object-cover"
                       onError={(e) => {
                         e.currentTarget.src = profileDefault;
                       }}
@@ -206,7 +210,7 @@ const Navbar: React.FC = () => {
                     <img
                       src={profileDefault}
                       alt="프로필"
-                      className="w-8 h-8 rounded-full object-cover"
+                      className="w-12 h-12 rounded-full object-cover"
                       onError={(_e) => {
                       }}
                     />
@@ -219,22 +223,21 @@ const Navbar: React.FC = () => {
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
                     {/* ADMIN이 아닐 때만 표시되는 메뉴들 */}
-                    {userRole !== 'ADMIN' && !isMyPage && (
+                    {userRole !== 'ADMIN' && (
                       <button
                         onClick={() => {
-                          navigate('/mypage');
+                          navigate('/mypage?tab=내 정보');
                           setShowProfileMenu(false);
                         }}
                         className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span>마이 페이지</span>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                        <span>마이페이지</span>
                       </button>
                     )}
-                    {userRole !== 'ADMIN' && !isMyPage && (
+                    {userRole !== 'ADMIN' && (
                       <button
                         onClick={() => {
                           navigate('/mypage?tab=내 상담 내역');
@@ -246,6 +249,22 @@ const Navbar: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>상담 내역</span>
+                      </button>
+                    )}
+                    {userRole !== 'ADMIN' && userRole !== 'ADVISOR' && (
+                    <button
+                        onClick={() => {
+                          navigate('/mypage?tab=찜한 전문가');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                        <span>
+                          찜한 전문가
+                        </span>
                       </button>
                     )}
                     
@@ -265,10 +284,7 @@ const Navbar: React.FC = () => {
                       </button>
                     )}
                     
-                    {/* 구분선 - ADMIN이 아니고 마이페이지가 아닐 때만 표시 */}
-                    {(userRole !== 'ADMIN' && !isMyPage) || userRole === 'ADMIN' ? (
-                      <div className="border-t border-gray-200 my-1"></div>
-                    ) : null}
+                    <div className="border-t border-gray-200 my-1"></div>
                     
                     {/* 로그아웃 버튼 - 모든 role에서 표시 */}
                     <button

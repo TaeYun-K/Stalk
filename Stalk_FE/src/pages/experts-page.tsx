@@ -13,7 +13,7 @@ interface Expert {
   id: number;
   name: string;
   profileImageUrl: string;
-  preferredStyle: 'SHORT' | 'LONG';
+  preferredStyle: 'SHORT' | 'MID_SHORT' | 'MID' | 'MID_LONG' | 'LONG';
   shortIntro: string;
   averageRating: number;
   reviewCount: number;
@@ -100,18 +100,21 @@ const ExpertsPage = () => {
       // 선택된 모든 카테고리를 만족해야 함 (AND 조건)
       matchesCategories = selectedCategories.every(category => {
         // 카테고리와 preferredStyle 매칭
-        const styleMatch = 
-          (category === '단기' && expert.preferredStyle === 'SHORT') ||
-          (category === '장기' && expert.preferredStyle === 'LONG');
-        
+        const styleMap: Record<string, string> = {
+          '단기': 'SHORT',
+          '중단기': 'MID_SHORT',
+          '중기': 'MID',
+          '중장기': 'MID_LONG',
+          '장기': 'LONG'
+        };
+
+
+        const styleMatch = styleMap[category] === expert.preferredStyle;
+
         // 자격증 이름에서도 카테고리 검색
         const certMatch = expert.certificates.some(cert => 
           cert.certificateName.includes(category)
         );
-        
-        if (styleMatch || certMatch) {
-          console.log(`전문가 ${expert.name} - 카테고리 "${category}" 매칭: 스타일=${expert.preferredStyle}, 매칭=${styleMatch || certMatch}`);
-        }
         
         return styleMatch || certMatch;
       });
@@ -182,7 +185,20 @@ const ExpertsPage = () => {
   };
 
   const getPreferredStyleText = (style: string) => {
-    return style === 'SHORT' ? '단기' : '장기';
+    switch (style) {
+      case 'SHORT':
+        return '단기';
+      case 'MID_SHORT':
+        return '중단기';
+      case 'MID':
+        return '중기';
+      case 'MID_LONG':
+        return '중장기';
+      case 'LONG':
+        return '장기';
+      default:
+        return style;
+    }
   };
 
   const formatConsultationFee = (fee: number) => {
@@ -273,6 +289,16 @@ const ExpertsPage = () => {
                   단기
                 </button>
                 <button 
+                  onClick={() => handleCategoryClick('중단기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategories.includes('중단기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  중단기
+                </button>
+                <button 
                   onClick={() => handleCategoryClick('중기')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
                     selectedCategories.includes('중기')
@@ -283,6 +309,16 @@ const ExpertsPage = () => {
                   중기
                 </button>
                 <button 
+                  onClick={() => handleCategoryClick('중장기')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategories.includes('중장기')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  중장기
+                </button>
+                <button 
                   onClick={() => handleCategoryClick('장기')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
                     selectedCategories.includes('장기')
@@ -291,6 +327,47 @@ const ExpertsPage = () => {
                   }`}
                 >
                   장기
+                </button>
+                {/* Certificates */}
+                <button 
+                  onClick={() => handleCategoryClick('금융투자분석사')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategories.includes('금융투자분석사')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  금융투자분석사
+                </button>
+                <button 
+                  onClick={() => handleCategoryClick('CFA')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategories.includes('CFA')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  CFA
+                </button>
+                <button 
+                  onClick={() => handleCategoryClick('CPA')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategories.includes('CPA')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  CPA
+                </button>
+                <button 
+                  onClick={() => handleCategoryClick('증권분석사')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategories.includes('증권분석사')
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                  }`}
+                >
+                  증권분석사
                 </button>
               </div>
           </div>
