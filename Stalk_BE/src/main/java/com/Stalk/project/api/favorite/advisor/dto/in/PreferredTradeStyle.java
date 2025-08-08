@@ -1,4 +1,4 @@
-package com.Stalk.project.api.favorite.dto.in;
+package com.Stalk.project.api.favorite.advisor.dto.in;
 
 public enum PreferredTradeStyle {
     SHORT("단기"),
