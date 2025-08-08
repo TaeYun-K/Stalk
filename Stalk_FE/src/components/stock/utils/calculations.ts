@@ -186,16 +186,20 @@ export const calculateChangeRate = (current: number, previous: number): number =
   return ((current - previous) / previous) * 100;
 };
 
-// 거래량 포맷팅
+// 거래량 포맷팅 (한국어 단위)
 export const formatVolume = (volume: number): string => {
-  if (volume >= 1000000000) {
-    return `${(volume / 1000000000).toFixed(1)}B`;
+  if (volume >= 100000000) {
+    return `${(volume / 100000000).toFixed(1)}억`;
+  } else if (volume >= 10000000) {
+    return `${(volume / 10000000).toFixed(1)}천만`;
   } else if (volume >= 1000000) {
-    return `${(volume / 1000000).toFixed(1)}M`;
+    return `${(volume / 1000000).toFixed(1)}백만`;
+  } else if (volume >= 10000) {
+    return `${(volume / 10000).toFixed(1)}만`;
   } else if (volume >= 1000) {
-    return `${(volume / 1000).toFixed(1)}K`;
+    return `${(volume / 1000).toFixed(1)}천`;
   }
-  return volume.toString();
+  return volume.toLocaleString();
 };
 
 // VWAP (Volume Weighted Average Price)
@@ -345,59 +349,65 @@ export const calculateHeikinAshi = (opens: number[], highs: number[], lows: numb
 };
 
 // Ichimoku Cloud
-export const calculateIchimoku = (highs: number[], lows: number[], period1: number = 9, period2: number = 26, period3: number = 52) => {
-  const tenkan: (number | null)[] = [];
-  const kijun: (number | null)[] = [];
-  const senkouA: (number | null)[] = [];
-  const senkouB: (number | null)[] = [];
-  const chikou: number[] = [];
+export const calculateIchimoku = (highs: number[], lows: number[], closes: number[]) => {
+  const period1 = 9;
+  const period2 = 26;
+  const period3 = 52;
+  
+  const tenkanSen: (number | null)[] = [];
+  const kijunSen: (number | null)[] = [];
+  const senkouSpanA: (number | null)[] = [];
+  const senkouSpanB: (number | null)[] = [];
+  const chikouSpan: (number | null)[] = [];
   
   for (let i = 0; i < highs.length; i++) {
     // Tenkan-sen (Conversion Line)
     if (i < period1 - 1) {
-      tenkan.push(null);
+      tenkanSen.push(null);
     } else {
       const periodHighs = highs.slice(i - period1 + 1, i + 1);
       const periodLows = lows.slice(i - period1 + 1, i + 1);
-      tenkan.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+      tenkanSen.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
     }
     
     // Kijun-sen (Base Line)
     if (i < period2 - 1) {
-      kijun.push(null);
+      kijunSen.push(null);
     } else {
       const periodHighs = highs.slice(i - period2 + 1, i + 1);
       const periodLows = lows.slice(i - period2 + 1, i + 1);
-      kijun.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+      kijunSen.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
     }
     
     // Senkou Span A (Leading Span A)
-    if (tenkan[i] !== null && kijun[i] !== null) {
-      senkouA.push((tenkan[i]! + kijun[i]!) / 2);
+    if (tenkanSen[i] !== null && kijunSen[i] !== null) {
+      senkouSpanA.push((tenkanSen[i]! + kijunSen[i]!) / 2);
     } else {
-      senkouA.push(null);
+      senkouSpanA.push(null);
     }
     
     // Senkou Span B (Leading Span B)
     if (i < period3 - 1) {
-      senkouB.push(null);
+      senkouSpanB.push(null);
     } else {
       const periodHighs = highs.slice(i - period3 + 1, i + 1);
       const periodLows = lows.slice(i - period3 + 1, i + 1);
-      senkouB.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+      senkouSpanB.push((Math.max(...periodHighs) + Math.min(...periodLows)) / 2);
+    }
+    
+    // Chikou Span (Lagging Span) - close price shifted back by period2
+    if (i >= period2) {
+      chikouSpan.push(closes[i - period2]);
+    } else {
+      chikouSpan.push(null);
     }
   }
   
-  // Chikou Span (Lagging Span) - close price shifted back
-  for (let i = 0; i < highs.length; i++) {
-    chikou.push(lows[i]); // Using close price, shifted back period2 periods
-  }
-  
   return {
-    tenkan,
-    kijun,
-    senkouA,
-    senkouB,
-    chikou
+    tenkanSen,
+    kijunSen,
+    senkouSpanA,
+    senkouSpanB,
+    chikouSpan
   };
 };

@@ -16,9 +16,6 @@ interface StockRankingTableProps {
   onStockClick: (stock: RankingStock) => void;
   rankingType: 'volume' | 'gainers' | 'losers';
   onRankingTypeChange: (type: 'volume' | 'gainers' | 'losers') => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  onSearchSubmit: (e: React.FormEvent) => void;
   title: string;
   marketType: '전체' | 'kospi' | 'kosdaq';
   onMarketTypeChange: (market: '전체' | 'kospi' | 'kosdaq') => void;
@@ -31,9 +28,6 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
   onStockClick,
   rankingType,
   onRankingTypeChange,
-  searchQuery,
-  onSearchChange,
-  onSearchSubmit,
   title,
   marketType,
   onMarketTypeChange,
@@ -87,29 +81,6 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
             ))}
           </div>
         </div>
-
-        {/* Search Bar */}
-        <form onSubmit={onSearchSubmit} className="mb-4">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="종목명 또는 종목코드 검색..."
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                darkMode 
-                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-              }`}
-            />
-            <button
-              type="submit"
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              🔍
-            </button>
-          </div>
-        </form>
       </div>
 
       {/* Ranking Type Tabs */}
