@@ -26,32 +26,27 @@ const ChartControls: React.FC<ChartControlsProps> = ({
   ];
 
   return (
-    <div className={`flex items-center justify-between p-4 border-b ${
-      darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-    }`}>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            기간:
-          </span>
-          {periods.map(p => (
-            <button
-              key={p.value}
-              onClick={() => onPeriodChange(p.value)}
-              className={`px-3 py-1 rounded transition-colors ${
-                period === p.value
-                  ? 'bg-blue-600 text-white'
-                  : darkMode 
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-      </div>
+    <div className={`inline-flex items-center gap-1.5 px-2 py-1.5 ${
+      darkMode ? 'bg-gray-900/40 border-gray-700/50' : 'bg-gray-50 border-gray-200'
+    } rounded-lg mb-2 border`}>
+      <span className={`text-xs font-medium ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+        기간:
+      </span>
+      {periods.map(p => (
+        <button
+          key={p.value}
+          onClick={() => onPeriodChange(p.value)}
+          className={`px-2 py-1 text-xs rounded-md transition-all ${
+            period === p.value
+              ? 'bg-blue-500 text-white shadow-sm'
+              : darkMode 
+                ? 'bg-gray-800/60 text-gray-400 hover:bg-gray-700/60 hover:text-gray-300' 
+                : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+          }`}
+        >
+          {p.label}
+        </button>
+      ))}
     </div>
   );
 };

@@ -16,7 +16,6 @@ import micOffIcon from "@/assets/images/icons/consultation/mic-off.svg";
 import micOnIcon from "@/assets/images/icons/consultation/mic-on.svg";
 import participantsIcon from "@/assets/images/icons/consultation/participants.svg";
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
-import settingsIcon from "@/assets/images/icons/consultation/settings.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import ChatPanel from "@/components/consultation/Chat.panel";
 import StockChart from "@/components/stock/charts/stock-chart";
@@ -50,7 +49,6 @@ type HoveredButton =
   | "chat"
   | "participants"
   | "stock"
-  | "settings"
   | null;
 
 const DEFAULT_VIDEO_CONFIG = {
@@ -201,12 +199,12 @@ const VideoConsultationPage: React.FC = () => {
 
   // 로컬 비디오 연결 & 차트 전환 시 연결
   useEffect(() => {
-    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces)) {
+    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces || showParticipants)) {
       setTimeout(() => {
         attachLocalVideo(publisher);
       }, 100);
     }
-  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces]);
+  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces, showParticipants]);
 
   // 실시간 채팅 읽음 상태 변경
   useEffect(() => {
@@ -1217,9 +1215,9 @@ const VideoConsultationPage: React.FC = () => {
           </div>
         )}
 
-        {!showStockChart && (showParticipants || showChat) && (
+        {((!showStockChart && showParticipants) || showChat) && (
           <div className="w-80 bg-gray-800 border-l border-gray-700">
-            {showParticipants && (
+            {showParticipants && !showStockChart && (
               <div className="p-4 border-b border-gray-700">
                 <h3 className="text-lg font-semibold mb-4">
                   참가자 ({publisher ? 1 : 0 + subscribers.length})
@@ -1409,14 +1407,19 @@ const VideoConsultationPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => !showStockChart && setShowChat(!showChat)}
+              onClick={() => {
+                console.log("Chat button clicked - showStockChart:", showStockChart, "showChat:", showChat);
+                if (showChat) {
+                  setShowChat(false);
+                } else {
+                  setShowChat(true);
+                  setShowParticipants(false); // Close participants when opening chat
+                }
+              }}
               onMouseEnter={() => setHoveredButton("chat")}
               onMouseLeave={() => setHoveredButton(null)}
-              disabled={showStockChart}
               className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
-                showStockChart
-                  ? "bg-gray-800 text-gray-500 cursor-not-allowed opacity-50"
-                  : showChat
+                showChat
                   ? "bg-blue-500 hover:bg-blue-600"
                   : "bg-gray-700 hover:bg-gray-600"
               }`}
@@ -1427,13 +1430,21 @@ const VideoConsultationPage: React.FC = () => {
               )}
               {hoveredButton === "chat" && (
                 <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
-                  {showStockChart ? "차트 모드에서 사용 불가" : showChat ? "채팅 닫기" : "채팅 열기"}
+                  {showChat ? "채팅 닫기" : "채팅 열기"}
                 </div>
               )}
             </button>
 
             <button
-              onClick={() => setShowParticipants(!showParticipants)}
+              onClick={() => {
+                console.log("Participants button clicked - showStockChart:", showStockChart, "showParticipants:", showParticipants);
+                if (showParticipants) {
+                  setShowParticipants(false);
+                } else {
+                  setShowParticipants(true);
+                  setShowChat(false); // Close chat when opening participants
+                }
+              }}
               onMouseEnter={() => setHoveredButton("participants")}
               onMouseLeave={() => setHoveredButton(null)}
               className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
@@ -1483,18 +1494,6 @@ const VideoConsultationPage: React.FC = () => {
               )}
             </button>
 
-            <button
-              onMouseEnter={() => setHoveredButton("settings")}
-              onMouseLeave={() => setHoveredButton(null)}
-              className="relative w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-all duration-200"
-            >
-              <img src={settingsIcon} alt="설정" className="w-6 h-6" />
-              {hoveredButton === "settings" && (
-                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
-                  설정
-                </div>
-              )}
-            </button>
           </div>
 
           {/* Right side - End Call button */}

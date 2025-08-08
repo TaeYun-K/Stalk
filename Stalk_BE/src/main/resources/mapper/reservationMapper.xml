@@ -48,6 +48,13 @@
       AND is_approved = 1
   </select>
 
+  <!-- 주문번호로 예약 ID 조회 -->
+  <select id="getReservationIdByOrderId" resultType="Long">
+    SELECT id
+    FROM consultation_sessions
+    WHERE order_id = #{orderId}
+  </select>
+
   <!-- 전문가의 예약 내역 조회 (전문가용) -->
   <select id="findAdvisorReservations"
     resultType="com.Stalk.project.api.reservation.dto.out.ReservationDetailResponseDto">
