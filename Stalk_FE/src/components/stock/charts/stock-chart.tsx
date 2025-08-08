@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -65,6 +66,9 @@ interface ChartDataPoint {
 interface StockChartProps {
   selectedStock?: StockData | null;
   darkMode?: boolean;
+  session?: Session | null;
+  chartInfo?: ChartInfo | null;
+  onChartChange?: (info: ChartInfo) => void;
   realTimeUpdates?: boolean;
   chartType?: ChartType;
   period?: number;
@@ -73,11 +77,17 @@ interface StockChartProps {
 
 type ChartType = 'line';
 
+type ChartInfo = {
+  ticker: string;
+  period: string;
+};
+
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 
 const StockChart: React.FC<StockChartProps> = ({
   selectedStock,
   darkMode = false,
+  chartInfo,
   realTimeUpdates = false,
   chartType: propChartType = 'line',
   period: propPeriod = 7,
@@ -117,6 +127,9 @@ const StockChart: React.FC<StockChartProps> = ({
   const rsiChartRef = useRef<any>(null);
   const macdChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
+
+  const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+  
   
   const {
     initializeCanvas,
@@ -244,6 +257,7 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [chartData, rawData, showMA20, showMA50, showEMA12, showEMA26, showBollingerBands, showVWAP, showIchimoku, showRSI, showMACD, showStochastic]);
 
+
   const fetchChartData = async (isUpdate = false) => {
     if (isLoading) {
       console.log("StockChart - 이미 로딩 중, 요청 건너뜀");
@@ -257,7 +271,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
     try {
       // More comprehensive market type detection - same logic as in use-stock-data.ts
-      const ticker = selectedStock?.ticker || '';
+      const ticker = getCurrentTicker();
       let marketType: string;
       
       if (ticker.startsWith('9') || ticker.startsWith('3')) {
