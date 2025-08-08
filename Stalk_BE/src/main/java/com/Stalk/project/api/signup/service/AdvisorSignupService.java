@@ -62,7 +62,7 @@ public class AdvisorSignupService {
         .loginType("LOCAL")
         .role("ADVISOR")
         .image(imageUrl)
-        .isVerified(false)
+        .isVerified(true)
         .termsAgreed(req.getAgreedPrivacy())
         .isActive(true)
         .build();
