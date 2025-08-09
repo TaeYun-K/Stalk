@@ -562,6 +562,8 @@ const VideoConsultationPage: React.FC = () => {
       session.signal({
         type: 'chart:change',
         data: JSON.stringify(info)
+      }).then(() => {
+          console.log('[chart] sent:', info);
       }).catch(err => console.error('Chart change signaling failed', err));
     }
   };
