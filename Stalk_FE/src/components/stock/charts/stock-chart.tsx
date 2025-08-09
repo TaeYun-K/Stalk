@@ -95,7 +95,6 @@ const StockChart: React.FC<StockChartProps> = ({
   period: propPeriod = 7,
   drawingMode: propDrawingMode = false
 }) => {
-  console.log("StockChart - 컴포넌트 렌더링됨:", selectedStock);
 
   const [chartData, setChartData] = useState<any>(null);
   const [volumeChartData, setVolumeChartData] = useState<any>(null);
@@ -145,7 +144,7 @@ const StockChart: React.FC<StockChartProps> = ({
   } = useDrawingCanvas(chartContainerRef);
 
   
-  
+  // 외부 chartInfo 들어오면 내부 period 동기화
   useEffect(() => {
     if(!chartInfo) return;
 
@@ -158,40 +157,35 @@ const StockChart: React.FC<StockChartProps> = ({
     if (propChartType !== chartType) {
       setChartType(propChartType);
     }
-    const newPeriod = propPeriod.toString();
-    if (newPeriod !== period) {
-      setPeriod(newPeriod);
-    }
     if (propDrawingMode !== isDrawingMode) {
       setIsDrawingMode(propDrawingMode);
     }
-  }, [propChartType, propPeriod, propDrawingMode]);
 
-  // Update internal period state when prop changes
-  useEffect(() => {
-    console.log("StockChart - propPeriod changed to:", propPeriod);
-    setPeriod(propPeriod.toString());
-  }, [propPeriod]);
-
-  useEffect(() => {
-    console.log('=== useEffect Triggered ===');
-    console.log('Ticker:', selectedStock?.ticker);
-    console.log('Period:', period);
-    if (selectedStock?.ticker) {
-      console.log("StockChart - 데이터 가져오기 시작:", selectedStock.ticker, "Period:", period);
-      fetchChartData();
+    // period: chartInfo가 없을 때만 보조로 반영
+    if (!chartInfo && propPeriod != null) {
+      const newPeriod = String(propPeriod);
+      if (newPeriod !== period) setPeriod(newPeriod);
     }
-  }, [selectedStock?.ticker, period]);
+  }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
   useEffect(() => {
-    if (!selectedStock?.ticker || !realTimeUpdates) return;
+    const ticker = getCurrentTicker();
+    console.log('=== FETCH TRIGGER ===', { selectedTicker: selectedStock?.ticker, chartInfoTicker: chartInfo?.ticker, usedTicker: ticker, period });
 
-    const interval = setInterval(() => {
-      fetchChartData(true);
-    }, REAL_TIME_UPDATE_INTERVAL_MS);
+    if(!ticker) return;
+    fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
-    return () => clearInterval(interval);
-  }, [selectedStock?.ticker, period, realTimeUpdates]);
+  }, [chartInfo?.ticker, selectedStock?.ticker, period]); 
+
+
+  // 실시간 업데이트 interval
+  useEffect(() => {
+  const ticker = getCurrentTicker();
+  if (!ticker || !realTimeUpdates) return;
+
+  const id = setInterval(() => fetchChartData(true), REAL_TIME_UPDATE_INTERVAL_MS);
+  return () => clearInterval(id);
+}, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
 
   // Single effect to manage canvas lifecycle with proper cleanup
   useEffect(() => {
@@ -1260,11 +1254,13 @@ const StockChart: React.FC<StockChartProps> = ({
     return volume.toLocaleString();
   };
 
-  if (!selectedStock) {
+  const ticker = getCurrentTicker();
+  const displayname = selectedStock?.name ?? `${ticker} (공유)`;
+  if (!ticker) {
     return (
       <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg`}>
         <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} text-base py-16`}>
-          주식을 선택하면 차트가 표시됩니다.
+          주식을 선택하거나 공유된 차트를 기다려 주세요.
         </div>
       </div>
     );
@@ -1394,12 +1390,11 @@ const StockChart: React.FC<StockChartProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 flex-1">
                 <h2 className={`text-lg font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {selectedStock?.name || '종목을 선택하세요'}
-                </h2>
-                {selectedStock && (
+                  {selectedStock?.name || '공유 차트'}
+                </h2>                
                   <>
                     <span className={`text-sm px-2 py-0.5 rounded font-medium ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
-                      {selectedStock.ticker}
+                      {displayname /* getCurrentTicker() 결과 */}
                     </span>
                     {rawData && (
                       <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
@@ -1407,7 +1402,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       </span>
                     )}
                   </>
-                )}
+                
                 <div className="flex-1">
                   <ChartControls
                     period={period}

@@ -1592,7 +1592,7 @@ const VideoConsultationPage: React.FC = () => {
               )}
               {hoveredButton === "stock" && (
                 <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
-                  {showStockChart ? "비디오 뷰로 전환" : "차트 보기"}
+                  {showStockChart ? "차트 닫기" : "차트 보기"}
                 </div>
               )}
             </button>
