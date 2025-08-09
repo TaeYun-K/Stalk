@@ -553,13 +553,6 @@ const VideoConsultationPage: React.FC = () => {
     return userInfo?.role === 'ADVISOR' ? '전문가' : '의뢰인';
   };
 
-  const handelSelectStock = (ticker: string) => {
-    // UI에서 종목 선택될 때 호출되는 지점
-    const info = { ticker, period: currentChart?.period ?? '7' }; // 현재 period 유지 or 기본값
-    setCurrentChart(info);
-    session?.signal({ type: 'chart:change', data: JSON.stringify(info) });
-};
-
   // 차트 변경 감지 후 signaling
   const handleChartChange = (info: ChartInfo) => {
     // 로컬 상태 업데이트
@@ -575,6 +568,22 @@ const VideoConsultationPage: React.FC = () => {
       }).catch(err => console.error('Chart change signaling failed', err));
     }
   };
+
+  // 차트 선택 시 signaling
+  useEffect(() => {
+    if (!session) return;
+    if (!selectedStock?.ticker) return;
+
+    if (currentChart?.ticker !== selectedStock.ticker) {
+      const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7' };
+      setCurrentChart(info);
+      session.signal({
+        type: 'chart:change',
+        data: JSON.stringify(info)
+      }).then(() => console.log('[chart] sent (auto-select):', info))
+        .catch(console.error);
+    }
+  }, [session, selectedStock?.ticker]);
 
   // 차트 변경 이벤트 수신
   useEffect(() => {
