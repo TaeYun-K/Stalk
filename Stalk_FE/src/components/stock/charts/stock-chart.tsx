@@ -93,7 +93,8 @@ const StockChart: React.FC<StockChartProps> = ({
   realTimeUpdates = false,
   chartType: propChartType = 'line',
   period: propPeriod = 7,
-  drawingMode: propDrawingMode = false
+  drawingMode: propDrawingMode = false,
+  session
 }) => {
 
   const [chartData, setChartData] = useState<any>(null);
@@ -130,7 +131,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const konvaStage = useRef<Konva.Stage | null>(null);
 
   const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
-  
+  const chartKey = { ticker: getCurrentTicker(), period };
   
   const {
     initializeCanvas,
@@ -140,8 +141,22 @@ const StockChart: React.FC<StockChartProps> = ({
     undoLastShape,
     setDrawingTool,
     setStrokeColor,
-    setStrokeWidth
-  } = useDrawingCanvas(chartContainerRef);
+    setStrokeWidth,
+    getAllShapes,
+    applyRemoteChange,
+    applySnapshot
+  } = useDrawingCanvas(chartContainerRef, {
+
+    onChange: (change) => {
+      if (!session) return;
+      const payload = { ...change, chart: chartKey };
+      const type =
+        change.type === 'add' || change.type === 'update' ? `drawing:${change.type}`
+        : change.type === 'delete' ? 'drawing:delete'
+        : 'drawing:clear';
+      session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
+    }
+  });
 
   
   // 외부 chartInfo 들어오면 내부 period 동기화
@@ -168,6 +183,7 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
+  // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
 
@@ -180,7 +196,6 @@ const StockChart: React.FC<StockChartProps> = ({
 
   }, [chartInfo?.ticker, selectedStock?.ticker, period]); 
 
-
   // 실시간 업데이트 interval
   useEffect(() => {
   const ticker = getCurrentTicker();
@@ -188,7 +203,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const id = setInterval(() => fetchChartData(true), REAL_TIME_UPDATE_INTERVAL_MS);
   return () => clearInterval(id);
-}, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
+  }, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
 
   // Single effect to manage canvas lifecycle with proper cleanup
   useEffect(() => {
@@ -253,6 +268,58 @@ const StockChart: React.FC<StockChartProps> = ({
     };
   }, [isDrawingMode, period, chartData]); // All dependencies that should trigger re-init
 
+  // 드로잉 시그널 수신 핸들러 등록
+  useEffect(() => {
+    if (!session) return;
+
+    // 수신 페이로드 유효성/차트키 체크
+    const isForThisChart = (msg: any) =>
+      msg?.chart?.ticker === chartKey.ticker && msg?.chart?.period === chartKey.period;
+
+    // add/update 수신 → 도형 반영
+    // 드로잉 추가 수신 처리
+    const onAdd = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'add', shape: msg.shape, version: msg.version });
+    };
+
+    // 드로잉 갱신 수신 처리
+    const onUpdate = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'update', shape: msg.shape, version: msg.version });
+    };
+
+    // 드로잉 삭제 수신 처리
+    const onDelete = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'delete', id: msg.id, version: msg.version });
+    };
+
+    // 전체 지우기 수신 처리
+    const onClear = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'clear', version: msg.version } as any);
+    };
+
+    // OpenVidu 시그널 리스너 등록
+    session.on('signal:drawing:add', onAdd);
+    session.on('signal:drawing:update', onUpdate);
+    session.on('signal:drawing:delete', onDelete);
+    session.on('signal:drawing:clear', onClear);
+
+    // 언마운트 시 정리
+    return () => {
+      session.off('signal:drawing:add', onAdd);
+      session.off('signal:drawing:update', onUpdate);
+      session.off('signal:drawing:delete', onDelete);
+      session.off('signal:drawing:clear', onClear);
+    };
+  }, [session, chartKey.ticker, chartKey.period, applyRemoteChange]);
+
   // Removed duplicate effect - drawing mode is now handled in the main canvas initialization effect
 
   // Update charts when indicators change - with safety delay
@@ -265,6 +332,52 @@ const StockChart: React.FC<StockChartProps> = ({
       return () => clearTimeout(timer);
     }
   }, [chartData, rawData, showMA20, showMA50, showEMA12, showEMA26, showBollingerBands, showVWAP, showIchimoku, showRSI, showMACD, showStochastic]);
+
+  // 동기화 요청/응답 처리
+  useEffect(() => {
+    if (!session) return;
+
+    // 동기화 요청 수신 처리
+    const onSyncReq = async (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+
+      // 스냅샷 생성 후 응답 전송
+      const shapes = getAllShapes();
+      const response = {
+        type: 'sync-response',
+        chart: chartKey,
+        shapes,
+        version: undefined // 훅에서 관리 중이면 필요 시 버전도 포함 가능
+      };
+      session.signal({ type: 'drawing:sync-response', data: JSON.stringify(response) }).catch(console.error);
+    };
+
+    // 동기화 응답 수신 처리
+    const onSyncRes = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      applySnapshot(msg.shapes, msg.version);
+    };
+
+    // 리스너 등록
+    session.on('signal:drawing:sync-request', onSyncReq);
+    session.on('signal:drawing:sync-response', onSyncRes);
+
+    // 정리
+    return () => {
+      session.off('signal:drawing:sync-request', onSyncReq);
+      session.off('signal:drawing:sync-response', onSyncRes);
+    };
+  }, [session, chartKey.ticker, chartKey.period, getAllShapes, applySnapshot]);
+
+  // 드로잉 모드 켰을 때 또는 차트 변경 시 동기화 요청
+  useEffect(() => {
+    if (!session) return;
+    if (isDrawingMode) {
+      requestSync();
+    }
+  }, [session, isDrawingMode, chartKey.ticker, chartKey.period]);
 
 
   const fetchChartData = async (isUpdate = false) => {
@@ -881,6 +994,16 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   };
 
+  // 드로잉 데이터 동기화 요청 전송
+  const requestSync = () => {
+    if (!session) return;
+    // 동기화 요청 브로드캐스트
+    session.signal({
+      type: 'drawing:sync-request',
+      data: JSON.stringify({ type: 'sync-request', chart: chartKey })
+    }).catch(console.error);
+  };
+
   // Determine tick settings based on period
   const periodDays = parseInt(period);
   const getTickSettings = () => {
@@ -1493,7 +1616,7 @@ const StockChart: React.FC<StockChartProps> = ({
               {/* Always render the canvas container to avoid DOM manipulation issues */}
               <div 
                 id="drawing-canvas" 
-                className="absolute inset-0 pointer-events-none"
+                className={`absolute inset-0 ${isDrawingMode ? 'pointer-events-auto' : 'pointer-events-none'}`}
                 style={{ 
                   display: isDrawingMode ? 'block' : 'none',
                   opacity: isCanvasReady ? 1 : 0, 
