@@ -102,7 +102,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [macdChartData, setMacdChartData] = useState<any>(null);
   const [stochChartData, setStochChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>('line');
-  const [period, setPeriod] = useState<string>(propPeriod.toString());
+  const [period, setPeriod] = useState<string>(chartInfo?.period ?? propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
@@ -170,6 +170,9 @@ const StockChart: React.FC<StockChartProps> = ({
 
   useEffect(() => {
     const ticker = getCurrentTicker();
+
+    if (chartInfo && period !== chartInfo.period) return;
+
     console.log('=== FETCH TRIGGER ===', { selectedTicker: selectedStock?.ticker, chartInfoTicker: chartInfo?.ticker, usedTicker: ticker, period });
 
     if(!ticker) return;
