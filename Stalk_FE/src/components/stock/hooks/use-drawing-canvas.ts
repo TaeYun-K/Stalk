@@ -1,9 +1,42 @@
 import { useRef, useCallback, RefObject } from 'react';
 import Konva from 'konva';
 
-export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
+// 드로잉 도구 타입
+export type DrawingTool = 'pen' | 'trendline' | 'vertical' | 'rectangle' | 'arrow' | 'fibonacci';
+
+export interface SerializedShape {
+  id: string;                       // 전역 고유 ID (양쪽에서 동일해야 함)
+  type: DrawingTool | 'path';       // Konva 라인 등 구분
+  attrs: {
+    x?: number; y?: number;
+    width?: number; height?: number; rotation?: number;
+    points?: number[]; tension?: number;
+    stroke?: string; strokeWidth?: number; opacity?: number;
+    dash?: number[]; fill?: string;
+    scaleX?: number; scaleY?: number;
+    offsetX?: number; offsetY?: number;
+    pointerLength?: number; pointerWidth?: number;
+    tool?: DrawingTool;             // 생성 당시 사용한 툴(구분용)
+    [k: string]: any;               // 여유 슬롯
+  };
+}
+
+export type DrawingChange =
+  | { type: 'add' | 'update'; shape: SerializedShape; version: number }
+  | { type: 'delete'; id: string; version: number }
+  | { type: 'clear'; version: number };
+
+  
+
+export const useDrawingCanvas = (
+  containerRef: RefObject<HTMLDivElement>,
+  opts?: {
+    onChange?: (change: DrawingChange) => void; // ← 추가
+  }
+) => {
   const stageRef = useRef<Konva.Stage | null>(null);
   const layerRef = useRef<Konva.Layer | null>(null);
+  const versionRef = useRef(0);
   const isDrawingRef = useRef<boolean>(false);
   const lastLineRef = useRef<Konva.Line | null>(null);
   const selectedShapeRef = useRef<Konva.Node | null>(null);
@@ -16,65 +49,152 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
   const strokeColorRef = useRef<string>('#1e40af');
   const strokeWidthRef = useRef<number>(2);
 
-  const initializeCanvas = useCallback(() => {
-    if (!containerRef.current) {
-      console.log('컨테이너가 준비되지 않음');
-      return null;
+  const genId = () => `shape_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Konva 노드에 고유 ID 부여 (없으면 생성)
+  const ensureId = useCallback((node: Konva.Node): string => {
+    let id = node.id();
+    if (!id) {
+      id = `shape_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      node.id(id);
     }
+    return id;
+  }, []);
 
-    const container = containerRef.current;
-    const width = container.offsetWidth;
-    const height = container.offsetHeight;
+  // ID로 노드 검색
+  const findById = useCallback((layer: Konva.Layer, id: string) => {
+    return layer.findOne((n) => n.id() === id) as Konva.Node | null;
+  }, []);
 
-    if (width === 0 || height === 0) {
-      console.log('컨테이너 크기가 0');
-      return null;
+  // Konva 노드를 SerializedShape 객체로 변환
+  const serialize = useCallback((node: Konva.Node): SerializedShape => {
+    const className = node.getClassName();
+    const id = ensureId(node);
+    const attrs = node.getAttrs();
+    const kept = {
+      x: attrs.x, y: attrs.y, width: attrs.width, height: attrs.height, rotation: attrs.rotation,
+      points: attrs.points, tension: attrs.tension, stroke: attrs.stroke, strokeWidth: attrs.strokeWidth,
+      opacity: attrs.opacity, dash: attrs.dash, fill: attrs.fill,
+      scaleX: attrs.scaleX, scaleY: attrs.scaleY, offsetX: attrs.offsetX, offsetY: attrs.offsetY,
+      draggable: attrs.draggable, visible: attrs.visible,
+      pointerLength: attrs.pointerLength, pointerWidth: attrs.pointerWidth,
+      tool: attrs.tool,
+    };
+
+    const type: SerializedShape['type'] =
+      className === 'Rect'  ? 'rectangle' :
+      className === 'Arrow' ? 'arrow' :
+      className === 'Line'  ? (attrs.tool as DrawingTool ?? 'pen') :
+      'path';
+
+    return { id, type, attrs: kept };
+  }, [ensureId]);
+
+
+  function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
+    const out = {} as Pick<T, K>;
+    keys.forEach(k => { if (obj[k] !== undefined) (out[k] = obj[k]); });
+    return out;
+  }
+
+  //SerializedShape를 레이어에 생성/갱신
+  const upsertFromSerialized = useCallback((layer: Konva.Layer, s: SerializedShape) => {
+    let node = findById(layer, s.id);
+    const apply = (n: Konva.Node) => { n.setAttrs({ ...s.attrs }); n.id(s.id); };
+
+    if (node) {
+      apply(node);
+    } else {
+      switch (s.type) {
+        case 'rectangle': node = new Konva.Rect({ ...s.attrs }); break;
+        case 'arrow':     node = new Konva.Arrow({ ...s.attrs }); break;
+        default:          node = new Konva.Line({ ...s.attrs });  break;
+      }
+      node.id(s.id);
+      layer.add(node);
     }
+    return node!;
+  }, [findById]);
 
-    // Use the existing drawing-canvas div from React
-    const canvasContainer = document.getElementById('drawing-canvas');
-    if (!canvasContainer) {
-      console.error('Drawing canvas element not found');
-      return null;
+  // 변화가 있을 때 event를 발생시키는 함수 
+  const emit = useCallback((change: Omit<DrawingChange, 'version'>) => {
+    const version = ++versionRef.current;
+    opts?.onChange?.({ ...change, version } as DrawingChange);
+  }, [opts]);
+
+  // 도형 생성 직후 event 
+  const onLocalShapeCreated = useCallback((node: Konva.Node, tool: DrawingTool) => {
+    ensureId(node);
+    node.setAttr('tool', tool);
+    layerRef.current?.draw();
+    emit({ type: 'add', shape: serialize(node) });
+  }, [emit, ensureId, serialize]);
+
+  // 로컬 도형 이동/리사이즈 후 변경 알림
+  const onLocalShapeUpdated = useCallback((node: Konva.Node) => {
+    ensureId(node);
+    layerRef.current?.draw();
+    emit({ type: 'update', shape: serialize(node) });
+  }, [emit, ensureId, serialize]);
+
+  // undo (마지막 도형 삭제)
+  const undoLastShape = () => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    const children = layer.getChildren();
+    const last = children[children.length - 1];
+    if (!last) return;
+    const id = ensureId(last);
+    last.destroy();
+    layer.draw();
+    emit({ type: 'delete', id });
+  };
+
+  // 전체 지우기
+  const clearCanvas = () => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    layer.destroyChildren();
+    layer.draw();
+    emit({ type: 'clear' });
+  };
+
+  // 현재 레이어의 모든 도형 직렬화 배열 반환
+  const getAllShapes = useCallback((): SerializedShape[] => {
+    const layer = layerRef.current;
+    if (!layer) return [];
+    return layer.getChildren().map(serialize);
+  }, [serialize]);
+
+  // 원격에서 받은 단일 변경 사항을 로컬 stage에 반영
+  const applyRemoteChange = useCallback((change: DrawingChange) => {
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    if (change.type === 'clear') {
+      layer.destroyChildren();
+      layer.draw();
+      return;
     }
-    
-    // Clear any existing Konva content
-    canvasContainer.innerHTML = '';
+    if (change.type === 'delete') {
+      const node = findById(layer, change.id);
+      if (node) node.destroy();
+      layer.draw();
+      return;
+    }
+    upsertFromSerialized(layer, change.shape);
+    layer.draw();
+  }, [findById, upsertFromSerialized]);
 
-    console.log('Konva Stage 생성 중...', { width, height });
-
-    // Konva Stage 생성 - use container ID string
-    const stage = new Konva.Stage({
-      container: 'drawing-canvas',
-      width: width,
-      height: height,
-    });
-
-    // Layer 생성
-    const layer = new Konva.Layer();
-    stage.add(layer);
-
-    // Transformer 생성
-    const transformer = new Konva.Transformer({
-      nodes: [],
-      visible: false,
-    });
-    layer.add(transformer);
-
-    stageRef.current = stage;
-    layerRef.current = layer;
-    transformerRef.current = transformer;
-
-    console.log('Konva 초기화 완료');
-
-    // 이벤트 리스너 설정
-    stage.on('mousedown touchstart', handleMouseDown);
-    stage.on('mousemove touchmove', handleMouseMove);
-    stage.on('mouseup touchend', handleMouseUp);
-    stage.on('click tap', handleClick);
-
-    return stage;
-  }, [containerRef]);
+  // 원격에서 받은 전체 스냅샷을 로컬 stage에 연결
+  const applySnapshot = useCallback((shapes: SerializedShape[], version?: number) => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    layer.destroyChildren();
+    shapes.forEach(s => upsertFromSerialized(layer, s));
+    layer.draw();
+    if (version != null) versionRef.current = version;
+  }, [upsertFromSerialized]);
 
   const handleMouseDown = useCallback((_e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     const stage = stageRef.current;
@@ -197,69 +317,6 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
     isDrawingRef.current = false;
   }, [containerRef]);
 
-  const clearCanvas = useCallback(() => {
-    const layer = layerRef.current;
-    const stage = stageRef.current;
-    
-    if (!layer || !stage) return;
-
-    // Remove the layer and create a new one
-    layer.destroy();
-    
-    // Create new layer
-    const newLayer = new Konva.Layer();
-    stage.add(newLayer);
-    
-    // Create new transformer
-    const newTransformer = new Konva.Transformer({
-      borderStroke: '#1e40af',
-      borderStrokeWidth: 2,
-      anchorStroke: '#1e40af',
-      anchorFill: 'white',
-      anchorSize: 8,
-      anchorCornerRadius: 4,
-    });
-    newLayer.add(newTransformer);
-    
-    // Update refs
-    layerRef.current = newLayer;
-    transformerRef.current = newTransformer;
-    selectedShapeRef.current = null;
-    shapeHistoryRef.current = [];
-    lastLineRef.current = null;
-    currentShapeRef.current = null;
-    
-    // Redraw
-    stage.batchDraw();
-  }, []);
-
-  const undoLastShape = useCallback(() => {
-    const layer = layerRef.current;
-    const transformer = transformerRef.current;
-    if (!layer || !transformer) return;
-
-    const history = shapeHistoryRef.current;
-    if (history.length === 0) {
-      console.log('삭제할 도형이 없습니다');
-      return;
-    }
-
-    // Get the last created shape
-    const lastShape = history.pop();
-    if (lastShape) {
-      // If the last shape is currently selected, deselect it
-      if (selectedShapeRef.current === lastShape) {
-        transformer.nodes([]);
-        transformer.visible(false);
-        selectedShapeRef.current = null;
-      }
-      
-      // Remove from layer
-      lastShape.destroy();
-      layer.batchDraw();
-      console.log('마지막 도형 삭제됨');
-    }
-  }, []);
 
   // Helper function to create shape during drag
   const createShapeByType = useCallback((shapeType: string, x1: number, y1: number, x2: number, y2: number): Konva.Node | null => {
@@ -612,6 +669,158 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
     console.log(`두께 변경: ${width}`);
   }, []);
 
+    // 드로잉 관리 함수 & 드로잉 데이터 signal 전송
+  const initializeCanvas = useCallback((): Konva.Stage | null => {
+    if (!containerRef.current) {
+      console.log('컨테이너가 준비되지 않음');
+      return null;
+    }
+
+    const container = containerRef.current;
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+
+    if (width === 0 || height === 0) {
+      console.log('컨테이너 크기가 0');
+      return null;
+    }
+
+    // Use the existing drawing-canvas div from React
+    const canvasContainer = document.getElementById('drawing-canvas') as HTMLDivElement | null;
+    if (!canvasContainer) {
+      console.error('Drawing canvas element not found');
+      return null;
+    }
+
+    // 드로잉 입력이 막히지 않도록 보장
+    canvasContainer.style.pointerEvents = 'auto';
+    
+    // Clear any existing Konva content
+    canvasContainer.innerHTML = '';
+
+    console.log('Konva Stage 생성 중...', { width, height });
+
+    // Konva Stage 생성 - use container ID string
+    const stage = new Konva.Stage({
+      container: 'drawing-canvas',
+      width: width,
+      height: height,
+    });
+
+    // Layer 생성
+    const layer = new Konva.Layer({ listening: true });
+    stage.add(layer);
+
+    // Transformer 생성
+    const transformer = new Konva.Transformer({
+      nodes: [],
+      visible: false,
+      rotateEnabled: true,
+      enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+    });
+    layer.add(transformer);
+
+    // 내부 ref 연결
+    stageRef.current = stage;
+    layerRef.current = layer;
+    transformerRef.current = transformer;
+
+    console.log('Konva 초기화 완료');
+
+    // ==== 변경 시 event 전송 로직 ====
+
+    // 1) 기본 포인터 이벤트(그리기/선택)
+    stage.on('mousedown touchstart', handleMouseDown);
+    stage.on('mousemove touchmove', handleMouseMove);
+    stage.on('mouseup touchend', handleMouseUp);
+    stage.on('click tap', handleClick);
+
+    // 2) 🔔 드로잉 변경 감지용(시그널링 트리거 포인트)
+    //    - 어떤 노드든 dragend/transformend 발생 시 업데이트 이벤트 발생
+    stage.on('dragend', (e) => {
+      const node = e.target as Konva.Node;
+      if (!node || node === stage) return;
+      onLocalShapeUpdated(node); // ← STEP 1에서 만든 함수: emit({ type:'update', shape: serialize(node) })
+    });
+    stage.on('transformend', (e) => {
+      const node = e.target as Konva.Node;
+      if (!node || node === stage) return;
+      onLocalShapeUpdated(node);
+    });
+    
+    // 3) 🔥 더블클릭(또는 더블탭)로 노드 삭제 → delete 이벤트 발생
+    stage.on('dblclick dbltap', (e) => {
+      const node = e.target as Konva.Node;
+      if (!node || node === stage) return;
+      const id = ensureId(node);   // 없으면 생성
+      node.destroy();
+      layer.draw();
+      emit({ type: 'delete', id }); // ← STEP 1의 emit
+    });
+
+    // 4) 스테이지 포커스 & 키보드 단축키(선택 노드 삭제)
+    const containerEl = stage.container();
+    containerEl.tabIndex = 1;
+    containerEl.focus();
+    const onKeyDown = (ev: KeyboardEvent) => {
+      // Delete / Backspace
+      if (ev.key === 'Delete' || ev.key === 'Backspace') {
+        const nodes = transformer.nodes?.() ?? [];
+        if (nodes.length > 0) {
+          nodes.forEach((n) => {
+            const id = ensureId(n);
+            n.destroy();
+            emit({ type: 'delete', id });
+          });
+          layer.draw();
+          transformer.nodes([]); // 선택 해제
+          transformer.visible(false);
+          layer.draw();
+        }
+      }
+    };
+    containerEl.addEventListener('keydown', onKeyDown);
+
+    // 5) 컨테이너 리사이즈 대응 (차트 영역 크기 변동 시 Stage 동기화)
+    const ro = new ResizeObserver(() => {
+      const w = container.offsetWidth;
+      const h = container.offsetHeight;
+      if (w > 0 && h > 0) {
+        stage.size({ width: w, height: h });
+        layer.batchDraw();
+      }
+    });
+    ro.observe(container);
+
+    
+    // 6) 스크롤 방지(차트 스크롤과 충돌 방지하고 싶으면 유지)
+    stage.on('wheel', (e) => {
+      // 필요 시 확대/축소를 막거나 커스텀 줌과 연동
+      e.evt.preventDefault();
+    });
+
+    // 생성된 노드에 lifecycle event 달기 위한 헬퍼
+    const attachNodeLifecycle = (node: Konva.Node) => {
+      // 업데이트 시그널
+      node.on('dragend transformend', () => onLocalShapeUpdated(node));
+      // 필요시 단일 클릭으로 선택해서 transformer 표시하는 로직 등 추가 가능
+    };  
+
+    // 전역으로 접근 가능하게 저장
+    (stage as any).__attachNodeLifecycle = attachNodeLifecycle;
+
+    //cleanup은 훅의 cleanup에서 stage.distroy() 시 자동으로 대부분 정리
+    (stage as any).__cleanup = () => {
+      ro.disconnect();
+      containerEl.removeEventListener('keydown', onKeyDown);
+    };
+
+
+    return stage;
+  }, [  containerRef,
+  handleMouseDown, handleMouseMove, handleMouseUp, handleClick,
+  onLocalShapeUpdated, emit, ensureId]);
+
   return {
     initializeCanvas,
     enableDrawing,
@@ -622,5 +831,10 @@ export const useDrawingCanvas = (containerRef: RefObject<HTMLDivElement>) => {
     setDrawingTool,
     setStrokeColor,
     setStrokeWidth,
+    getAllShapes,
+    applyRemoteChange,
+    applySnapshot,      
+    onLocalShapeCreated,
+    onLocalShapeUpdated,
   };
 };
