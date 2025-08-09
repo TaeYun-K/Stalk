@@ -148,6 +148,7 @@ const StockChart: React.FC<StockChartProps> = ({
   } = useDrawingCanvas(chartContainerRef, {
 
     onChange: (change) => {
+      console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
       const payload = { ...change, chart: chartKey };
       const type =
@@ -272,6 +273,8 @@ const StockChart: React.FC<StockChartProps> = ({
   useEffect(() => {
     if (!session) return;
 
+    console.log('[RECV] registering handlers');
+
     // 수신 페이로드 유효성/차트키 체크
     const isForThisChart = (msg: any) =>
       msg?.chart?.ticker === chartKey.ticker && msg?.chart?.period === chartKey.period;
@@ -357,6 +360,7 @@ const StockChart: React.FC<StockChartProps> = ({
     const onSyncRes = (e: any) => {
       const msg = JSON.parse(e.data);
       if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      console.log('[SYNC] apply snapshot', msg.shapes?.length);
       applySnapshot(msg.shapes, msg.version);
     };
 

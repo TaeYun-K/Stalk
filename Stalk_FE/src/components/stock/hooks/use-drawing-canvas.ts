@@ -1,6 +1,7 @@
 import { useRef, useCallback, RefObject } from 'react';
 import Konva from 'konva';
 
+
 // 드로잉 도구 타입
 export type DrawingTool = 'pen' | 'trendline' | 'vertical' | 'rectangle' | 'arrow' | 'fibonacci';
 
@@ -26,7 +27,8 @@ export type DrawingChange =
   | { type: 'delete'; id: string; version: number }
   | { type: 'clear'; version: number };
 
-  
+type DrawableNode = Konva.Shape | Konva.Group;
+
 
 export const useDrawingCanvas = (
   containerRef: RefObject<HTMLDivElement>,
@@ -42,7 +44,7 @@ export const useDrawingCanvas = (
   const selectedShapeRef = useRef<Konva.Node | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const startPointRef = useRef<{ x: number, y: number } | null>(null);
-  const currentShapeRef = useRef<Konva.Node | null>(null);
+  const currentShapeRef = useRef<DrawableNode | null>(null);
   const shapeHistoryRef = useRef<Konva.Node[]>([]); // Track shape creation order
   
   const drawingToolRef = useRef<string>('pen');
@@ -168,6 +170,7 @@ export const useDrawingCanvas = (
 
   // 원격에서 받은 단일 변경 사항을 로컬 stage에 반영
   const applyRemoteChange = useCallback((change: DrawingChange) => {
+    console.log('[APPLY] remote change', change); 
     const layer = layerRef.current;
     if (!layer) return;
 
@@ -254,22 +257,41 @@ export const useDrawingCanvas = (
     }
   }, []);
 
+
+  // 드로잉 종료 시 생성된 도형을 add 시그널로 올리고, 
   const handleMouseUp = useCallback(() => {
-    // Make shape draggable after drag creation is complete
-    if (currentShapeRef.current && drawingToolRef.current !== 'pen') {
-      if (currentShapeRef.current instanceof Konva.Group) {
-        currentShapeRef.current.draggable(true);
-      } else {
-        (currentShapeRef.current as any).draggable(true);
-      }
+    const layer = layerRef.current;
+    if (!isDrawingRef.current || !layer) return;
+
+    // 펜이면 lastLine, 그 외는 드래그 생성된 currentShape
+    const node = drawingToolRef.current === 'pen' ? lastLineRef.current : currentShapeRef.current;
+    if (!node) {
+      console.warn('[END] finalize but no node');
+      isDrawingRef.current = false;
+      lastLineRef.current = null;
+      currentShapeRef.current = null;
+      startPointRef.current = null;
+      return;
     }
-    
+
+    // 생성 직후: add 시그널 발생 (이게 있어야 상대 화면에 그려짐)
+    onLocalShapeCreated(node as Konva.Node, drawingToolRef.current);
+
+    // 이후 이동/리사이즈가 update 시그널로 나가도록 라이프사이클 연결
+    // @ts-ignore
+    stageRef.current?.__attachNodeLifecycle?.(node as Konva.Node);
+
+    // 드래그 가능 옵션(원하면 유지)
+    node.draggable(true);
+
+    // 상태 정리
     isDrawingRef.current = false;
     lastLineRef.current = null;
     currentShapeRef.current = null;
     startPointRef.current = null;
-    console.log('그리기 종료');
-  }, []);
+
+    console.log('그리기 종료(ADD 발행 완료)');
+  }, [onLocalShapeCreated]);
 
   const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     // Click handling for selection is now always available for any tool
@@ -319,7 +341,9 @@ export const useDrawingCanvas = (
 
 
   // Helper function to create shape during drag
-  const createShapeByType = useCallback((shapeType: string, x1: number, y1: number, x2: number, y2: number): Konva.Node | null => {
+  const createShapeByType = useCallback((
+    shapeType: string, 
+    x1: number, y1: number, x2: number, y2: number): DrawableNode | null => {
     switch (shapeType) {
       case 'trendline':
         return new Konva.Line({
