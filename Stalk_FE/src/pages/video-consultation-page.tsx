@@ -553,6 +553,14 @@ const VideoConsultationPage: React.FC = () => {
     return userInfo?.role === 'ADVISOR' ? '전문가' : '의뢰인';
   };
 
+  const handelSelectStock = (ticker: string) => {
+    // UI에서 종목 선택될 때 호출되는 지점
+    const info = { ticker, period: currentChart?.period ?? '7' }; // 현재 period 유지 or 기본값
+    setCurrentChart(info);
+    session?.signal({ type: 'chart:change', data: JSON.stringify(info) });
+};
+
+  // 차트 변경 감지 후 signaling
   const handleChartChange = (info: ChartInfo) => {
     // 로컬 상태 업데이트
     setCurrentChart(info);
