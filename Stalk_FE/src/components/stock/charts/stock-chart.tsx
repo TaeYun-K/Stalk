@@ -32,6 +32,7 @@ import {
   calculateHeikinAshi,
   calculateIchimoku
 } from '../utils/calculations';
+import { on } from 'events';
 
 ChartJS.register(
   CategoryScale,
@@ -88,6 +89,7 @@ const StockChart: React.FC<StockChartProps> = ({
   selectedStock,
   darkMode = false,
   chartInfo,
+  onChartChange,
   realTimeUpdates = false,
   chartType: propChartType = 'line',
   period: propPeriod = 7,
@@ -141,6 +143,16 @@ const StockChart: React.FC<StockChartProps> = ({
     setStrokeColor,
     setStrokeWidth
   } = useDrawingCanvas(chartContainerRef);
+
+  
+  
+  useEffect(() => {
+    if(!chartInfo) return;
+
+    if(chartInfo.period !== period) {
+      setPeriod(chartInfo.period);
+    }
+  }, [chartInfo?.ticker, chartInfo?.period]);
 
   useEffect(() => {
     if (propChartType !== chartType) {
@@ -841,11 +853,15 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const handlePeriodChange = (newPeriod: string) => {
-    console.log('=== Period Change Debug ===');
-    console.log('Current period:', period);
-    console.log('New period:', newPeriod);
-    console.log('Selected ticker:', selectedStock?.ticker);
     setPeriod(newPeriod);
+
+    const ticker = getCurrentTicker();
+    if(ticker) {
+      onChartChange?.({
+        ticker,
+        period: newPeriod
+      });
+    }
   };
 
   const handleChartTypeChange = (newType: ChartType) => {
