@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -459,20 +461,44 @@ public class KrxDataController {
     /**
      * Get combined volume ranking from both KOSPI and KOSDAQ
      */
-    @GetMapping("/ranking/volume")
-    public ResponseEntity<Map<String, Object>> getCombinedVolumeRanking() {
+    @GetMapping("/ranking/volume-ranking")
+    public ResponseEntity<Map<String, Object>> getCombinedVolumeRanking(
+            @RequestParam(required = false) String market) {
         Map<String, Object> response = new HashMap<>();
         
         try {
-            logger.info("Fetching combined volume ranking data");
+            logger.info("Fetching volume ranking data, market filter: {}", market);
             
-            // Get volume rankings from both markets
-            List<KrxRankingStock> kospiVolume = krxApiService.getKospiVolumeRanking(25);
-            List<KrxRankingStock> kosdaqVolume = krxApiService.getKosdaqVolumeRanking(25);
+            List<KrxRankingStock> allStocks = new ArrayList<>();
             
-            // Combine both lists
-            List<KrxRankingStock> allStocks = new java.util.ArrayList<>(kospiVolume);
-            allStocks.addAll(kosdaqVolume);
+            // Check market filter
+            if ("kospi".equalsIgnoreCase(market)) {
+                // KOSPI only
+                allStocks = krxApiService.getKospiVolumeRanking(50);
+            } else if ("kosdaq".equalsIgnoreCase(market)) {
+                // KOSDAQ only
+                allStocks = krxApiService.getKosdaqVolumeRanking(50);
+            } else {
+                // Combined (default)
+                List<KrxRankingStock> kospiVolume = new ArrayList<>();
+                List<KrxRankingStock> kosdaqVolume = new ArrayList<>();
+                
+                try {
+                    kospiVolume = krxApiService.getKospiVolumeRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSPI volume ranking: {}", e.getMessage());
+                }
+                
+                try {
+                    kosdaqVolume = krxApiService.getKosdaqVolumeRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSDAQ volume ranking: {}", e.getMessage());
+                }
+                
+                // Combine both lists
+                allStocks = new java.util.ArrayList<>(kospiVolume);
+                allStocks.addAll(kosdaqVolume);
+            }
             
             // Sort by volume and limit to top 50
             allStocks.sort((a, b) -> {
@@ -503,7 +529,313 @@ public class KrxDataController {
             logger.error("Failed to fetch volume ranking", e);
             response.put("success", false);
             response.put("message", "거래량 순위 조회 실패: " + e.getMessage());
-            return ResponseEntity.internalServerError().body(response);
+            response.put("data", new ArrayList<>());
+            return ResponseEntity.ok(response); // Return 200 with error message instead of 500
+        }
+    }
+    
+    /**
+     * Get combined price increase ranking from both KOSPI and KOSDAQ
+     */
+    @GetMapping("/ranking/price-increase-ranking")
+    public ResponseEntity<Map<String, Object>> getCombinedPriceIncreaseRanking(
+            @RequestParam(required = false) String market) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching price increase ranking data, market filter: {}", market);
+            
+            List<KrxRankingStock> allStocks = new ArrayList<>();
+            
+            // Check market filter
+            if ("kospi".equalsIgnoreCase(market)) {
+                // KOSPI only
+                allStocks = krxApiService.getKospiPriceIncreaseRanking(50);
+            } else if ("kosdaq".equalsIgnoreCase(market)) {
+                // KOSDAQ only
+                allStocks = krxApiService.getKosdaqPriceIncreaseRanking(50);
+            } else {
+                // Combined (default)
+                List<KrxRankingStock> kospiIncrease = new ArrayList<>();
+                List<KrxRankingStock> kosdaqIncrease = new ArrayList<>();
+                
+                try {
+                    kospiIncrease = krxApiService.getKospiPriceIncreaseRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSPI price increase ranking: {}", e.getMessage());
+                }
+                
+                try {
+                    kosdaqIncrease = krxApiService.getKosdaqPriceIncreaseRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSDAQ price increase ranking: {}", e.getMessage());
+                }
+                
+                // Combine both lists
+                allStocks = new java.util.ArrayList<>(kospiIncrease);
+                allStocks.addAll(kosdaqIncrease);
+            }
+            
+            // Sort by change rate and limit to top 50
+            allStocks.sort((a, b) -> {
+                try {
+                    double rateA = a.getChangeRate();
+                    double rateB = b.getChangeRate();
+                    return Double.compare(rateB, rateA);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            if (allStocks.size() > 50) {
+                allStocks = allStocks.subList(0, 50);
+            }
+            
+            // Update rankings43n
+            for (int i = 0; i < allStocks.size(); i++) {
+                allStocks.get(i).setRank(i + 1);
+            }
+            
+            response.put("success", true);
+            response.put("data", allStocks);
+            response.put("message", "상승률 순위 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch price increase ranking", e);
+            response.put("success", false);
+            response.put("message", "상승률 순위 조회 실패: " + e.getMessage());
+            response.put("data", new ArrayList<>());
+            return ResponseEntity.ok(response); // Return 200 with error message instead of 500
+        }
+    }
+    
+    /**
+     * Get combined price decrease ranking from both KOSPI and KOSDAQ
+     */
+    @GetMapping("/ranking/price-decrease-ranking")
+    public ResponseEntity<Map<String, Object>> getCombinedPriceDecreaseRanking(
+            @RequestParam(required = false) String market) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching price decrease ranking data, market filter: {}", market);
+            
+            List<KrxRankingStock> allStocks = new ArrayList<>();
+            
+            // Check market filter
+            if ("kospi".equalsIgnoreCase(market)) {
+                // KOSPI only
+                allStocks = krxApiService.getKospiPriceDecreaseRanking(50);
+            } else if ("kosdaq".equalsIgnoreCase(market)) {
+                // KOSDAQ only
+                allStocks = krxApiService.getKosdaqPriceDecreaseRanking(50);
+            } else {
+                // Combined (default)
+                List<KrxRankingStock> kospiDecrease = new ArrayList<>();
+                List<KrxRankingStock> kosdaqDecrease = new ArrayList<>();
+                
+                try {
+                    kospiDecrease = krxApiService.getKospiPriceDecreaseRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSPI price decrease ranking: {}", e.getMessage());
+                }
+                
+                try {
+                    kosdaqDecrease = krxApiService.getKosdaqPriceDecreaseRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSDAQ price decrease ranking: {}", e.getMessage());
+                }
+                
+                // Combine both lists
+                allStocks = new java.util.ArrayList<>(kospiDecrease);
+                allStocks.addAll(kosdaqDecrease);
+            }
+            
+            // Sort by change rate (negative) and limit to top 50
+            allStocks.sort((a, b) -> {
+                try {
+                    double rateA = a.getChangeRate();
+                    double rateB = b.getChangeRate();
+                    return Double.compare(rateA, rateB); // Note: reversed for decrease
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            if (allStocks.size() > 50) {
+                allStocks = allStocks.subList(0, 50);
+            }
+            
+            // Update rankings
+            for (int i = 0; i < allStocks.size(); i++) {
+                allStocks.get(i).setRank(i + 1);
+            }
+            
+            response.put("success", true);
+            response.put("data", allStocks);
+            response.put("message", "하락률 순위 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch price decrease ranking", e);
+            response.put("success", false);
+            response.put("message", "하락률 순위 조회 실패: " + e.getMessage());
+            response.put("data", new ArrayList<>());
+            return ResponseEntity.ok(response); // Return 200 with error message instead of 500
+        }
+    }
+    
+    /**
+     * Get combined trade value ranking from both KOSPI and KOSDAQ
+     */
+    @GetMapping("/ranking/trade-value-ranking")
+    public ResponseEntity<Map<String, Object>> getCombinedTradeValueRanking(
+            @RequestParam(required = false) String market) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching trade value ranking data, market filter: {}", market);
+            
+            List<KrxRankingStock> allStocks = new ArrayList<>();
+            
+            // Check market filter
+            if ("kospi".equalsIgnoreCase(market)) {
+                // KOSPI only
+                allStocks = krxApiService.getKospiTradeValueRanking(50);
+            } else if ("kosdaq".equalsIgnoreCase(market)) {
+                // KOSDAQ only
+                allStocks = krxApiService.getKosdaqTradeValueRanking(50);
+            } else {
+                // Combined (default)
+                List<KrxRankingStock> kospiValue = new ArrayList<>();
+                List<KrxRankingStock> kosdaqValue = new ArrayList<>();
+                
+                try {
+                    kospiValue = krxApiService.getKospiTradeValueRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSPI trade value ranking: {}", e.getMessage());
+                }
+                
+                try {
+                    kosdaqValue = krxApiService.getKosdaqTradeValueRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSDAQ trade value ranking: {}", e.getMessage());
+                }
+                
+                // Combine both lists
+                allStocks = new java.util.ArrayList<>(kospiValue);
+                allStocks.addAll(kosdaqValue);
+            }
+            
+            // Sort by trade value and limit to top 50
+            allStocks.sort((a, b) -> {
+                try {
+                    long valA = parseVolume(a.getTradeValue());
+                    long valB = parseVolume(b.getTradeValue());
+                    return Long.compare(valB, valA);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            if (allStocks.size() > 50) {
+                allStocks = allStocks.subList(0, 50);
+            }
+            
+            // Update rankings
+            for (int i = 0; i < allStocks.size(); i++) {
+                allStocks.get(i).setRank(i + 1);
+            }
+            
+            response.put("success", true);
+            response.put("data", allStocks);
+            response.put("message", "거래대금 순위 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch trade value ranking", e);
+            response.put("success", false);
+            response.put("message", "거래대금 순위 조회 실패: " + e.getMessage());
+            response.put("data", new ArrayList<>());
+            return ResponseEntity.ok(response); // Return 200 with error message instead of 500
+        }
+    }
+    
+    /**
+     * Get combined market capitalization ranking from both KOSPI and KOSDAQ
+     */
+    @GetMapping("/ranking/market-cap-ranking")
+    public ResponseEntity<Map<String, Object>> getCombinedMarketCapRanking(
+            @RequestParam(required = false) String market) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            logger.info("Fetching market capitalization ranking data, market filter: {}", market);
+            
+            List<KrxRankingStock> allStocks = new ArrayList<>();
+            
+            // Check market filter
+            if ("kospi".equalsIgnoreCase(market)) {
+                // KOSPI only
+                allStocks = krxApiService.getKospiMarketCapRanking(50);
+            } else if ("kosdaq".equalsIgnoreCase(market)) {
+                // KOSDAQ only
+                allStocks = krxApiService.getKosdaqMarketCapRanking(50);
+            } else {
+                // Combined (default)
+                List<KrxRankingStock> kospiStocks = new ArrayList<>();
+                List<KrxRankingStock> kosdaqStocks = new ArrayList<>();
+                
+                try {
+                    // Fetch market cap ranking directly
+                    kospiStocks = krxApiService.getKospiMarketCapRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSPI market cap ranking: {}", e.getMessage());
+                }
+                
+                try {
+                    kosdaqStocks = krxApiService.getKosdaqMarketCapRanking(25);
+                } catch (Exception e) {
+                    logger.error("Failed to fetch KOSDAQ market cap ranking: {}", e.getMessage());
+                }
+                
+                // Combine both lists
+                allStocks = new java.util.ArrayList<>(kospiStocks);
+                allStocks.addAll(kosdaqStocks);
+            }
+            
+            // Sort by market cap and limit to top 50
+            allStocks.sort((a, b) -> {
+                try {
+                    long capA = parseVolume(a.getMarketCap());
+                    long capB = parseVolume(b.getMarketCap());
+                    return Long.compare(capB, capA);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+            
+            if (allStocks.size() > 50) {
+                allStocks = allStocks.subList(0, 50);
+            }
+            
+            // Update rankings
+            for (int i = 0; i < allStocks.size(); i++) {
+                allStocks.get(i).setRank(i + 1);
+            }
+            
+            response.put("success", true);
+            response.put("data", allStocks);
+            response.put("message", "시가총액 순위 조회 성공");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to fetch market cap ranking", e);
+            response.put("success", false);
+            response.put("message", "시가총액 순위 조회 실패: " + e.getMessage());
+            response.put("data", new ArrayList<>());
+            return ResponseEntity.ok(response); // Return 200 with error message instead of 500
         }
     }
     
@@ -560,6 +892,7 @@ public class KrxDataController {
 
     /**
      * Helper method to parse volume string to long for sorting
+     * Handles both numeric strings and Korean formatted strings (억, 조, etc.)
      */
     private long parseVolume(String volume) {
         if (volume == null || volume.trim().isEmpty()) {
@@ -567,9 +900,26 @@ public class KrxDataController {
         }
         
         try {
-            // Remove commas and parse
+            // Remove commas
             String cleanVolume = volume.replace(",", "").trim();
-            return Long.parseLong(cleanVolume);
+            
+            // Handle Korean suffixes
+            if (cleanVolume.endsWith("조")) {
+                // 1조 = 1,000,000,000,000
+                String numPart = cleanVolume.substring(0, cleanVolume.length() - 1).trim();
+                return (long)(Double.parseDouble(numPart) * 1_000_000_000_000L);
+            } else if (cleanVolume.endsWith("억")) {
+                // 1억 = 100,000,000
+                String numPart = cleanVolume.substring(0, cleanVolume.length() - 1).trim();
+                return (long)(Double.parseDouble(numPart) * 100_000_000L);
+            } else if (cleanVolume.endsWith("만")) {
+                // 1만 = 10,000
+                String numPart = cleanVolume.substring(0, cleanVolume.length() - 1).trim();
+                return (long)(Double.parseDouble(numPart) * 10_000L);
+            } else {
+                // Plain number
+                return Long.parseLong(cleanVolume);
+            }
         } catch (NumberFormatException e) {
             logger.warn("Failed to parse volume: {}", volume);
             return 0L;
@@ -609,7 +959,13 @@ public class KrxDataController {
             logger.info("Starting KRX API diagnosis...");
             
             // Test basic connectivity
-            diagnosis.put("api_connection", krxApiService.testConnection());
+            try {
+                diagnosis.put("api_connection", krxApiService.testConnection());
+            } catch (Exception e) {
+                diagnosis.put("api_connection", false);
+                diagnosis.put("connection_error", e.getMessage());
+                diagnosis.put("connection_error_type", e.getClass().getSimpleName());
+            }
             
             // Try to fetch a small sample
             try {
@@ -622,6 +978,9 @@ public class KrxDataController {
                 }
             } catch (Exception e) {
                 diagnosis.put("kospi_error", e.getMessage());
+                diagnosis.put("kospi_error_type", e.getClass().getSimpleName());
+                // Log full stack trace for debugging
+                logger.error("KOSPI fetch error details:", e);
             }
             
             // Try KOSDAQ
@@ -631,6 +990,7 @@ public class KrxDataController {
                 diagnosis.put("kosdaq_sample_count", kosdaqSample.size());
             } catch (Exception e) {
                 diagnosis.put("kosdaq_error", e.getMessage());
+                diagnosis.put("kosdaq_error_type", e.getClass().getSimpleName());
             }
             
             // Check ETF detection
@@ -651,8 +1011,9 @@ public class KrxDataController {
         } catch (Exception e) {
             logger.error("Diagnosis failed", e);
             diagnosis.put("error", e.getMessage());
+            diagnosis.put("error_type", e.getClass().getSimpleName());
             diagnosis.put("diagnosis_failed", true);
-            return ResponseEntity.internalServerError().body(diagnosis);
+            return ResponseEntity.ok(diagnosis); // Return 200 with error info instead of 500
         }
     }
 }
