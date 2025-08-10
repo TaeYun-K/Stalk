@@ -41,6 +41,36 @@ class CommunityService {
     }
   }
 
+  // List posts with pagination (public API)
+  static async getPostsPaged(category: string = PostCategory.ALL, pageNo: number = 1, pageSize: number = 10): Promise<CursorPage<CommunityPostSummaryDto>> {
+    try {
+      const query = new URLSearchParams({
+        category: category,
+        pageNo: String(pageNo),
+        pageSize: String(pageSize)
+      });
+      const response = await fetch(
+        `/api/community/posts?${query.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch posts');
+      }
+
+      const data = await response.json();
+      return data.result;
+    } catch (error) {
+      console.error('Error fetching posts (paged):', error);
+      throw error;
+    }
+  }
+
   // Create post with authentication
   static async createPost(data: CommunityPostCreateRequestDto) {
     try {
@@ -236,6 +266,10 @@ class CommunityService {
       );
 
       if (!response.ok) {
+        // 권한 제한(전문가만) 처리
+        if (response.status === 403) {
+          throw new Error('댓글 작성은 전문가만 가능합니다.');
+        }
         if (response.status === 401) {
           // 토큰 만료 시 새로고침 시도
           console.log('토큰이 만료되었습니다. 새로고침을 시도합니다.');
@@ -251,7 +285,10 @@ class CommunityService {
             );
             
             if (!retryResponse.ok) {
-              throw new Error('Failed to create comment after token refresh');
+              if (retryResponse.status === 403) {
+                throw new Error('댓글 작성은 전문가만 가능합니다.');
+              }
+              throw new Error('댓글 작성에 실패했습니다. 잠시 후 다시 시도해주세요.');
             }
             
             return await retryResponse.json();
@@ -259,7 +296,7 @@ class CommunityService {
             throw new Error('토큰 새로고침에 실패했습니다. 다시 로그인해주세요.');
           }
         }
-        throw new Error('Failed to create comment');
+        throw new Error('댓글 작성에 실패했습니다. 잠시 후 다시 시도해주세요.');
       }
 
       return await response.json();

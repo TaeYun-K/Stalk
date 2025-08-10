@@ -43,7 +43,7 @@ import CommunityPage from "@/pages/community-page";
 import WritePostPage from "@/pages/write-post-page";
 import KnowledgeBoardPage from "@/pages/knowledge-board-page";
 import MyPage from "@/pages/my-page";
-import FavoritesPage from "@/pages/favorites-page";
+
 import SearchPage from "@/pages/search-page";
 import VideoConsultationPage from "@/pages/video-consultation-page";
 import AdminPage from "@/pages/admin-page";
@@ -72,7 +72,6 @@ const showSidebarRoutes: string[] = [
   "/settings",
   "/write-post",
   "/consultations",
-  "/favorites",
   "/search",
   "/notifications",
   "/watchlist",
@@ -97,7 +96,7 @@ const AppContent: React.FC = () => {
     showSidebarRoutes.includes(location.pathname) ||
     location.pathname.startsWith("/expert-detail/") ||
     location.pathname.startsWith("/community/post/");
-  const showFooter: boolean = !hideFooterRoutes.includes(location.pathname);
+  const showFooter: boolean = !hideFooterRoutes.some(route => location.pathname.startsWith(route));
   const isVideoPage = location.pathname.startsWith("/video-consultation");
 
   return (
@@ -159,7 +158,6 @@ const AppContent: React.FC = () => {
                 }
               />
               <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
               <Route
                 path="/expert-registration/:advisorId"
                 element={<ExpertsIntroductionRegistrationPage />}

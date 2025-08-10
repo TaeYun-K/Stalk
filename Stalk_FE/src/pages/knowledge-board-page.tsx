@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import CommunityService from '@/services/communityService';
+import AuthService from '@/services/authService';
 import { PostCategory, CommunityPostDetailDto, CommunityCommentDto } from '@/types';
 
 const KnowledgeBoardPage = () => {
@@ -13,6 +14,10 @@ const KnowledgeBoardPage = () => {
   const [comments, setComments] = useState<CommunityCommentDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  // 댓글 수정 상태
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingContent, setEditingContent] = useState<string>('');
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -28,6 +33,24 @@ const KnowledgeBoardPage = () => {
       loadComments();
     }
   }, [postId]);
+
+  // 현재 사용자 정보 로드
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        if (AuthService.isLoggedIn()) {
+          const userProfile = await AuthService.getUserProfile();
+          setCurrentUser(userProfile);
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (e) {
+        setCurrentUser(null);
+        console.error('사용자 정보 로드 실패:', e);
+      }
+    };
+    loadCurrentUser();
+  }, []);
 
   const loadPostDetail = async () => {
     if (!postId) return;
@@ -82,14 +105,24 @@ const KnowledgeBoardPage = () => {
 
   const handleCommentSubmit = async () => {
     if (commentInput.trim() === '' || !postId) return;
-    
+    // 비전문가/비로그인 사용자 가드
+    if (!currentUser) {
+      alert('로그인이 필요합니다. 로그인 후 이용해주세요.');
+      navigate('/login');
+      return;
+    }
+    if (currentUser.role !== 'ADVISOR') {
+      alert('댓글 작성은 전문가만 가능합니다. 전문가 승인 후 이용해주세요.');
+      return;
+    }
     try {
       await CommunityService.createComment(parseInt(postId), { content: commentInput });
       setCommentInput('');
       loadComments(); // 댓글 목록 새로고침
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating comment:', error);
-      alert('댓글 작성 중 오류가 발생했습니다.');
+      const message = error instanceof Error ? error.message : '댓글 작성 중 오류가 발생했습니다.';
+      alert(message);
     }
   };
 
@@ -104,6 +137,35 @@ const KnowledgeBoardPage = () => {
     } catch (error) {
       console.error('Error deleting comment:', error);
       alert('댓글 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 댓글 수정 시작
+  const handleCommentEditStart = (commentId: number, currentContent: string) => {
+    setEditingCommentId(commentId);
+    setEditingContent(currentContent);
+  };
+
+  // 댓글 수정 취소
+  const handleCommentEditCancel = () => {
+    setEditingCommentId(null);
+    setEditingContent('');
+  };
+
+  // 댓글 수정 저장
+  const handleCommentEditSave = async (commentId: number) => {
+    if (!editingContent.trim()) {
+      alert('수정할 내용을 입력해주세요.');
+      return;
+    }
+    try {
+      await CommunityService.updateComment(commentId, { content: editingContent.trim() });
+      setEditingCommentId(null);
+      setEditingContent('');
+      await loadComments();
+    } catch (e: any) {
+      const message = e instanceof Error ? e.message : '댓글 수정 중 오류가 발생했습니다.';
+      alert(message);
     }
   };
 
@@ -228,19 +290,24 @@ const KnowledgeBoardPage = () => {
                 <div className='flex flex-row gap-4'>
                 <span className='text-sm text-gray-500'>조회수 {postDetail.viewCount}</span>
                 <div className="flex space-x-2">
-                  <button
-                    onClick={(e) => handleEditPost(post.postId, e)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    수정
-                  </button>
-                  <button
-                    onClick={(e) => handleDeletePost(post.postId, e)}
-                    className="text-sm text-red-600 hover:text-red-800"
-                  >
-                    삭제
-                  </button>
-                  </div>
+                  {/* 게시글 수정/삭제 버튼은 필요 시 소유자/관리자에만 노출 */}
+                  {currentUser && (currentUser.role === 'ADMIN' || postDetail.authorName === (currentUser.name ?? currentUser.userId)) && (
+                    <>
+                      <button
+                        onClick={(e) => handleEditPost(postDetail.postId, e)}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={(e) => handleDeletePost(postDetail.postId, e)}
+                        className="text-sm text-red-600 hover:text-red-800"
+                      >
+                        삭제
+                      </button>
+                    </>
+                  )}
+                </div>
                 </div>
               </div>
               <span className='pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200'>
@@ -257,21 +324,32 @@ const KnowledgeBoardPage = () => {
               </div>
               
               {/* 댓글 작성 */}
-              <div className='flex flex-row gap-3 items-center justify-between'>
-                <input 
-                  type="text" 
-                  placeholder='댓글을 입력해주세요.' 
-                  className='pl-5 py-2 w-full border border-blue-500 rounded-full focus:outline-none focus:ring-1 focus:ring-blue-500'
-                  value={commentInput}
-                  onChange={(e) => setCommentInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                />
-                <button 
-                  className='inline-flex items-center justify-center whitespace-nowrap px-3 py-2 bg-blue-500 text-white text-sm rounded-full'
-                  onClick={handleCommentSubmit}
-                >
-                  작성
-                </button>
+              <div className='flex flex-col gap-2'>
+                <div className='flex flex-row gap-3 items-center justify-between'>
+                  <input 
+                    type="text" 
+                    placeholder='댓글을 입력해주세요.' 
+                    className={`pl-5 py-2 w-full border rounded-full focus:outline-none focus:ring-1 ${currentUser?.role === 'ADVISOR' ? 'border-blue-500 focus:ring-blue-500' : 'border-gray-300'}`}
+                    value={commentInput}
+                    onChange={(e) => setCommentInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    disabled={!currentUser || currentUser.role !== 'ADVISOR'}
+                  />
+                  <button 
+                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-2 text-sm rounded-full ${(!currentUser || currentUser.role !== 'ADVISOR') ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-500 text-white'}`}
+                    onClick={handleCommentSubmit}
+                    disabled={!currentUser || currentUser.role !== 'ADVISOR'}
+                  >
+                    작성
+                  </button>
+                </div>
+                {/* 안내 문구 */}
+                {!currentUser && (
+                  <p className='text-xs text-gray-500 pl-3'>로그인이 필요합니다. 로그인 후 이용해주세요.</p>
+                )}
+                {currentUser && currentUser.role !== 'ADVISOR' && (
+                  <p className='text-xs text-gray-500 pl-3'>댓글 작성은 전문가만 가능합니다. 전문가 승인 후 이용해주세요.</p>
+                )}
               </div>
               
               {/* 댓글 목록 */}
@@ -280,7 +358,7 @@ const KnowledgeBoardPage = () => {
                   <div key={comment.commentId} className='pt-2 flex flex-col gap-3 items-start justify-between'>
                     {/* 댓글 작성자 이미지 & 프로필 + 수정 & 삭제 버튼 */}
                     <div className='flex flex-row items-center justify-between w-full'>
-                      {/* 댓글 작성자 이미지 & 프로필 */}
+                  {/* 댓글 작성자 이미지 & 프로필 */}
                       <div className='flex flex-row gap-3 items-center'>
                         <div className='w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center'>
                           <span className='text-sm font-semibold text-gray-600'>
@@ -292,20 +370,58 @@ const KnowledgeBoardPage = () => {
                           <span className='text-sm text-gray-500'>{formatDate(comment.createdAt)}</span>
                         </div>
                       </div>
-                      {/* 수정 & 삭제 버튼 */}
+                    {/* 수정 & 삭제 버튼: 본인(또는 관리자)만 표시 */}
+                    {currentUser && (currentUser.role === 'ADMIN' || comment.authorName === (currentUser.name ?? currentUser.userId)) && (
                       <div className='flex flex-row gap-2'>
-                        <button className='text-sm text-gray-500 hover:text-blue-500 hover:font-semibold'>수정</button>
-                        <p className='text-sm text-gray-500'>|</p>
-                        <button 
-                          className='text-sm text-gray-500 hover:text-red-500 hover:font-semibold'
-                          onClick={() => handleCommentDelete(comment.commentId)}
-                        >
-                          삭제
-                        </button>
+                        {editingCommentId === comment.commentId ? (
+                          <>
+                            <button
+                              className='text-sm text-blue-600 hover:text-blue-800 font-semibold'
+                              onClick={() => handleCommentEditSave(comment.commentId)}
+                            >
+                              저장
+                            </button>
+                            <p className='text-sm text-gray-500'>|</p>
+                            <button
+                              className='text-sm text-gray-500 hover:text-gray-700'
+                              onClick={handleCommentEditCancel}
+                            >
+                              취소
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className='text-sm text-gray-500 hover:text-blue-500 hover:font-semibold'
+                              onClick={() => handleCommentEditStart(comment.commentId, comment.content)}
+                            >
+                              수정
+                            </button>
+                            <p className='text-sm text-gray-500'>|</p>
+                            <button 
+                              className='text-sm text-gray-500 hover:text-red-500 hover:font-semibold'
+                              onClick={() => handleCommentDelete(comment.commentId)}
+                            >
+                              삭제
+                            </button>
+                          </>
+                        )}
                       </div>
+                    )}
                     </div>
                     {/* 댓글 내용 */}
-                    <span className='pl-[60px] text-sm text-gray-500 leading-loose text-justify'>{comment.content}</span>
+                    {editingCommentId === comment.commentId ? (
+                      <div className='pl-[60px] w-full'>
+                        <textarea
+                          className='w-full p-3 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                          rows={3}
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                        />
+                      </div>
+                    ) : (
+                      <span className='pl-[60px] text-sm text-gray-500 leading-loose text-justify'>{comment.content}</span>
+                    )}
                   </div>
                 ))}
               </div>

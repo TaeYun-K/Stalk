@@ -205,6 +205,16 @@ class AuthService {
     console.log('Request URL:', url);
     console.log('Request headers:', config.headers);
     console.log('Full Authorization header:', (config.headers as any).Authorization);
+    
+    // JWT 토큰 디코딩해서 페이로드 확인
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      console.log('JWT payload:', payload);
+      console.log('Token role:', payload.role);
+      console.log('Token subject:', payload.sub);
+    } catch (e) {
+      console.error('Failed to decode JWT:', e);
+    }
 
     const response = await fetch(url, config);
 

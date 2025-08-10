@@ -29,8 +29,13 @@ public class StockListingService {
         // Load from KRX API
         if (krxApiService != null) {
             logger.info("Attempting to load stocks from KRX API...");
-            loadFromKrxApi();
-            logger.info("StockListingService initialized with {} stocks in cache", stockCache.size());
+            try {
+                loadFromKrxApi();
+                logger.info("StockListingService initialized with {} stocks in cache", stockCache.size());
+            } catch (Exception e) {
+                logger.error("Failed to load stocks from KRX API: {}", e.getMessage());
+                logger.error("Stock cache will be empty - search will not work");
+            }
         } else {
             logger.warn("KrxApiService is not available, stock cache will be empty");
         }

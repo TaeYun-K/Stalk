@@ -44,7 +44,25 @@ export const useStockData = (
     setError(null);
 
     try {
-      const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
+      // More comprehensive market type detection
+      // KOSDAQ: A000000-A999999 format (6 digits starting with A prefix removed, so 0-9 range)
+      // Common KOSDAQ patterns: 000xxx-099xxx, 100xxx-199xxx, 200xxx-299xxx, 300xxx-399xxx, 900xxx-999xxx
+      // KOSPI: 000000-099999, 100000-199999 (but many exceptions)
+      // Dev Sisters (194480) is KOSDAQ despite starting with 1
+      
+      // For now, let's use a more accurate detection or default to trying both
+      // First, try the original logic but with better KOSDAQ detection
+      let marketType: string;
+      
+      if (ticker.startsWith('9') || ticker.startsWith('3')) {
+        marketType = 'KOSDAQ';
+      } else if (ticker.startsWith('00')) {
+        marketType = 'KOSPI'; 
+      } else {
+        // For ambiguous cases like 194480, we need a different approach
+        // Let's default to KOSDAQ for 1xxxxx range as many tech companies are there
+        marketType = ticker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
+      }
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}`
       );
@@ -86,7 +104,7 @@ export const useStockData = (
         setData({
           ticker: stockTicker,
           name: stockName,
-          marketType: ticker.startsWith('900') || ticker.startsWith('300') ? 'KOSDAQ' : 'KOSPI',
+          marketType: marketType, // Use the computed marketType from above
           price: price,
           change: change,
           changeRate: changeRate,
@@ -134,94 +152,174 @@ export const useStockData = (
   };
 };
 
+// Simple cache for ranking data (5 minute TTL)
+const rankingCache = new Map<string, {data: any[], timestamp: number}>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketType?: string) => {
   const [stocks, setStocks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStocks = useCallback(async () => {
+    // Check cache first
+    const cacheKey = `${category}-${marketType || 'all'}`;
+    const cached = rankingCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      console.log(`💰 Using cached data for ${cacheKey}`);
+      setStocks(cached.data);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       let allStocks: any[] = [];
 
-      if (category === 'volume') {
-        // Use the combined volume endpoint
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/krx/ranking/volume`);
+      // PERFORMANCE OPTIMIZATION: Try to use combined endpoints first (if available)
+      // If not available, fall back to the current multi-call approach
+      
+      // First, try the optimized single-call approach
+      const categoryMap = {
+        'volume': 'volume-ranking',
+        'gainers': 'price-increase-ranking', 
+        'losers': 'price-decrease-ranking'
+      };
+      
+      const endpoint = categoryMap[category || 'volume'];
+      const marketFilter = marketType && marketType !== '전체' ? `&market=${marketType.toLowerCase()}` : '';
+      const optimizedUrl = `${import.meta.env.VITE_API_URL}/api/krx/ranking/${endpoint}?limit=50${marketFilter}`;
+      
+      try {
+        // Try the optimized combined endpoint
+        const optimizedResponse = await fetch(optimizedUrl);
         
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || '거래량 순위 로드 실패');
+        if (optimizedResponse.ok) {
+          const responseData = await optimizedResponse.json();
+          if (responseData.success && responseData.data) {
+            allStocks = responseData.data;
+            console.log(`✅ Used optimized endpoint: ${optimizedUrl}`);
+          }
+        } else if (optimizedResponse.status !== 404) {
+          // If it's not a 404 (endpoint doesn't exist), log the error
+          console.warn(`Optimized endpoint failed with status ${optimizedResponse.status}, falling back to legacy approach`);
         }
-
-        const responseData = await response.json();
-        if (responseData.success && responseData.data) {
-          allStocks = responseData.data;
-        }
-      } else {
-        // For gainers and losers, fetch from both KOSPI and KOSDAQ
-        const kospiEndpoint = category === 'gainers' 
-          ? `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-increase-ranking`
-          : `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-decrease-ranking`;
-        
-        const kosdaqEndpoint = category === 'gainers'
-          ? `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-increase-ranking` 
-          : `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-decrease-ranking`;
-
-        // Fetch both markets concurrently
-        const [kospiResponse, kosdaqResponse] = await Promise.all([
-          fetch(kospiEndpoint),
-          fetch(kosdaqEndpoint)
-        ]);
-
-        if (!kospiResponse.ok || !kosdaqResponse.ok) {
-          throw new Error('상승/하락률 순위 로드 실패');
-        }
-
-        const [kospiData, kosdaqData] = await Promise.all([
-          kospiResponse.json(),
-          kosdaqResponse.json()
-        ]);
-
-        // Combine both arrays
-        allStocks = [...kospiData, ...kosdaqData];
-
-        // Sort by change rate and re-rank
-        allStocks.sort((a, b) => {
-          const aRate = Math.abs(parseFloat(a.changeRate) || 0);
-          const bRate = Math.abs(parseFloat(b.changeRate) || 0);
-          return bRate - aRate;
-        });
-
-        // Update rankings and limit to top 50
-        allStocks = allStocks.slice(0, 50).map((stock, index) => ({
-          ...stock,
-          rank: index + 1
-        }));
+      } catch (optimizedError) {
+        console.warn('Optimized endpoint failed, using legacy multi-call approach:', optimizedError);
       }
       
-      // Apply market filtering if specified
-      if (marketType && marketType !== '전체') {
-        allStocks = allStocks.filter((stock: any) => {
-          const ticker = stock.ticker || '';
+      // If optimized endpoint didn't work, use the legacy multi-call approach
+      if (allStocks.length === 0) {
+        console.log('📡 Using legacy multi-call approach...');
+        
+        if (category === 'volume') {
+          // Fetch volume rankings from both KOSPI and KOSDAQ
+          const [kospiResponse, kosdaqResponse] = await Promise.all([
+            fetch(`${import.meta.env.VITE_API_URL}/api/krx/kospi/volume-ranking?limit=25`),
+            fetch(`${import.meta.env.VITE_API_URL}/api/krx/kosdaq/volume-ranking?limit=25`)
+          ]);
           
-          if (marketType === 'kospi') {
-            // KOSPI stocks: regular 6-digit codes, typically 0-3 prefix
-            return !ticker.startsWith('9') && !ticker.startsWith('3');
-          } else if (marketType === 'kosdaq') {
-            // KOSDAQ stocks: typically start with 9 or 3
-            return ticker.startsWith('9') || ticker.startsWith('3');
+          if (!kospiResponse.ok || !kosdaqResponse.ok) {
+            throw new Error('거래량 순위 로드 실패');
           }
-          return true;
-        });
 
-        // Re-rank after filtering
-        allStocks = allStocks.map((stock, index) => ({
-          ...stock,
-          rank: index + 1
-        }));
+          const [kospiData, kosdaqData] = await Promise.all([
+            kospiResponse.json(),
+            kosdaqResponse.json()
+          ]);
+
+          // Combine both arrays
+          allStocks = [...kospiData, ...kosdaqData];
+          
+          // Sort by volume and re-rank
+          allStocks.sort((a, b) => {
+            const volA = parseInt((a.volume || '0').toString().replace(/,/g, ''));
+            const volB = parseInt((b.volume || '0').toString().replace(/,/g, ''));
+            return volB - volA;
+          });
+          
+          // Update rankings and limit to top 50
+          allStocks = allStocks.slice(0, 50).map((stock, index) => ({
+            ...stock,
+            rank: index + 1
+          }));
+        } else {
+          // For gainers and losers, fetch from both KOSPI and KOSDAQ
+          const kospiEndpoint = category === 'gainers' 
+            ? `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-increase-ranking`
+            : `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-decrease-ranking`;
+          
+          const kosdaqEndpoint = category === 'gainers'
+            ? `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-increase-ranking` 
+            : `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-decrease-ranking`;
+
+          // Fetch both markets concurrently
+          const [kospiResponse, kosdaqResponse] = await Promise.all([
+            fetch(kospiEndpoint),
+            fetch(kosdaqEndpoint)
+          ]);
+
+          if (!kospiResponse.ok || !kosdaqResponse.ok) {
+            throw new Error('상승/하락률 순위 로드 실패');
+          }
+
+          const [kospiData, kosdaqData] = await Promise.all([
+            kospiResponse.json(),
+            kosdaqResponse.json()
+          ]);
+
+          // Combine both arrays
+          allStocks = [...kospiData, ...kosdaqData];
+
+          // Sort by change rate and re-rank
+          allStocks.sort((a, b) => {
+            const aRate = Math.abs(parseFloat(a.changeRate) || 0);
+            const bRate = Math.abs(parseFloat(b.changeRate) || 0);
+            return bRate - aRate;
+          });
+
+          // Update rankings and limit to top 50
+          allStocks = allStocks.slice(0, 50).map((stock, index) => ({
+            ...stock,
+            rank: index + 1
+          }));
+        }
+        
+        // Apply market filtering if specified (only for legacy approach)
+        if (marketType && marketType !== '전체') {
+          allStocks = allStocks.filter((stock: any) => {
+            const ticker = stock.ticker || '';
+            
+            // Use the same improved logic as other places
+            if (marketType === 'kospi') {
+              // KOSPI logic - more accurate detection
+              if (ticker.startsWith('00') || (!ticker.startsWith('9') && !ticker.startsWith('3') && !ticker.startsWith('1'))) {
+                return true;
+              }
+              return false;
+            } else if (marketType === 'kosdaq') {
+              // KOSDAQ logic - include tickers starting with 1, 3, 9
+              return ticker.startsWith('9') || ticker.startsWith('3') || ticker.startsWith('1');
+            }
+            return true;
+          });
+
+          // Re-rank after filtering
+          allStocks = allStocks.map((stock, index) => ({
+            ...stock,
+            rank: index + 1
+          }));
+        }
       }
+      
+      // Cache the results
+      rankingCache.set(cacheKey, {
+        data: allStocks,
+        timestamp: now
+      });
       
       setStocks(allStocks);
     } catch (err) {

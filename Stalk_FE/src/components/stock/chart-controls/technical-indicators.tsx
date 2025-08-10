@@ -18,12 +18,24 @@ interface TechnicalIndicatorsProps {
   };
   onIndicatorChange: (indicator: string, value: boolean) => void;
   darkMode?: boolean;
+  disabledIndicators?: {
+    ma20?: boolean;
+    ma50?: boolean;
+    ema12?: boolean;
+    ema26?: boolean;
+    rsi?: boolean;
+    macd?: boolean;
+    bollinger?: boolean;
+    stochastic?: boolean;
+    ichimoku?: boolean;
+  };
 }
 
 const TechnicalIndicators: React.FC<TechnicalIndicatorsProps> = ({
   indicators,
   onIndicatorChange,
-  darkMode = false
+  darkMode = false,
+  disabledIndicators = {}
 }) => {
   const [expandedCategory, setExpandedCategory] = useState<string | null>('trend');
 
@@ -76,14 +88,14 @@ const TechnicalIndicators: React.FC<TechnicalIndicatorsProps> = ({
   };
 
   return (
-    <div className={`border-b ${
-      darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'
+    <div className={`${
+      darkMode ? 'bg-gray-900' : 'bg-white'
     }`}>
-      <div className="p-3">
-        <h3 className={`text-sm font-semibold mb-3 ${
+      <div className="p-4">
+        <h3 className={`text-base font-bold mb-4 ${
           darkMode ? 'text-gray-200' : 'text-gray-900'
         }`}>
-          기술적 지표
+          📊 기술적 지표
         </h3>
         
         <div className="space-y-2">
@@ -111,47 +123,60 @@ const TechnicalIndicators: React.FC<TechnicalIndicatorsProps> = ({
                 <div className={`px-3 py-2 space-y-2 border-t ${
                   darkMode ? 'border-gray-700' : 'border-gray-200'
                 }`}>
-                  {category.indicators.map(ind => (
-                    <label
-                      key={ind.key}
-                      className={`flex items-center gap-3 cursor-pointer p-2 rounded-md ${
-                        darkMode 
-                          ? 'hover:bg-gray-800 text-gray-300' 
-                          : 'hover:bg-gray-50 text-gray-700'
-                      } transition-colors`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={indicators[ind.key as keyof typeof indicators] || false}
-                        onChange={(e) => onIndicatorChange(ind.key, e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: ind.color }}
-                          />
-                          <span className="text-sm font-medium">{ind.label}</span>
+                  {category.indicators.map(ind => {
+                    const isDisabled = disabledIndicators[ind.key as keyof typeof disabledIndicators] || false;
+                    return (
+                      <label
+                        key={ind.key}
+                        className={`flex items-center gap-3 p-2 rounded-md ${
+                          isDisabled 
+                            ? darkMode 
+                              ? 'opacity-50 cursor-not-allowed text-gray-500' 
+                              : 'opacity-50 cursor-not-allowed text-gray-400'
+                            : darkMode 
+                              ? 'hover:bg-gray-800 text-gray-300 cursor-pointer' 
+                              : 'hover:bg-gray-50 text-gray-700 cursor-pointer'
+                        } transition-colors`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={indicators[ind.key as keyof typeof indicators] || false}
+                          onChange={(e) => !isDisabled && onIndicatorChange(ind.key, e.target.checked)}
+                          disabled={isDisabled}
+                          className={`rounded border-gray-300 ${
+                            isDisabled 
+                              ? 'text-gray-400 cursor-not-allowed' 
+                              : 'text-blue-600 focus:ring-blue-500'
+                          }`}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className={`w-3 h-3 rounded-full ${isDisabled ? 'opacity-50' : ''}`}
+                              style={{ backgroundColor: ind.color }}
+                            />
+                            <span className={`text-sm font-medium ${isDisabled ? 'line-through' : ''}`}>
+                              {ind.label}
+                            </span>
+                            {isDisabled && (
+                              <span className={`text-xs ${darkMode ? 'text-red-400' : 'text-red-500'}`}>
+                                (데이터 부족)
+                              </span>
+                            )}
+                          </div>
+                          <div className={`text-xs mt-0.5 ${
+                            darkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            {ind.description}
+                          </div>
                         </div>
-                        <div className={`text-xs mt-0.5 ${
-                          darkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
-                          {ind.description}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
           ))}
-        </div>
-        
-        <div className={`mt-3 text-xs ${
-          darkMode ? 'text-gray-500' : 'text-gray-400'
-        }`}>
-          💡 여러 지표를 동시에 사용하여 더 정확한 분석이 가능합니다
         </div>
       </div>
     </div>

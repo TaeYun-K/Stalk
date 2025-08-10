@@ -173,7 +173,8 @@ public class SecurityConfig {
 
             // 커뮤니티
             .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
-            .requestMatchers(HttpMethod.POST, "/api/community/**").authenticated()
+            .requestMatchers(HttpMethod.POST, "/api/community/posts/*/comments")
+            .hasAnyRole("ADVISOR")
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
             .requestMatchers(HttpMethod.DELETE, "/api/community/**").authenticated()
 
@@ -182,6 +183,7 @@ public class SecurityConfig {
 
             // 주식 조회
             .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/stock/**").permitAll()
 
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()

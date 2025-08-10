@@ -77,6 +77,8 @@ const MyPage = () => {
     }
   }, [searchParams]);
 
+  
+
   // API 관련 상태
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

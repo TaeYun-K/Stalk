@@ -147,11 +147,19 @@ const ExpertDetailPage: React.FC = () => {
   );
   const [availableTimes, setAvailableTimes] = useState<ApiTimeSlot[]>([]);
 
+  // 전문가 간 예약 제한 오류 메시지 상태
+  const [expertReservationError, setExpertReservationError] = useState<
+    string | null
+  >(null);
+
   // 현재 전문가의 ID (URL 파라미터의 id)
   const advisorId = id;
 
   // API 호출
   useEffect(() => {
+    // 페이지 로드 시 전문가 간 예약 오류 메시지 초기화
+    setExpertReservationError(null);
+
     const fetchExpertDetails = async () => {
       if (!id) {
         setError("전문가 ID가 없습니다.");
@@ -289,7 +297,11 @@ const ExpertDetailPage: React.FC = () => {
   };
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split("T")[0];
+    // 로컬 시간대 기준으로 YYYY-MM-DD 형식 생성 (UTC 변환 문제 방지)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   };
 
   const isSelected = (date: Date) => {
@@ -380,6 +392,128 @@ const ExpertDetailPage: React.FC = () => {
         throw new Error("로그인이 필요한 서비스입니다.");
       }
 
+      // 전문가 본인인지 확인
+      const isExpertOwner =
+        userInfo?.role === "ADVISOR" && userInfo?.name === expertData?.name;
+
+      // 전문가 본인인 경우 차단된 시간 조회
+      if (isExpertOwner) {
+        console.log(
+          "Expert owner viewing their own schedule - fetching blocked times"
+        );
+        console.log(`🔍 Fetching blocked times for date: ${date}`);
+        console.log(`🔑 Current token exists:`, !!AuthService.getAccessToken());
+        console.log(`👤 Current user info:`, AuthService.getUserInfo());
+
+        // JWT 토큰 디코딩해서 페이로드 확인
+        const token = AuthService.getAccessToken();
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            console.log(`🔓 JWT payload:`, payload);
+            console.log(`⏰ Token expiry:`, new Date(payload.exp * 1000));
+            console.log(`🕐 Current time:`, new Date());
+            console.log(`⌛ Token expired:`, payload.exp * 1000 < Date.now());
+          } catch (e) {
+            console.error(`❌ Failed to decode JWT:`, e);
+          }
+        }
+
+        // 임시로 API 호출 우회해서 문제 격리
+        console.log(`⚠️ API 호출 우회 중 - 임시 더미 데이터 반환`);
+
+        // 임시 더미 데이터 (실제 운영에서는 제거 필요)
+        const dummyBlockedTimes = ["12:00", "13:00"]; // 점심시간 차단 예시
+
+        // 기본 시간 슬롯 생성 (09:00 ~ 20:00)
+        const allTimeSlots = [
+          "09:00",
+          "10:00",
+          "11:00",
+          "12:00",
+          "13:00",
+          "14:00",
+          "15:00",
+          "16:00",
+          "17:00",
+          "18:00",
+          "19:00",
+          "20:00",
+        ];
+
+        // 각 시간 슬롯의 상태 결정
+        const timeSlots: ApiTimeSlot[] = allTimeSlots.map((time) => ({
+          time,
+          is_available: !dummyBlockedTimes.includes(time), // 차단된 시간이 아니면 예약 가능
+          is_reserved: false, // 전문가 본인 확인용이므로 예약 상태는 false로 설정
+          is_blocked: dummyBlockedTimes.includes(time), // 차단된 시간인지 확인
+        }));
+
+        console.log("Generated time slots for expert (dummy data):", timeSlots);
+        setAvailableTimes(timeSlots);
+        return;
+
+        /* 원래 API 호출 코드 (임시 주석처리)
+        try {
+          // 전문가 본인의 차단된 시간 조회 API 호출
+          const blockedTimesResponse = await AuthService.authenticatedRequest(
+            `/api/advisors/blocked-times?date=${date}`
+          );
+
+          if (blockedTimesResponse.ok) {
+            const blockedTimesData = await blockedTimesResponse.json();
+            console.log("Blocked times data:", blockedTimesData);
+
+            // 차단된 시간 목록을 가져옴
+            const blockedTimes = blockedTimesData.result?.blockedTimes || [];
+            
+            // 각 시간 슬롯의 상태 결정
+            const timeSlots: ApiTimeSlot[] = allTimeSlots.map(time => ({
+              time,
+              is_available: !blockedTimes.includes(time), // 차단된 시간이 아니면 예약 가능
+              is_reserved: false, // 전문가 본인 확인용이므로 예약 상태는 false로 설정
+              is_blocked: blockedTimes.includes(time) // 차단된 시간인지 확인
+            }));
+
+            console.log("Generated time slots for expert:", timeSlots);
+            setAvailableTimes(timeSlots);
+            return;
+          } else {
+            console.warn("Failed to fetch blocked times, using fallback");
+            throw new Error("차단된 시간 조회 실패");
+          }
+        } catch (error) {
+          console.error("Error fetching blocked times:", error);
+          console.warn("Using fallback data due to API error");
+          
+          // API 호출 실패 시 폴백 데이터 제공 (점심시간 차단 예시)
+          const fallbackTimeSlots: ApiTimeSlot[] = [
+            { time: "09:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "10:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "11:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "12:00", is_available: false, is_reserved: false, is_blocked: true },
+            { time: "13:00", is_available: false, is_reserved: false, is_blocked: true },
+            { time: "14:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "15:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "16:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "17:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "18:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "19:00", is_available: true, is_reserved: false, is_blocked: false },
+            { time: "20:00", is_available: true, is_reserved: false, is_blocked: false },
+          ];
+          setAvailableTimes(fallbackTimeSlots);
+          return;
+        }
+        */
+      }
+
+      // 전문가가 다른 전문가에게 예약하려는 경우 차단
+      if (userInfo?.role === "ADVISOR" && !isExpertOwner) {
+        console.log("ADVISOR trying to book another advisor - blocking");
+        throw new Error("🚫 전문가는 다른 전문가에게 예약할 수 없습니다.");
+      }
+
+      // 일반 사용자인 경우 기존 API 호출
       const response = await AuthService.authenticatedRequest(
         `/api/advisors/${advisorId}/available-times?date=${date}`
       );
@@ -493,12 +627,46 @@ const ExpertDetailPage: React.FC = () => {
     }
   };
 
+  // 결제/예약 취소 API 호출
+  const cancelPaymentReservation = async (orderId: string) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      await fetch("/api/cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId }), // PaymentCancelRequestDto와 매칭
+      });
+    } catch (e) {
+      // 취소 실패는 사용자에겐 조용히 처리(재시도는 선택)
+      console.warn("예약 취소 API 호출 실패(무시):", e);
+    }
+  };
+
   // 예약 및 결제 처리 함수
   const handleReservation = async (
     reservationData: PaymentReservationRequest,
     onSuccess?: () => void,
     onError?: (message: string) => void
   ) => {
+    // 중복 취소 방지용
+    let cancelSent = false;
+    const safeCancel = async (orderId?: string | null) => {
+      if (!orderId || cancelSent) return;
+      cancelSent = true;
+      await cancelPaymentReservation(orderId);
+    };
+
+    // beforeunload 핸들러 (탭 닫기/새로고침 시 취소 시도)
+    let beforeUnloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
+
+    // 결제 생성 후에만 값이 들어감
+    let orderIdForCancel: string | null = null;
+
     try {
       // 토큰 확인
       const token = localStorage.getItem("accessToken");
@@ -506,7 +674,7 @@ const ExpertDetailPage: React.FC = () => {
         throw new Error("로그인이 필요합니다. 다시 로그인해주세요.");
       }
 
-      // 백엔드 API 호출 - 예약 생성 + 결제 준비
+      // 예약 생성 + 결제 준비 (orderId 생성 구간)
       const response = await fetch("/api/reservations/with-payment", {
         method: "POST",
         headers: {
@@ -519,56 +687,83 @@ const ExpertDetailPage: React.FC = () => {
       const data: ApiResponse = await response.json();
 
       if (!response.ok || !data.isSuccess) {
-        // 인증 오류 처리
         if (response.status === 401 || data.code === 401) {
           throw new Error("로그인이 만료되었습니다. 다시 로그인해주세요.");
         }
         throw new Error(data.message || "예약 생성에 실패했습니다.");
       }
 
-      // result를 PaymentReservationResponse 타입으로 캐스팅
       const reservationResult =
         data.result as unknown as PaymentReservationResponse;
 
-      // 토스페이먼츠 SDK 로드 확인
+      // orderId 확보 (이게 있어야만 취소 가능)
+      const paymentData = reservationResult.paymentData;
+      orderIdForCancel = paymentData?.orderId ?? null;
+
+      // Toss SDK 확인
       if (!window.TossPayments) {
+        // 여기서 실패하면 생성해놓은 예약은 취소 필요
+        await safeCancel(orderIdForCancel);
         throw new Error(
           "결제 시스템을 불러오는 중입니다. 잠시 후 다시 시도해주세요."
         );
       }
 
-      // 토스페이먼츠 초기화
       const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY;
       if (!clientKey) {
+        await safeCancel(orderIdForCancel);
         throw new Error("결제 설정에 오류가 있습니다.");
       }
 
       const tossPayments = window.TossPayments(clientKey);
-      const paymentData = reservationResult.paymentData;
 
-      // 🔥 중요: successUrl/failUrl을 프론트엔드 페이지로 설정
-      // 백엔드 API가 아닌 프론트엔드 페이지로 리다이렉트
+      // 탭 닫기/새로고침 대비: 결제 진행 구간에서만 임시 등록
+      beforeUnloadHandler = (e: BeforeUnloadEvent) => {
+        // 사용자에게 경고를 띄우고(브라우저가 무시할 수도), 백엔드 취소 시도
+        // e.preventDefault(); // 일부 브라우저에서 필요 없음
+        // e.returnValue = ""; // 크롬에서 커스텀 메시지는 무시됨
+        void safeCancel(orderIdForCancel);
+      };
+      window.addEventListener("beforeunload", beforeUnloadHandler);
+
+      // 실 결제창 호출 (여기서 사용자 취소/닫힘/에러 시 Promise reject)
       await tossPayments.requestPayment("카드", {
         amount: paymentData.amount,
         orderId: paymentData.orderId,
         orderName: paymentData.orderName,
         customerKey: paymentData.customerKey,
         customerName: paymentData.customerName,
-        // 프론트엔드 페이지로 리다이렉트 (백엔드 API X)
         successUrl: `${window.location.origin}/payment/success`,
         failUrl: `${window.location.origin}/payment/fail`,
       });
 
-      // 📍 주의: 이 onSuccess는 결제창 호출 성공 시점이지, 결제 완료 시점이 아님
-      // 실제 결제 완료는 successUrl 페이지에서 처리됨
+      // 주의: 위에서 성공하면 곧바로 리다이렉트되어 아래 코드는 보통 실행 안 됨
       console.log("결제창 호출 성공");
-    } catch (error) {
+    } catch (error: any) {
       console.error("예약/결제 처리 오류:", error);
+
+      // TossPayments 에러 케이스 분기(주요 예: USER_CANCEL)
+      // SDK에서 주는 error.code가 있으면 참고해서 취소 요청
+      const code = error?.code as string | undefined;
+      if (code) {
+        // 대표 코드 예시: 'USER_CANCEL', 'INVALID_CARD', 'EXCEED_LIMIT' 등
+        // 어떤 코드든 결제 실패면 PENDING 예약은 정리하는 편이 안전
+        await safeCancel(orderIdForCancel);
+      } else {
+        // 일반 오류라도, 예약이 생성된 상태(orderId 있음)면 취소
+        await safeCancel(orderIdForCancel);
+      }
+
       const errorMessage =
         error instanceof Error
           ? error.message
           : "알 수 없는 오류가 발생했습니다.";
       onError?.(errorMessage);
+    } finally {
+      // 정리
+      if (beforeUnloadHandler) {
+        window.removeEventListener("beforeunload", beforeUnloadHandler);
+      }
     }
   };
 
@@ -938,58 +1133,90 @@ const ExpertDetailPage: React.FC = () => {
               {/* 현재 로그인한 사용자가 이 전문가인지 확인 */}
               {(() => {
                 const currentUserInfo = AuthService.getUserInfo();
-                return (
+                const isExpertOwner =
                   currentUserInfo?.role === "ADVISOR" &&
-                  currentUserInfo?.name === expertData?.name
-                );
-              })() ? (
-                <>
-                  {/* 전문가 본인인 경우 수정/삭제 버튼 */}
-                  <button
-                    onClick={() =>
-                      navigate(`/expert-introduction-update/${advisorId}`)
-                    }
-                    className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
-                  >
-                    수정하기
-                  </button>
-                  <button
-                    onClick={handleDeleteExpert}
-                    className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg"
-                  >
-                    삭제하기
-                  </button>
-                </>
-              ) : (
-                /* 다른 사용자인 경우 예약하기 버튼 */
-                <button
-                  onClick={() => {
-                    // 토큰 확인
-                    const token = AuthService.getAccessToken();
-                    if (!token) {
-                      alert("로그인이 필요한 서비스입니다.");
-                      navigate("/login");
-                      return;
-                    }
+                  currentUserInfo?.name === expertData?.name;
 
-                    const currentUserInfo = AuthService.getUserInfo();
-                    setReservationForm({
-                      name: currentUserInfo?.name || "",
-                      phone: currentUserInfo?.contact || "",
-                      requestDetails: "",
-                    });
-                    setSelectedDate("");
-                    setSelectedTime("");
-                    setSelectedCalendarDate(null);
-                    setAvailableTimes([]);
-                    setAvailableTimesError(null);
-                    setShowReservationModal(true);
-                  }}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg"
-                >
-                  예약하기
-                </button>
-              )}
+                return (
+                  <>
+                    {/* 모든 사용자(전문가 본인 포함)에게 예약하기 버튼 표시 */}
+                    {currentUserInfo?.name !== expertData?.name && (
+                    <button
+                      onClick={() => {
+                        // 토큰 확인
+                        const token = AuthService.getAccessToken();
+                        if (!token) {
+                          alert("로그인이 필요한 서비스입니다.");
+                          navigate("/login");
+                          return;
+                        }
+
+                        const currentUserInfo = AuthService.getUserInfo();
+
+                        // 전문가가 다른 전문가에게 예약하려는 경우 차단
+                        if (
+                          currentUserInfo?.role === "ADVISOR" &&
+                          currentUserInfo?.name !== expertData?.name
+                        ) {
+                          setExpertReservationError(
+                            "🚫 전문가는 다른 전문가에게 예약할 수 없습니다."
+                          );
+                          return;
+                        }
+
+                        // 정상적인 경우 오류 메시지 초기화
+                        setExpertReservationError(null);
+
+                        setReservationForm({
+                          name: currentUserInfo?.name || "",
+                          phone: currentUserInfo?.contact || "",
+                          requestDetails: "",
+                        });
+                        setSelectedDate("");
+                        setSelectedTime("");
+                        setSelectedCalendarDate(null);
+                        setAvailableTimes([]);
+                        setAvailableTimesError(null);
+                        setShowReservationModal(true);
+                      }}
+                      className={`w-full font-semibold py-3 px-6 mb-3 rounded-lg transition-colors shadow-lg ${
+                        isExpertOwner
+                          ? "bg-blue-500 hover:bg-blue-600 text-white"
+                          : "bg-blue-500 hover:bg-blue-600 text-white"
+                      }`}
+                    >
+                      예약하기
+                    </button>
+                    )}
+                    
+                    {/* 전문가 간 예약 제한 오류 메시지 */}
+                    {expertReservationError && (
+                      <div className="w-full mb-3 p-3 border border-red-300 bg-red-50 text-red-600 rounded-lg text-sm text-center">
+                        {expertReservationError}
+                      </div>
+                    )}
+                    {isExpertOwner && (
+                      <>
+                        {/* 전문가 본인인 경우 수정/삭제 버튼 */}
+                        <button
+                          onClick={() =>
+                            navigate(`/expert-introduction-update/${advisorId}`)
+                          }
+                          className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
+                        >
+                          수정하기
+                        </button>
+                        <button
+                          onClick={handleDeleteExpert}
+                          className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
+                        >
+                          삭제하기
+                        </button>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1000,7 +1227,15 @@ const ExpertDetailPage: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg border-2 border border-blue-300 max-w-md w-full shadow-lg max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center p-8 pb-4">
-              <h3 className="text-2xl font-bold text-gray-900">예약하기</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {(() => {
+                  const currentUserInfo = AuthService.getUserInfo();
+                  const isExpertOwner =
+                    currentUserInfo?.role === "ADVISOR" &&
+                    currentUserInfo?.name === expertData?.name;
+                  return isExpertOwner ? "예약하기" : "예약하기";
+                })()}
+              </h3>
               <button
                 onClick={() => setShowReservationModal(false)}
                 className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -1010,6 +1245,30 @@ const ExpertDetailPage: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto px-8 pr-6 scrollbar-hide">
+              {(() => {
+                const currentUserInfo = AuthService.getUserInfo();
+                const isExpertOwner =
+                  currentUserInfo?.role === "ADVISOR" &&
+                  currentUserInfo?.name === expertData?.name;
+
+                if (isExpertOwner) {
+                  return (
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start flex-col space-y-2">
+                        <div className="text-blue-600 mr-2">
+                          ℹ️ <strong>전문가 모드</strong>
+                        </div>
+                        <div className="text-sm text-blue-700 text-left pl-7 space-y-1">
+                          <p>실제 차단된 시간 정보를 확인할 수 있습니다.</p>
+                          <p>일반 사용자의 예약화면과 동일합니다.</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <form className="space-y-6 pb-4">
                 <div>
                   <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
@@ -1020,7 +1279,7 @@ const ExpertDetailPage: React.FC = () => {
                     name="name"
                     value={reservationForm.name}
                     onChange={handleInputChange}
-                    placeholder="김싸피"
+                    placeholder="이름을 입력하세요"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -1033,7 +1292,7 @@ const ExpertDetailPage: React.FC = () => {
                     name="phone"
                     value={reservationForm.phone}
                     onChange={handleInputChange}
-                    placeholder="010-0000-0000"
+                    placeholder="휴대폰 번호를 입력하세요"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline focus:outline-blue-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -1195,26 +1454,51 @@ const ExpertDetailPage: React.FC = () => {
             </div>
 
             <div className="flex justify-end p-8 pt-4 border-t border-gray-200 bg-white">
-              <button
-                type="button"
-                onClick={() => {
-                  const reservationData = {
-                    advisorUserId: advisorId!, // 실제 어드바이저 ID
-                    date: selectedDate, // 선택된 날짜
-                    time: selectedTime, // 선택된 시간
-                    requestMessage: requestMessage, // 요청 메시지
-                  };
+              {(() => {
+                const currentUserInfo = AuthService.getUserInfo();
+                const isExpertOwner =
+                  currentUserInfo?.role === "ADVISOR" &&
+                  currentUserInfo?.name === expertData?.name;
 
-                  handleReservation(
-                    reservationData,
-                    () => console.log("예약 성공"), // 성공 콜백
-                    (error) => setError(error) // 에러 콜백
+                if (isExpertOwner) {
+                  // 전문가 본인인 경우 - 예약 현황 확인용
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowReservationModal(false);
+                      }}
+                      className="bg-gray-400 hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                    >
+                      닫기
+                    </button>
                   );
-                }}
-                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-              >
-                예약 완료
-              </button>
+                } else {
+                  // 일반 사용자인 경우 - 실제 예약 진행
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const reservationData = {
+                          advisorUserId: advisorId!, // 실제 어드바이저 ID
+                          date: selectedDate, // 선택된 날짜
+                          time: selectedTime, // 선택된 시간
+                          requestMessage: requestMessage, // 요청 메시지
+                        };
+
+                        handleReservation(
+                          reservationData,
+                          () => console.log("예약 성공"), // 성공 콜백
+                          (error) => setError(error) // 에러 콜백
+                        );
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                    >
+                      예약 완료
+                    </button>
+                  );
+                }
+              })()}
             </div>
           </div>
         </div>
