@@ -1,8 +1,8 @@
-package com.Stalk.project.api.favorite.service;
+package com.Stalk.project.api.favorite.advisor.service;
 
-import com.Stalk.project.api.favorite.dao.FavoriteMapper;
-import com.Stalk.project.api.favorite.dto.out.FavoriteActionResponseDto;
-import com.Stalk.project.api.favorite.dto.out.FavoriteAdvisorResponseDto;
+import com.Stalk.project.api.favorite.advisor.dao.FavoriteMapper;
+import com.Stalk.project.api.favorite.advisor.dto.out.FavoriteActionResponseDto;
+import com.Stalk.project.api.favorite.advisor.dto.out.FavoriteAdvisorResponseDto;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.global.response.BaseResponseStatus;

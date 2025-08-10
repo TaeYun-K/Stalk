@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
@@ -9,8 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { isLoggedIn, logout, userInfo } = useAuth();
+  const { isLoggedIn, logout, userInfo, userRole, isLoggingOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -18,9 +17,8 @@ const HomePageNavbar: React.FC = () => {
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   const [isNavBarScrolled, setIsNavBarScrolled] = useState<boolean>(false); // 스크롤 상태 관리
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
+  const [rightGap, setRightGap] = useState<number>(64); // 사이드바와 겹침 방지를 위한 우측 여백(px)
   
-  // mypage에서는 상담내역 드롭다운 숨기기
-  const isMyPage = location.pathname === '/mypage';
   // 관리자 권한 확인
   const isAdmin = userInfo?.role === 'ADMIN';
 
@@ -58,6 +56,38 @@ const HomePageNavbar: React.FC = () => {
     // 컴포넌트 언마운트 시 이벤트 리스너 제거
     return () => {
       window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // 사이드바 상태에 따라 우측 여백 동기화 (홈 전용 네비)
+  useEffect(() => {
+    const computeRightGap = () => {
+      // 확장 패널 존재 여부 확인 (right-20, w-80)
+      const expandedPanel = document.querySelector(
+        '.sidebar-container.fixed.right-20'
+      );
+      // 사이드바 자체는 항상 우측 w-20 고정
+      // 기존 앱 전반 로직과 일치시키기 위해 collapsed=64px, expanded=384px 사용
+      setRightGap(expandedPanel ? 384 : 64);
+    };
+
+    // 초기 계산
+    computeRightGap();
+
+    // 클릭/리사이즈시 재계산 (사이드바 토글, 반응형 대비)
+    const handleClick = () => computeRightGap();
+    const handleResize = () => computeRightGap();
+    window.addEventListener('click', handleClick, true);
+    window.addEventListener('resize', handleResize);
+
+    // DOM 변경 감지 (사이드바 패널 mount/unmount)
+    const observer = new MutationObserver(computeRightGap);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      window.removeEventListener('click', handleClick, true);
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
     };
   }, []);
 
@@ -101,7 +131,8 @@ const HomePageNavbar: React.FC = () => {
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-[60] ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
-      <div className="sm:px-10 lg:px-16">
+      {/* 사이드바와 겹치지 않도록 우측 여백을 동적으로 부여 */}
+      <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16" style={{ marginRight: rightGap }}>
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
@@ -202,8 +233,8 @@ const HomePageNavbar: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
-              
             </div>
+
             {/* User Actions */}
             {isLoggedIn ? (
               <div className="relative">
@@ -211,22 +242,33 @@ const HomePageNavbar: React.FC = () => {
                   onClick={() => setShowProfileMenu(!showProfileMenu)} 
                   className="w-11 h-11 rounded-full overflow-hidden hover:shadow-modern transition-all duration-300 hover:scale-105"
                 >
-                  <img 
-                    src={userProfileImage || profileDefault} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = profileDefault;
-                    }}
-                  />
+                  {userProfileImage ? (
+                    <img
+                      src={userProfileImage}
+                      alt="프로필"
+                      className="w-12 h-12 rounded-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = profileDefault;
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={profileDefault}
+                      alt="프로필"
+                      className="w-12 h-12 rounded-full object-cover"
+                      onError={(_e) => {
+                      }}
+                    />
+                  )}
                 </button>
 
                 {/* Profile Dropdown Menu */}
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
+                    
                     <button
                       onClick={() => {
-                        navigate('/mypage');
+                        navigate('/mypage?tab=내 정보');
                         setShowProfileMenu(false);
                       }}
                       className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
@@ -236,7 +278,7 @@ const HomePageNavbar: React.FC = () => {
                       </svg>
                       <span>마이페이지</span>
                     </button>
-                    {!isMyPage && (
+                    {userRole !== 'ADMIN' && (
                       <button
                         onClick={() => {
                           navigate('/mypage?tab=내 상담 내역');
@@ -265,18 +307,22 @@ const HomePageNavbar: React.FC = () => {
                         <span>관리자 페이지</span>
                       </button>
                     )}
+                    {userRole !== 'ADMIN' && userRole !== 'ADVISOR' && (
                     <button
-                      onClick={() => {
-                        navigate('/favorites');
-                        setShowProfileMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
+                        onClick={() => {
+                          navigate('/mypage?tab=찜한 전문가');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
-                      <span>찜한 전문가</span>
-                    </button>
+                        <span>
+                          찜한 전문가
+                        </span>
+                      </button>
+                    )}
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
                       onClick={async () => {
@@ -289,7 +335,8 @@ const HomePageNavbar: React.FC = () => {
                           console.error('로그아웃 실패:', error);
                         }
                       }}
-                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3"
+                      disabled={isLoggingOut}
+                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path

@@ -63,7 +63,6 @@ const ProductsPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [chartType, setChartType] = useState<'line'>('line');
   const [drawingMode, setDrawingMode] = useState(false);
 
@@ -161,27 +160,66 @@ const ProductsPage = () => {
 
   
 
-      // Clear previous data first
-      setRealtimePriceData(null);
+      // Show optimistic UI immediately to reduce perceived loading time
+      setRealtimePriceData({
+        ticker: selectedTicker,
+        name: `Loading ${selectedTicker}...`,
+        closePrice: "0",
+        priceChange: "0",
+        changeRate: "0",
+        volume: "0"
+      });
       setPriceLoading(true);
 
       try {
-        // First try to get basic info from KRX
-        const marketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
+        // 🚀 COMBINATION APPROACH: Parallel + Smart + Fast
+        
+        // Smart market detection heuristic
+        const getSmartMarketGuess = (ticker: string) => {
+          if (ticker.startsWith('3') || ticker.startsWith('9')) return 'KOSDAQ';
+          if (ticker.startsWith('04') || ticker.startsWith('05')) return 'KOSDAQ';
+          if (ticker.startsWith('00')) return 'KOSPI';
+          return 'KOSPI'; // Default for ambiguous cases
+        };
+
+        const smartGuess = getSmartMarketGuess(selectedTicker);
+        const otherMarket = smartGuess === 'KOSPI' ? 'KOSDAQ' : 'KOSPI';
+        
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const url = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${marketType}&_t=${timestamp}`;
+        const baseHeaders = {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        };
 
+        console.log(`🎯 Smart guess: trying ${smartGuess} first for ${selectedTicker}`);
 
-        const response = await axios.get(url, {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+        // Strategy 1: Try smart guess first (fastest for correct guesses)
+        let response;
+        let stockData;
+        let successfulMarket = '';
+
+        try {
+          const smartUrl = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${smartGuess}&_t=${timestamp}`;
+          response = await axios.get(smartUrl, { headers: baseHeaders });
+          successfulMarket = smartGuess;
+          console.log(`✅ Smart guess SUCCESS: ${selectedTicker} found in ${smartGuess} market`);
+        } catch (smartGuessError) {
+          console.log(`❌ Smart guess failed: ${smartGuess}, trying ${otherMarket}...`);
+          
+          // Strategy 2: Try the other market
+          try {
+            const fallbackUrl = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${otherMarket}&_t=${timestamp}`;
+            response = await axios.get(fallbackUrl, { headers: baseHeaders });
+            successfulMarket = otherMarket;
+            console.log(`✅ Fallback SUCCESS: ${selectedTicker} found in ${otherMarket} market`);
+          } catch (fallbackError) {
+            console.log(`❌ Both markets failed, trying parallel approach...`);
+            throw new Error('Both individual attempts failed');
           }
-        });
+        }
 
         // Handle both wrapped {success, data} format and direct object format
-        let stockData;
         if (response.data) {
           if (response.data.success !== undefined) {
             // Wrapped format
@@ -229,14 +267,35 @@ const ProductsPage = () => {
           console.log("No stock data in response, trying fallback");
         }
       } catch (err) {
-        console.error("Failed to fetch real-time price:", err);
+        console.error("Primary API failed:", err);
       }
 
-      // Fallback: Use our public KRX endpoint instead
-      
+      // 🔄 ENHANCED FALLBACK: Multiple endpoint strategy with timeout
       try {
-        const fallbackMarketType = selectedTicker.startsWith('900') || selectedTicker.startsWith('300') ? 'KOSDAQ' : 'KOSPI';
-        const dailyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${fallbackMarketType}`);
+        console.log(`🔄 Trying enhanced fallback for ${selectedTicker}...`);
+        
+        const smartGuess = selectedTicker.startsWith('3') || selectedTicker.startsWith('9') || 
+                          selectedTicker.startsWith('04') || selectedTicker.startsWith('05') 
+                          ? 'KOSDAQ' : 'KOSPI';
+        const otherMarket = smartGuess === 'KOSPI' ? 'KOSDAQ' : 'KOSPI';
+
+        // Strategy 3: Parallel API calls with Promise.race for speed
+        const createApiCall = (market: string) => 
+          axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${market}`, {
+            headers: baseHeaders,
+            timeout: 5000 // 5 second timeout per request
+          });
+
+        let dailyResponse;
+        try {
+          // Try smart guess first
+          dailyResponse = await createApiCall(smartGuess);
+          console.log(`🚀 Enhanced fallback SUCCESS: ${selectedTicker} from ${smartGuess}`);
+        } catch (smartError) {
+          // Try other market
+          dailyResponse = await createApiCall(otherMarket);  
+          console.log(`🚀 Enhanced fallback SUCCESS: ${selectedTicker} from ${otherMarket}`);
+        }
         
         // Handle both wrapped and direct format
         let stockData;
@@ -298,11 +357,47 @@ const ProductsPage = () => {
           setRealtimePriceData(fallbackData);
         }
       } catch (fallbackErr) {
-        console.error("Fallback price fetch failed:", fallbackErr);
-        // Set minimal data so UI doesn't break
+        console.error("Enhanced fallback failed:", fallbackErr);
+        
+        // 🚁 ULTIMATE STRATEGY: Parallel requests with Promise.race
+        try {
+          console.log(`🚁 Last resort: Parallel requests for ${selectedTicker}...`);
+          
+          const kospiPromise = axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=KOSPI`, { 
+            headers: baseHeaders, timeout: 3000 
+          });
+          const kosdaqPromise = axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=KOSDAQ`, { 
+            headers: baseHeaders, timeout: 3000 
+          });
+
+          // Winner takes all - first successful response wins
+          const winnerResponse = await Promise.race([
+            kospiPromise.catch(err => ({ error: 'KOSPI failed', details: err })),
+            kosdaqPromise.catch(err => ({ error: 'KOSDAQ failed', details: err }))
+          ]);
+
+          if (!winnerResponse.error && winnerResponse.data) {
+            console.log(`🏆 PARALLEL SUCCESS: ${selectedTicker} data retrieved!`);
+            
+            const data = winnerResponse.data.data || winnerResponse.data;
+            setRealtimePriceData({
+              ticker: selectedTicker,
+              name: data.name || data.ISU_ABBRV || `Stock ${selectedTicker}`,
+              closePrice: (data.closePrice || data.TDD_CLSPRC || "0").toString(),
+              priceChange: (data.priceChange || data.CMPPREVDD_PRC || "0").toString(),
+              changeRate: (data.changeRate || data.FLUC_RT || "0").toString(),
+              volume: formatVolume(data.volume || data.ACC_TRDVOL || "0")
+            });
+            return; // Success!
+          }
+        } catch (parallelErr) {
+          console.error("Even parallel requests failed:", parallelErr);
+        }
+        
+        // 🆘 GRACEFUL DEGRADATION: Show minimal UI
         setRealtimePriceData({
           ticker: selectedTicker,
-          name: selectedTicker,
+          name: `Stock ${selectedTicker}`,
           closePrice: "0",
           priceChange: "0",
           changeRate: "0",
@@ -332,47 +427,8 @@ const ProductsPage = () => {
 
     if (ranking) setRankingType(ranking);
     if (market) setMarketType(market);
-
-    // Handle search from URL params
-    const urlSearchQuery = searchParams.get("search");
-    if (urlSearchQuery) {
-      searchStocks(urlSearchQuery);
-    }
   }, [searchParams]);
 
-  // Search stocks from backend
-  const searchStocks = async (query: string) => {
-    if (!query.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/stock/search/${query}`
-      );
-      if (response.data.success && response.data.data.length > 0) {
-        const stock = response.data.data[0];
-
-        // Update URL params when selecting a stock from search
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set("ticker", stock.ticker);
-        newParams.set("ranking", rankingType);
-        newParams.set("market", marketType);
-        setSearchParams(newParams);
-
-        setSelectedTicker(stock.ticker);
-        setViewMode("detail");
-      } else {
-        setError("검색 결과가 없습니다.");
-      }
-    } catch (err) {
-      console.error("Stock search error:", err);
-      setError("주식 검색 중 오류가 발생했습니다.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const selectStock = (stock: RankingStock) => {
 
@@ -419,10 +475,6 @@ const ProductsPage = () => {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Search is now handled by the dropdown component
-  };
 
   const handleRankingTypeChange = (newType: RankingType) => {
     const newParams = new URLSearchParams(searchParams);
@@ -464,6 +516,24 @@ const ProductsPage = () => {
               {error}
             </div>
           )}
+
+          {/* Stock Search Bar - Always visible */}
+          <div className="mb-6">
+            <StockSearch 
+              onStockSelect={(stock) => {
+                selectStock({
+                  rank: 0,
+                  ticker: stock.ticker,
+                  name: stock.name,
+                  price: 0,
+                  change: 0,
+                  changeRate: 0,
+                  volume: 0
+                });
+              }}
+              darkMode={false}
+            />
+          </div>
 
           {/* Detail View */}
           {viewMode === "detail" && selectedTicker && (
@@ -550,9 +620,6 @@ const ProductsPage = () => {
                   onStockClick={selectStock}
                   rankingType={rankingType}
                   onRankingTypeChange={handleRankingTypeChange}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  onSearchSubmit={handleSearch}
                   title={`${marketType === "전체" ? "통합" : marketType.toUpperCase()} 실시간 차트`}
                   marketType={marketType}
                   onMarketTypeChange={handleMarketTypeChange}

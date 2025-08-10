@@ -1,24 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import NewNavbar from "@/components/new-navbar";
-import { useAuth } from "@/context/AuthContext";
-import profileDefault from "@/assets/images/profiles/Profile_default.svg";
-import profileCat from "@/assets/images/profiles/Profile_cat.svg";
-import profileCheek from "@/assets/images/profiles/Profile_cheek.svg";
-import profileFox from "@/assets/images/profiles/Profile_fox.svg";
-import profilePanda from "@/assets/images/profiles/Profile_panda.svg";
-import profilePuppy from "@/assets/images/profiles/Profile_puppy.svg";
-import profileRabbit from "@/assets/images/profiles/Profile_rabbit.svg";
-import certificationExample from "@/assets/images/dummy/certification_example.svg";
-import ConsultationService from "@/services/consultationService";
-import AuthService from "@/services/authService";
-import ScheduleService from "@/services/scheduleService";
-import AdvisorService from "@/services/advisorService";
-import UserService from "@/services/userService";
-import FavoriteService, {
-  FavoriteAdvisorResponseDto,
-} from "@/services/favoriteService";
-import { ApprovalHistoryResponse, CertificateApprovalRequest } from "@/types";
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate  } from 'react-router-dom';
+import NewNavbar from '@/components/new-navbar';
+import { useAuth } from '@/context/AuthContext';
+import profileDefault from '@/assets/images/profiles/Profile_default.svg';
+import profileCat from '@/assets/images/profiles/Profile_cat.svg';
+import profileCheek from '@/assets/images/profiles/Profile_cheek.svg';
+import profileFox from '@/assets/images/profiles/Profile_fox.svg';
+import profilePanda from '@/assets/images/profiles/Profile_panda.svg';
+import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
+import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
+import certificationExample from '@/assets/images/dummy/certification_example.svg';
+import ConsultationService from '@/services/consultationService';
+import AuthService from '@/services/authService';
+import ScheduleService from '@/services/scheduleService';
+import AdvisorService from '@/services/advisorService';
+import UserService from '@/services/userService';
+import FavoriteService, { FavoriteAdvisorResponseDto } from '@/services/favoriteService';
+import { ApprovalHistoryResponse, CertificateApprovalRequest, ConsultationDiaryResponse, VideoRecording } from '@/types';
 
 interface ConsultationItem {
   id: string;
@@ -63,6 +61,8 @@ const MyPage = () => {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  
 
   // API 관련 상태
   const [isLoading, setIsLoading] = useState(true);
@@ -201,9 +201,10 @@ const MyPage = () => {
     }
   };
 
-  // 사용자 정보 로드
+  // 사용자 정보 로드 (의존성 경고 억제: loadUserInfo는 stable / 외부 영향 없음)
   useEffect(() => {
     loadUserInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userInfo]);
 
   // 스케줄 관리 상태들
@@ -224,8 +225,25 @@ const MyPage = () => {
   const [diaryError, setDiaryError] = useState<string | null>(null);
 
   // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
-  const isExpert = userProfile?.role === "ADVISOR";
-
+  const isExpert = userProfile?.role === 'ADVISOR';
+  
+  // 전문가 페이지 수정 탭 선택 시 라우팅 (렌더 중 navigate 방지)
+  useEffect(() => {
+    const routeToUpdate = async () => {
+      if (activeTab !== '전문가 페이지 수정' || !isExpert) return;
+      try {
+        // 내 advisorId 조회
+        const status = await AdvisorService.getProfileStatus();
+        if (status?.advisorId) {
+          navigate(`/expert-introduction-update/${status.advisorId}`);
+        }
+      } catch {
+        // 무시: 상태 조회 실패 시 이동하지 않음
+      }
+    };
+    routeToUpdate();
+  }, [activeTab, isExpert, navigate]);
+  
   // 날짜 선택 시 기존 스케줄 데이터 로드
   useEffect(() => {
     if (selectedScheduleDate && isExpert) {
@@ -425,7 +443,15 @@ const MyPage = () => {
         const scheduledConsultations: ConsultationItem[] = [];
         const completedConsultations: ConsultationItem[] = [];
 
-        reservations.forEach((reservation: any) => {
+        reservations.forEach((reservation: {
+          reservationId?: number | string;
+          date?: string;
+          time?: string;
+          content?: string;
+          advisorName?: string;
+          advisorUserId?: string;
+          status?: 'COMPLETED' | string;
+        }) => {
           const consultationItem: ConsultationItem = {
             id: reservation.reservationId?.toString() || "",
             date: reservation.date || "",
@@ -465,11 +491,12 @@ const MyPage = () => {
     }
   };
 
-  // 상담 내역 탭이 활성화될 때 데이터 로드
+  // 상담 내역 탭이 활성화될 때 데이터 로드 (의존성 경고 억제)
   useEffect(() => {
     if (activeTab === "내 상담 내역") {
       loadConsultationHistory();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Avatar options
@@ -486,6 +513,22 @@ const MyPage = () => {
   // Form handlers
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPasswordForm({ ...passwordForm, [e.target.name]: e.target.value });
+  };
+
+  // 비밀번호 변경 제출 핸들러 (API 연동)
+  const submitPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      alert('모든 비밀번호 항목을 입력해주세요.');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      alert('새 비밀번호와 확인 비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    const result = await UserService.changePassword(userProfile?.userId || '', passwordForm);
+    alert(result.message);
+    if (result.success) setShowPasswordModal(false);
   };
 
   const handleEditInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1498,16 +1541,7 @@ const MyPage = () => {
             )}
 
             {/* 전문가 전용 탭들 */}
-            {activeTab === "전문가 페이지 수정" && isExpert && (
-              <div className="bg-white rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  전문가 페이지 수정
-                </h2>
-                <p className="text-gray-600">
-                  전문가 페이지 수정 기능이 여기에 표시됩니다.
-                </p>
-              </div>
-            )}
+            {/* 전문가 페이지 수정 탭은 useEffect에서 라우팅 처리 */}
 
             {activeTab === "상담 영업 스케줄 관리" && isExpert && (
               <div className="bg-white rounded-lg p-6">
@@ -1770,24 +1804,27 @@ const MyPage = () => {
                           📹 상담 녹화 영상
                         </h3>
                         <div className="space-y-4">
-                          {consultationDiary.recordings.map(
-                            (recording, index) => (
-                              <div
-                                key={recording.id}
-                                className="border border-gray-200 rounded-lg p-4"
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <h4 className="font-medium text-gray-900">
-                                    녹화 영상 {index + 1}
-                                  </h4>
-                                  <span
-                                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                      recording.status === "COMPLETED"
-                                        ? "bg-green-100 text-green-800"
-                                        : recording.status === "PROCESSING"
-                                        ? "bg-yellow-100 text-yellow-800"
-                                        : "bg-gray-100 text-gray-800"
-                                    }`}
+                          {consultationDiary.recordings.map((recording: VideoRecording, index: number) => (
+                            <div key={recording.id} className="border border-gray-200 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-medium text-gray-900">녹화 영상 {index + 1}</h4>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  recording.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                  recording.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {recording.status === 'COMPLETED' ? '완료' :
+                                   recording.status === 'PROCESSING' ? '처리중' : '대기중'}
+                                </span>
+                              </div>
+                              
+                              {/* 비디오 플레이어 */}
+                              <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-3">
+                                {recording.url ? (
+                                  <video 
+                                    controls 
+                                    className="w-full h-full rounded-lg"
+                                    src={recording.url}
                                   >
                                     {recording.status === "COMPLETED"
                                       ? "완료"
@@ -2099,8 +2136,8 @@ const MyPage = () => {
                 ✕
               </button>
             </div>
-
-            <form className="space-y-6">
+            
+            <form className="space-y-6" onSubmit={submitPasswordChange}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   현재 비밀번호
@@ -2326,7 +2363,15 @@ const MyPage = () => {
               </div>
               <div className="flex justify-end space-x-3 pt-4">
                 <button
-                  onClick={() => setShowWithdrawalModal(false)}
+                  onClick={async () => {
+                    const res = await UserService.deleteAccount(userProfile?.userId || '', '');
+                    alert(res.message);
+                    if (res.success) {
+                      AuthService.removeAccessToken();
+                      setShowWithdrawalModal(false);
+                      navigate('/login');
+                    }
+                  }}
                   className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
                   회원탈퇴

@@ -129,7 +129,7 @@ public class CommunityService {
   }
 
   /**
-   * 글쓰기 권한 체크 - JWT 방식으로 변경
+   * 글쓰기 권한 체크 - 로그인한 모든 사용자 동일 권한
    */
   public WritePermissionResponseDto checkWritePermission(Long currentUserId, String currentUserRole) {
     log.info("글쓰기 권한 체크 시작 - userId: {}, role: {}", currentUserId, currentUserRole);
@@ -141,28 +141,18 @@ public class CommunityService {
         throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
       }
 
-      // 권한 확인 (모든 사용자 글 작성 가능)
-      boolean canWrite = true;
-
-      // 사용자 역할에 따른 사용 가능 카테고리 결정
-      List<String> availableCategories;
-      if ("USER".equals(currentUserRole)) {
-        // 일반 사용자: QUESTION만 작성 가능
-        availableCategories = Arrays.asList("QUESTION");
-      } else {
-        // 전문가: 모든 카테고리 작성 가능
-        availableCategories = Arrays.stream(PostCategory.values())
-            .filter(category -> category != PostCategory.ALL)
-            .map(PostCategory::name)
-            .collect(Collectors.toList());
-      }
+      // 로그인한 모든 사용자가 모든 카테고리 작성 가능 (ALL 제외)
+      List<String> availableCategories = Arrays.stream(PostCategory.values())
+          .filter(category -> category != PostCategory.ALL)
+          .map(PostCategory::name)
+          .collect(Collectors.toList());
 
       return WritePermissionResponseDto.builder()
-          .canWrite(canWrite)
+          .canWrite(true)
           .userRole(currentUserRole)
           .userName(userName)
           .availableCategories(availableCategories)
-          .message("글 작성이 가능합니다.")
+          .message("모든 카테고리에 글 작성이 가능합니다.")
           .build();
 
     } catch (BaseException e) {
@@ -183,9 +173,6 @@ public class CommunityService {
     log.info("커뮤니티 글 작성 시작 - userId: {}, role: {}", currentUserId, currentUserRole);
 
     try {
-      // 권한 검증
-      validateWritePermission(currentUserRole, requestDto.getCategory());
-
       // 글 작성
       int insertedRows = communityMapper.createCommunityPost(currentUserId, requestDto);
       if (insertedRows != 1) {
@@ -215,18 +202,6 @@ public class CommunityService {
       log.error("글 작성 중 오류 발생", e);
       throw new BaseException(BaseResponseStatus.INTERNAL_SERVER_ERROR);
     }
-  }
-
-  /**
-   * 글 작성 권한 검증
-   */
-  private void validateWritePermission(String userRole, PostCategory category) {
-    // 일반 사용자는 QUESTION만 작성 가능
-    if ("USER".equals(userRole) && category != PostCategory.QUESTION) {
-      throw new BaseException(BaseResponseStatus.COMMUNITY_WRITE_PERMISSION_DENIED);
-    }
-
-    // ADVISOR는 모든 카테고리 작성 가능 (추가 검증 없음)
   }
 
   /**

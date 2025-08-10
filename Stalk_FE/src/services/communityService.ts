@@ -41,6 +41,36 @@ class CommunityService {
     }
   }
 
+  // List posts with pagination (public API)
+  static async getPostsPaged(category: string = PostCategory.ALL, pageNo: number = 1, pageSize: number = 10): Promise<CursorPage<CommunityPostSummaryDto>> {
+    try {
+      const query = new URLSearchParams({
+        category: category,
+        pageNo: String(pageNo),
+        pageSize: String(pageSize)
+      });
+      const response = await fetch(
+        `/api/community/posts?${query.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch posts');
+      }
+
+      const data = await response.json();
+      return data.result;
+    } catch (error) {
+      console.error('Error fetching posts (paged):', error);
+      throw error;
+    }
+  }
+
   // Create post with authentication
   static async createPost(data: CommunityPostCreateRequestDto) {
     try {

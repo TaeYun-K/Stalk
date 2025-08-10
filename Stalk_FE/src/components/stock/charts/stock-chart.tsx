@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -31,6 +32,7 @@ import {
   calculateHeikinAshi,
   calculateIchimoku
 } from '../utils/calculations';
+import { on } from 'events';
 
 ChartJS.register(
   CategoryScale,
@@ -65,6 +67,9 @@ interface ChartDataPoint {
 interface StockChartProps {
   selectedStock?: StockData | null;
   darkMode?: boolean;
+  session?: Session | null;
+  chartInfo?: ChartInfo | null;
+  onChartChange?: (info: ChartInfo) => void;
   realTimeUpdates?: boolean;
   chartType?: ChartType;
   period?: number;
@@ -73,17 +78,24 @@ interface StockChartProps {
 
 type ChartType = 'line';
 
+type ChartInfo = {
+  ticker: string;
+  period: string;
+};
+
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 
 const StockChart: React.FC<StockChartProps> = ({
   selectedStock,
   darkMode = false,
+  chartInfo,
+  onChartChange,
   realTimeUpdates = false,
   chartType: propChartType = 'line',
   period: propPeriod = 7,
-  drawingMode: propDrawingMode = false
+  drawingMode: propDrawingMode = false,
+  session
 }) => {
-  console.log("StockChart - 컴포넌트 렌더링됨:", selectedStock);
 
   const [chartData, setChartData] = useState<any>(null);
   const [volumeChartData, setVolumeChartData] = useState<any>(null);
@@ -91,11 +103,12 @@ const StockChart: React.FC<StockChartProps> = ({
   const [macdChartData, setMacdChartData] = useState<any>(null);
   const [stochChartData, setStochChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>('line');
-  const [period, setPeriod] = useState<string>(propPeriod.toString());
+  const [period, setPeriod] = useState<string>(chartInfo?.period ?? propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
   const [rawData, setRawData] = useState<ChartDataPoint[]>([]);
+  const [isCanvasReady, setIsCanvasReady] = useState<boolean>(false);
   
   // Technical indicators states
   const [showVolume, setShowVolume] = useState<boolean>(true);
@@ -116,6 +129,9 @@ const StockChart: React.FC<StockChartProps> = ({
   const rsiChartRef = useRef<any>(null);
   const macdChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
+
+  const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+  const chartKey = { ticker: getCurrentTicker(), period };
   
   const {
     initializeCanvas,
@@ -125,81 +141,189 @@ const StockChart: React.FC<StockChartProps> = ({
     undoLastShape,
     setDrawingTool,
     setStrokeColor,
-    setStrokeWidth
-  } = useDrawingCanvas(chartContainerRef);
+    setStrokeWidth,
+    getAllShapes,
+    applyRemoteChange,
+    applySnapshot
+  } = useDrawingCanvas(chartContainerRef, {
+
+    onChange: (change) => {
+      console.log('[DRAW→PARENT] change', change); 
+      if (!session) return;
+      const payload = { ...change, chart: chartKey };
+      const type =
+        change.type === 'add' || change.type === 'update' ? `drawing:${change.type}`
+        : change.type === 'delete' ? 'drawing:delete'
+        : 'drawing:clear';
+      session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
+    }
+  });
+
+  
+  // 외부 chartInfo 들어오면 내부 period 동기화
+  useEffect(() => {
+    if(!chartInfo) return;
+
+    if(chartInfo.period !== period) {
+      setPeriod(chartInfo.period);
+    }
+  }, [chartInfo?.ticker, chartInfo?.period]);
 
   useEffect(() => {
     if (propChartType !== chartType) {
       setChartType(propChartType);
     }
-    const newPeriod = propPeriod.toString();
-    if (newPeriod !== period) {
-      setPeriod(newPeriod);
-    }
     if (propDrawingMode !== isDrawingMode) {
       setIsDrawingMode(propDrawingMode);
     }
-  }, [propChartType, propPeriod, propDrawingMode]);
 
-  // Update internal period state when prop changes
-  useEffect(() => {
-    console.log("StockChart - propPeriod changed to:", propPeriod);
-    setPeriod(propPeriod.toString());
-  }, [propPeriod]);
-
-  useEffect(() => {
-    console.log('=== useEffect Triggered ===');
-    console.log('Ticker:', selectedStock?.ticker);
-    console.log('Period:', period);
-    if (selectedStock?.ticker) {
-      console.log("StockChart - 데이터 가져오기 시작:", selectedStock.ticker, "Period:", period);
-      fetchChartData();
+    // period: chartInfo가 없을 때만 보조로 반영
+    if (!chartInfo && propPeriod != null) {
+      const newPeriod = String(propPeriod);
+      if (newPeriod !== period) setPeriod(newPeriod);
     }
-  }, [selectedStock?.ticker, period]);
+  }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
+  // ticker 변경시 fetch
   useEffect(() => {
-    if (!selectedStock?.ticker || !realTimeUpdates) return;
+    const ticker = getCurrentTicker();
 
-    const interval = setInterval(() => {
-      fetchChartData(true);
-    }, REAL_TIME_UPDATE_INTERVAL_MS);
+    if (chartInfo && period !== chartInfo.period) return;
 
-    return () => clearInterval(interval);
-  }, [selectedStock?.ticker, period, realTimeUpdates]);
+    console.log('=== FETCH TRIGGER ===', { selectedTicker: selectedStock?.ticker, chartInfoTicker: chartInfo?.ticker, usedTicker: ticker, period });
 
+    if(!ticker) return;
+    fetchChartData(); //내부에서 getCurrentTicker와 period 사용
+
+  }, [chartInfo?.ticker, selectedStock?.ticker, period]); 
+
+  // 실시간 업데이트 interval
   useEffect(() => {
-    if (chartContainerRef.current && chartData) {
-      console.log('Konva 캔버스 초기화 시작');
-      const stage = initializeCanvas();
-      if (stage) {
-        konvaStage.current = stage;
-        console.log('Konva 캔버스 초기화 성공');
-        
-        if (isDrawingMode) {
-          enableDrawing();
+  const ticker = getCurrentTicker();
+  if (!ticker || !realTimeUpdates) return;
+
+  const id = setInterval(() => fetchChartData(true), REAL_TIME_UPDATE_INTERVAL_MS);
+  return () => clearInterval(id);
+  }, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
+
+  // Single effect to manage canvas lifecycle with proper cleanup
+  useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const cleanupCanvas = () => {
+      if (konvaStage.current) {
+        try {
+          konvaStage.current.destroy();
+          konvaStage.current = null;
+        } catch (e) {
+          console.error('Error destroying Konva stage:', e);
         }
       }
-    }
-    
-    return () => {
-      if (konvaStage.current) {
-        konvaStage.current.destroy();
-        konvaStage.current = null;
-      }
+      setIsCanvasReady(false);
     };
-  }, [chartData]);
 
-  useEffect(() => {
-    if (konvaStage.current) {
-      if (isDrawingMode) {
-        console.log('그리기 모드 활성화');
-        enableDrawing();
-      } else {
-        console.log('그리기 모드 비활성화');
-        disableDrawing();
+    const setupCanvas = () => {
+      if (!mounted || !isDrawingMode || !chartData || !chartContainerRef.current) {
+        return;
       }
-    }
-  }, [isDrawingMode]);
+
+      // Clean up first
+      cleanupCanvas();
+
+      // Setup with delay for DOM stability
+      timeoutId = setTimeout(() => {
+        if (!mounted) return;
+        
+        const canvasContainer = document.getElementById('drawing-canvas');
+        if (canvasContainer && chartContainerRef.current) {
+          try {
+            console.log('Konva 캔버스 초기화 시작');
+            const stage = initializeCanvas();
+            if (stage && mounted) {
+              konvaStage.current = stage;
+              setIsCanvasReady(true);
+              console.log('Konva 캔버스 초기화 성공');
+              enableDrawing();
+            }
+          } catch (e) {
+            console.error('Error initializing Konva:', e);
+            if (mounted) {
+              setIsCanvasReady(false);
+            }
+          }
+        }
+      }, 500); // Longer delay for stability
+    };
+
+    // Setup canvas when conditions are met
+    setupCanvas();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      cleanupCanvas();
+    };
+  }, [isDrawingMode, period, chartData]); // All dependencies that should trigger re-init
+
+  // 드로잉 시그널 수신 핸들러 등록
+  useEffect(() => {
+    if (!session) return;
+
+    console.log('[RECV] registering handlers');
+
+    // 수신 페이로드 유효성/차트키 체크
+    const isForThisChart = (msg: any) =>
+      msg?.chart?.ticker === chartKey.ticker && msg?.chart?.period === chartKey.period;
+
+    // add/update 수신 → 도형 반영
+    // 드로잉 추가 수신 처리
+    const onAdd = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'add', shape: msg.shape, version: msg.version });
+    };
+
+    // 드로잉 갱신 수신 처리
+    const onUpdate = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'update', shape: msg.shape, version: msg.version });
+    };
+
+    // 드로잉 삭제 수신 처리
+    const onDelete = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'delete', id: msg.id, version: msg.version });
+    };
+
+    // 전체 지우기 수신 처리
+    const onClear = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'clear', version: msg.version } as any);
+    };
+
+    // OpenVidu 시그널 리스너 등록
+    session.on('signal:drawing:add', onAdd);
+    session.on('signal:drawing:update', onUpdate);
+    session.on('signal:drawing:delete', onDelete);
+    session.on('signal:drawing:clear', onClear);
+
+    // 언마운트 시 정리
+    return () => {
+      session.off('signal:drawing:add', onAdd);
+      session.off('signal:drawing:update', onUpdate);
+      session.off('signal:drawing:delete', onDelete);
+      session.off('signal:drawing:clear', onClear);
+    };
+  }, [session, chartKey.ticker, chartKey.period, applyRemoteChange]);
+
+  // Removed duplicate effect - drawing mode is now handled in the main canvas initialization effect
 
   // Update charts when indicators change - with safety delay
   useEffect(() => {
@@ -211,6 +335,54 @@ const StockChart: React.FC<StockChartProps> = ({
       return () => clearTimeout(timer);
     }
   }, [chartData, rawData, showMA20, showMA50, showEMA12, showEMA26, showBollingerBands, showVWAP, showIchimoku, showRSI, showMACD, showStochastic]);
+
+  // 동기화 요청/응답 처리
+  useEffect(() => {
+    if (!session) return;
+
+    // 동기화 요청 수신 처리
+    const onSyncReq = async (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+
+      // 스냅샷 생성 후 응답 전송
+      const shapes = getAllShapes();
+      const response = {
+        type: 'sync-response',
+        chart: chartKey,
+        shapes,
+        version: undefined // 훅에서 관리 중이면 필요 시 버전도 포함 가능
+      };
+      session.signal({ type: 'drawing:sync-response', data: JSON.stringify(response) }).catch(console.error);
+    };
+
+    // 동기화 응답 수신 처리
+    const onSyncRes = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      console.log('[SYNC] apply snapshot', msg.shapes?.length);
+      applySnapshot(msg.shapes, msg.version);
+    };
+
+    // 리스너 등록
+    session.on('signal:drawing:sync-request', onSyncReq);
+    session.on('signal:drawing:sync-response', onSyncRes);
+
+    // 정리
+    return () => {
+      session.off('signal:drawing:sync-request', onSyncReq);
+      session.off('signal:drawing:sync-response', onSyncRes);
+    };
+  }, [session, chartKey.ticker, chartKey.period, getAllShapes, applySnapshot]);
+
+  // 드로잉 모드 켰을 때 또는 차트 변경 시 동기화 요청
+  useEffect(() => {
+    if (!session) return;
+    if (isDrawingMode) {
+      requestSync();
+    }
+  }, [session, isDrawingMode, chartKey.ticker, chartKey.period]);
+
 
   const fetchChartData = async (isUpdate = false) => {
     if (isLoading) {
@@ -224,8 +396,18 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
-      const marketType = selectedStock?.ticker?.startsWith('9') || selectedStock?.ticker?.startsWith('3') ? 'KOSDAQ' : 'KOSPI';
-      const ticker = selectedStock?.ticker || '';
+      // More comprehensive market type detection - same logic as in use-stock-data.ts
+      const ticker = getCurrentTicker();
+      let marketType: string;
+      
+      if (ticker.startsWith('9') || ticker.startsWith('3')) {
+        marketType = 'KOSDAQ';
+      } else if (ticker.startsWith('00')) {
+        marketType = 'KOSPI'; 
+      } else {
+        // For ambiguous cases like 194480 (Dev Sisters), default to KOSDAQ for 1xxxxx range
+        marketType = ticker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
+      }
       
       // Ensure period is a number
       const periodNum = parseInt(period);
@@ -498,7 +680,7 @@ const StockChart: React.FC<StockChartProps> = ({
         
         newDatasets.push({
           label: 'BB Upper',
-          data: bollingerResult.upper,
+          data: bollingerResult.upperBand,
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
           borderWidth: 1,
@@ -509,7 +691,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
         newDatasets.push({
           label: 'BB Lower', 
-          data: bollingerResult.lower,
+          data: bollingerResult.lowerBand,
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
           borderWidth: 1,
@@ -520,7 +702,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
         newDatasets.push({
           label: 'BB Middle',
-          data: bollingerResult.middle,
+          data: bollingerResult.middleBand,
           borderColor: 'rgba(249, 115, 22, 0.6)',
           backgroundColor: 'transparent',
           borderWidth: 1,
@@ -583,7 +765,7 @@ const StockChart: React.FC<StockChartProps> = ({
           data: ichimokuResult.tenkanSen,
           borderColor: '#3b82f6',
           backgroundColor: 'transparent',
-          borderWidth: 1,
+          borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
         });
@@ -593,7 +775,41 @@ const StockChart: React.FC<StockChartProps> = ({
           data: ichimokuResult.kijunSen,
           borderColor: '#dc2626',
           backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          fill: false,
+          pointRadius: 0,
+        });
+
+        // Senkou Span A
+        newDatasets.push({
+          label: 'Senkou A',
+          data: ichimokuResult.senkouSpanA,
+          borderColor: 'rgba(34, 197, 94, 0.5)',
+          backgroundColor: 'transparent',
           borderWidth: 1,
+          fill: false,
+          pointRadius: 0,
+        });
+
+        // Senkou Span B
+        newDatasets.push({
+          label: 'Senkou B',
+          data: ichimokuResult.senkouSpanB,
+          borderColor: 'rgba(239, 68, 68, 0.5)',
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          fill: false,
+          pointRadius: 0,
+        });
+
+        // Chikou Span
+        newDatasets.push({
+          label: 'Chikou',
+          data: ichimokuResult.chikouSpan,
+          borderColor: '#a855f7',
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderDash: [2, 2],
           fill: false,
           pointRadius: 0,
         });
@@ -663,28 +879,39 @@ const StockChart: React.FC<StockChartProps> = ({
             {
               label: 'MACD',
               data: macdResult.macdLine,
+              type: 'line' as const,
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
               fill: false,
+              borderWidth: 2,
+              yAxisID: 'y',
             },
             {
               label: 'Signal',
               data: macdResult.signalLine,
+              type: 'line' as const,
               borderColor: 'rgb(255, 99, 132)',
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
               fill: false,
+              borderWidth: 2,
+              yAxisID: 'y',
             },
             {
               label: 'Histogram',
               data: macdResult.histogram,
               type: 'bar' as const,
               backgroundColor: macdResult.histogram.map((val: number | null) => 
-                val && val > 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)'
+                val && val > 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
               ),
+              borderColor: macdResult.histogram.map((val: number | null) => 
+                val && val > 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'
+              ),
+              borderWidth: 1,
+              yAxisID: 'y',
             },
           ],
         };
@@ -740,11 +967,15 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const handlePeriodChange = (newPeriod: string) => {
-    console.log('=== Period Change Debug ===');
-    console.log('Current period:', period);
-    console.log('New period:', newPeriod);
-    console.log('Selected ticker:', selectedStock?.ticker);
     setPeriod(newPeriod);
+
+    const ticker = getCurrentTicker();
+    if(ticker) {
+      onChartChange?.({
+        ticker,
+        period: newPeriod
+      });
+    }
   };
 
   const handleChartTypeChange = (newType: ChartType) => {
@@ -765,6 +996,16 @@ const StockChart: React.FC<StockChartProps> = ({
       case 'ichimoku': setShowIchimoku(value); break;
       case 'volume': setShowVolume(value); break;
     }
+  };
+
+  // 드로잉 데이터 동기화 요청 전송
+  const requestSync = () => {
+    if (!session) return;
+    // 동기화 요청 브로드캐스트
+    session.signal({
+      type: 'drawing:sync-request',
+      data: JSON.stringify({ type: 'sync-request', chart: chartKey })
+    }).catch(console.error);
   };
 
   // Determine tick settings based on period
@@ -804,12 +1045,16 @@ const StockChart: React.FC<StockChartProps> = ({
         align: 'end' as const,
         labels: {
           color: darkMode ? '#e5e7eb' : '#374151',
-          padding: 15,
+          padding: 10,
           font: {
-            size: 11,
+            size: 12,
+            family: "'Inter', 'system-ui', sans-serif",
+            weight: '500',
           },
           usePointStyle: true,
           pointStyle: 'circle',
+          boxWidth: 6,
+          boxHeight: 6,
         },
       },
       title: {
@@ -833,9 +1078,11 @@ const StockChart: React.FC<StockChartProps> = ({
             if (label.includes('종가') || label.includes('MA') || label.includes('EMA')) {
               return `${label}: ${value?.toLocaleString()}원`;
             } else if (label.includes('거래량')) {
-              return `${label}: ${formatVolume(value)}`;
+              return `${label}: ${value?.toLocaleString()}주 (${formatVolume(value)})`;
             } else if (label.includes('RSI') || label.includes('Stochastic')) {
               return `${label}: ${value?.toFixed(2)}%`;
+            } else if (label.includes('VWAP') || label.includes('BB') || label.includes('Bollinger') || label.includes('Ichimoku')) {
+              return `${label}: ${value?.toLocaleString()}원`;
             }
             return `${label}: ${value?.toFixed(2)}`;
           },
@@ -867,15 +1114,21 @@ const StockChart: React.FC<StockChartProps> = ({
           minRotation: 0,
           color: darkMode ? '#9ca3af' : '#6b7280',
           font: {
-            size: 10,
+            size: 11,
+            family: "'Inter', 'system-ui', sans-serif",
           },
           autoSkip: true,
           autoSkipPadding: 5,
+          padding: 8,
         },
         grid: {
           display: true,
-          color: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)',
+          color: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
           drawBorder: false,
+          lineWidth: 1,
+        },
+        border: {
+          display: false,
         },
       },
       y: {
@@ -887,17 +1140,23 @@ const StockChart: React.FC<StockChartProps> = ({
         },
         ticks: {
           callback: function(value: any) {
-            return value.toLocaleString();
+            return value.toLocaleString() + '원';
           },
           color: darkMode ? '#9ca3af' : '#6b7280',
           font: {
-            size: 10,
+            size: 11,
+            family: "'Inter', 'system-ui', sans-serif",
           },
+          padding: 8,
         },
         grid: {
           display: true,
-          color: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)',
+          color: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
           drawBorder: false,
+          lineWidth: 1,
+        },
+        border: {
+          display: false,
         },
       },
     },
@@ -919,6 +1178,28 @@ const StockChart: React.FC<StockChartProps> = ({
         display: true,
         text: '거래량',
         color: darkMode ? '#e5e7eb' : '#111827',
+        padding: 10,
+        font: {
+          size: 14,
+          weight: '600',
+        },
+      },
+      tooltip: {
+        mode: 'index' as const,
+        intersect: false,
+        backgroundColor: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        titleColor: darkMode ? '#f3f4f6' : '#111827',
+        bodyColor: darkMode ? '#d1d5db' : '#4b5563',
+        borderColor: darkMode ? '#4b5563' : '#e5e7eb',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: true,
+        callbacks: {
+          label: function(context: any) {
+            const value = context.parsed.y;
+            return `거래량: ${value?.toLocaleString()}주 (${formatVolume(value)})`;
+          },
+        },
       },
     },
     scales: {
@@ -932,11 +1213,24 @@ const StockChart: React.FC<StockChartProps> = ({
             return formatVolume(value);
           },
           color: darkMode ? '#9ca3af' : '#6b7280',
+          padding: 8,
+          font: {
+            size: 11,
+          },
         },
         grid: {
-          color: darkMode ? '#374151' : '#e5e7eb',
+          color: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)',
+          drawBorder: false,
         },
+        // Ensure minimum height for volume bars
+        min: 0,
       },
+    },
+    // Improve interaction with volume bars
+    interaction: {
+      mode: 'nearest' as const,
+      axis: 'x' as const,
+      intersect: false,
     },
   };
 
@@ -974,30 +1268,68 @@ const StockChart: React.FC<StockChartProps> = ({
   const macdChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         position: 'top' as const,
         labels: {
           color: darkMode ? '#e5e7eb' : '#374151',
+          padding: 8,
+          font: {
+            size: 11,
+          },
+          usePointStyle: true,
+          pointStyle: 'circle',
         },
       },
       title: {
         display: true,
         text: 'MACD',
         color: darkMode ? '#e5e7eb' : '#111827',
+        padding: 10,
+        font: {
+          size: 14,
+          weight: '600',
+        },
+      },
+      tooltip: {
+        mode: 'index' as const,
+        intersect: false,
+        backgroundColor: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        titleColor: darkMode ? '#f3f4f6' : '#111827',
+        bodyColor: darkMode ? '#d1d5db' : '#4b5563',
+        borderColor: darkMode ? '#4b5563' : '#e5e7eb',
+        borderWidth: 1,
+        padding: 10,
       },
     },
     scales: {
       x: {
-        display: false,
+        display: true,
+        ticks: {
+          display: false,
+        },
+        grid: {
+          display: false,
+        },
       },
       y: {
+        type: 'linear' as const,
+        display: true,
         position: 'right' as const,
         ticks: {
           color: darkMode ? '#9ca3af' : '#6b7280',
+          padding: 8,
+          font: {
+            size: 11,
+          },
         },
         grid: {
-          color: darkMode ? '#374151' : '#e5e7eb',
+          color: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)',
+          drawBorder: false,
         },
       },
     },
@@ -1038,177 +1370,307 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const formatVolume = (volume: number): string => {
-    if (volume >= 1000000000) {
-      return `${(volume / 1000000000).toFixed(1)}B`;
+    if (volume >= 100000000) {
+      return `${(volume / 100000000).toFixed(1)}억`;
+    } else if (volume >= 10000000) {
+      return `${(volume / 10000000).toFixed(1)}천만`;
     } else if (volume >= 1000000) {
-      return `${(volume / 1000000).toFixed(1)}M`;
+      return `${(volume / 1000000).toFixed(1)}백만`;
+    } else if (volume >= 10000) {
+      return `${(volume / 10000).toFixed(1)}만`;
     } else if (volume >= 1000) {
-      return `${(volume / 1000).toFixed(1)}K`;
+      return `${(volume / 1000).toFixed(1)}천`;
     }
-    return volume.toString();
+    return volume.toLocaleString();
   };
 
-  if (!selectedStock) {
+  const ticker = getCurrentTicker();
+  const displayname = selectedStock?.name ?? `${ticker} (공유)`;
+  if (!ticker) {
     return (
       <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg`}>
         <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} text-base py-16`}>
-          주식을 선택하면 차트가 표시됩니다.
+          주식을 선택하거나 공유된 차트를 기다려 주세요.
         </div>
       </div>
     );
   }
 
+  // Determine which indicators can be shown based on data length
+  const canShowRSI = rawData && rawData.length >= 14;
+  const canShowMACD = rawData && rawData.length >= 26;
+  const canShowStochastic = rawData && rawData.length >= 14;
+  const canShowBollinger = rawData && rawData.length >= 20;
+  const canShowMA20 = rawData && rawData.length >= 20;
+  const canShowMA50 = rawData && rawData.length >= 50;
+  const canShowEMA12 = rawData && rawData.length >= 12;
+  const canShowEMA26 = rawData && rawData.length >= 26;
+  const canShowIchimoku = rawData && rawData.length >= 52;
+
   return (
-    <div className={`min-h-[800px] ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} rounded-lg shadow-xl overflow-hidden flex flex-col`}>
-      {/* Header Section */}
-      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-        <ChartControls
-          period={period}
-          chartType={chartType}
-          onPeriodChange={handlePeriodChange}
-          onChartTypeChange={handleChartTypeChange}
-          darkMode={darkMode}
-        />
-        
-        {/* Drawing Mode Toggle */}
-        <div className="px-4 py-2 flex items-center justify-between">
-          <button
-            onClick={toggleDrawingMode}
-            className={`px-4 py-2 rounded-md transition-all text-sm font-medium ${
-              isDrawingMode 
-                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md' 
-                : darkMode
-                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {isDrawingMode ? '📝 그리기 모드 끄기' : '✏️ 그리기 모드 켜기'}
-          </button>
-          
-          <div className="text-xs text-gray-500">
-            {selectedStock ? `${selectedStock.name} (${selectedStock.ticker})` : '종목 미선택'}
-          </div>
-        </div>
-        
-        {isDrawingMode && (
-          <DrawingToolbar
-            onToolChange={setDrawingTool}
-            onColorChange={setStrokeColor}
-            onWidthChange={setStrokeWidth}
-            onClear={clearCanvas}
-            onDelete={undoLastShape}
+    <div className={`h-full w-full flex ${darkMode ? 'bg-gray-950' : 'bg-gray-50'}`}>
+      {/* Left Sidebar - Technical Indicators */}
+      <div className={`w-64 flex-shrink-0 ${darkMode ? 'bg-gray-900 border-r border-gray-800' : 'bg-white border-r border-gray-200'} flex flex-col z-10 h-full overflow-y-auto`}>
+        <div className="flex-1 overflow-y-auto">
+          <TechnicalIndicators
+            indicators={{
+              ma20: showMA20,
+              ma50: showMA50,
+              ema12: showEMA12,
+              ema26: showEMA26,
+              rsi: showRSI,
+              macd: showMACD,
+              bollinger: showBollingerBands,
+              stochastic: showStochastic,
+              vwap: showVWAP,
+              ichimoku: showIchimoku,
+              volume: showVolume,
+            }}
+            onIndicatorChange={(indicator, value) => {
+              // Check if indicator can be enabled based on data length
+              switch(indicator) {
+                case 'ma20': 
+                  if (!canShowMA20 && value) {
+                    alert('MA(20)을 표시하려면 최소 20개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowMA20(value); 
+                  break;
+                case 'ma50': 
+                  if (!canShowMA50 && value) {
+                    alert('MA(50)을 표시하려면 최소 50개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowMA50(value); 
+                  break;
+                case 'ema12': 
+                  if (!canShowEMA12 && value) {
+                    alert('EMA(12)를 표시하려면 최소 12개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowEMA12(value); 
+                  break;
+                case 'ema26': 
+                  if (!canShowEMA26 && value) {
+                    alert('EMA(26)을 표시하려면 최소 26개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowEMA26(value); 
+                  break;
+                case 'rsi': 
+                  if (!canShowRSI && value) {
+                    alert('RSI를 표시하려면 최소 14개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowRSI(value); 
+                  break;
+                case 'macd': 
+                  if (!canShowMACD && value) {
+                    alert('MACD를 표시하려면 최소 26개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowMACD(value); 
+                  break;
+                case 'bollinger': 
+                  if (!canShowBollinger && value) {
+                    alert('볼린저 밴드를 표시하려면 최소 20개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowBollingerBands(value); 
+                  break;
+                case 'stochastic': 
+                  if (!canShowStochastic && value) {
+                    alert('Stochastic을 표시하려면 최소 14개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowStochastic(value); 
+                  break;
+                case 'vwap': setShowVWAP(value); break;
+                case 'ichimoku': 
+                  if (!canShowIchimoku && value) {
+                    alert('일목균형표를 표시하려면 최소 52개의 데이터가 필요합니다.');
+                    return;
+                  }
+                  setShowIchimoku(value); 
+                  break;
+                case 'volume': setShowVolume(value); break;
+              }
+            }}
             darkMode={darkMode}
+            disabledIndicators={{
+              ma20: !canShowMA20,
+              ma50: !canShowMA50,
+              ema12: !canShowEMA12,
+              ema26: !canShowEMA26,
+              rsi: !canShowRSI,
+              macd: !canShowMACD,
+              bollinger: !canShowBollinger,
+              stochastic: !canShowStochastic,
+              ichimoku: !canShowIchimoku,
+            }}
           />
-        )}
+        </div>
       </div>
-      
-      {/* Technical Indicators Panel */}
-      <TechnicalIndicators
-        indicators={{
-          ma20: showMA20,
-          ma50: showMA50,
-          ema12: showEMA12,
-          ema26: showEMA26,
-          rsi: showRSI,
-          macd: showMACD,
-          bollinger: showBollingerBands,
-          stochastic: showStochastic,
-          vwap: showVWAP,
-          ichimoku: showIchimoku,
-          volume: showVolume,
-        }}
-        onIndicatorChange={(indicator, value) => {
-          switch(indicator) {
-            case 'ma20': setShowMA20(value); break;
-            case 'ma50': setShowMA50(value); break;
-            case 'ema12': setShowEMA12(value); break;
-            case 'ema26': setShowEMA26(value); break;
-            case 'rsi': setShowRSI(value); break;
-            case 'macd': setShowMACD(value); break;
-            case 'bollinger': setShowBollingerBands(value); break;
-            case 'stochastic': setShowStochastic(value); break;
-            case 'vwap': setShowVWAP(value); break;
-            case 'ichimoku': setShowIchimoku(value); break;
-            case 'volume': setShowVolume(value); break;
-          }
-        }}
-        darkMode={darkMode}
-      />
 
-      {/* Charts Container */}
-      <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} p-4 space-y-4 overflow-auto`}>
-        {/* Main Price Chart */}
-        <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg p-4 shadow-inner`}>
-          <div className="relative" style={{ height: '400px' }} ref={chartContainerRef}>
-            {isLoading && (
-              <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10 rounded-lg">
-                <div className="animate-spin rounded-full h-12 w-12 border-3 border-gray-200 dark:border-gray-700 border-t-blue-500"></div>
-                <p className="mt-3 text-sm font-medium text-gray-600 dark:text-gray-400">차트 데이터를 불러오는 중...</p>
-              </div>
-            )}
-
-            {error && (
-              <div className="absolute inset-0 flex flex-col justify-center items-center">
-                <div className="text-red-500 dark:text-red-400 text-center">
-                  <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm font-medium mb-3">{error}</p>
-                  <button
-                    onClick={() => fetchChartData()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    다시 시도
-                  </button>
+      {/* Main Chart Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Compact Header with Controls */}
+        <div className={`${darkMode ? 'bg-gray-900 border-b border-gray-800' : 'bg-white border-b border-gray-200'}`}>
+          <div className="px-4 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3 flex-1">
+                <h2 className={`text-lg font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {selectedStock?.name || '공유 차트'}
+                </h2>                
+                  <>
+                    <span className={`text-sm px-2 py-0.5 rounded font-medium ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                      {displayname /* getCurrentTicker() 결과 */}
+                    </span>
+                    {rawData && (
+                      <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                        {rawData.length}개
+                      </span>
+                    )}
+                  </>
+                
+                <div className="flex-1">
+                  <ChartControls
+                    period={period}
+                    chartType={chartType}
+                    onPeriodChange={handlePeriodChange}
+                    onChartTypeChange={handleChartTypeChange}
+                    darkMode={darkMode}
+                  />
                 </div>
               </div>
-            )}
-
-            {chartData && !isLoading && !error && (
-              <Line data={chartData} options={chartOptions} ref={chartRef} />
-            )}
+              <button
+                onClick={toggleDrawingMode}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  isDrawingMode 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : darkMode
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {isDrawingMode ? '그리기 끄기' : '그리기 켜기'}
+              </button>
+            </div>
             
             {isDrawingMode && (
-              <div id="drawing-canvas" className="absolute inset-0 pointer-events-none"></div>
+              <div className="mt-2">
+                <DrawingToolbar
+                  onToolChange={setDrawingTool}
+                  onColorChange={setStrokeColor}
+                  onWidthChange={setStrokeWidth}
+                  onClear={clearCanvas}
+                  onDelete={undoLastShape}
+                  darkMode={darkMode}
+                />
+              </div>
             )}
           </div>
         </div>
+      
 
-        {/* Volume Chart */}
-        {showVolume && volumeChartData && (
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg p-4 shadow-inner`}>
-            <div style={{ height: '150px' }}>
-              <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef} />
-            </div>
-          </div>
-        )}
+        {/* Charts Container */}
+        <div className={`flex-1 flex flex-col ${darkMode ? 'bg-gray-950' : 'bg-gray-50'} overflow-y-auto p-4`}>
+          {/* Main Price Chart */}
+          <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'} mb-4`}>
+            <div className="relative" style={{ minHeight: '400px', height: '50vh', maxHeight: '600px', padding: '24px' }} ref={chartContainerRef}>
+              {isLoading && (
+                <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10 rounded-xl">
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-500"></div>
+                  <p className="mt-3 text-sm font-medium text-gray-600 dark:text-gray-400">차트 데이터를 불러오는 중...</p>
+                </div>
+              )}
 
-        {/* RSI Chart */}
-        {showRSI && rsiChartData && (
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg p-4 shadow-inner`}>
-            <div style={{ height: '150px' }}>
-              <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef} />
-            </div>
-          </div>
-        )}
+              {error && (
+                <div className="absolute inset-0 flex flex-col justify-center items-center p-6">
+                  <div className={`max-w-md mx-auto text-center ${darkMode ? 'text-red-400' : 'text-red-500'}`}>
+                    <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${darkMode ? 'bg-red-900/20' : 'bg-red-50'}`}>
+                      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                      차트 데이터를 불러올 수 없습니다
+                    </h3>
+                    <p className={`text-sm mb-6 leading-relaxed ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {error}
+                    </p>
+                    <button
+                      onClick={() => fetchChartData()}
+                      className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        darkMode 
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      } shadow-lg hover:shadow-xl transform hover:scale-105`}
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                </div>
+              )}
 
-        {/* MACD Chart */}
-        {showMACD && macdChartData && (
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg p-4 shadow-inner`}>
-            <div style={{ height: '150px' }}>
-              <Bar data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
+              {chartData && !isLoading && !error && (
+                <Line data={chartData} options={chartOptions} ref={chartRef} />
+              )}
+              
+              {/* Always render the canvas container to avoid DOM manipulation issues */}
+              <div 
+                id="drawing-canvas" 
+                className={`absolute inset-0 ${isDrawingMode ? 'pointer-events-auto' : 'pointer-events-none'}`}
+                style={{ 
+                  display: isDrawingMode ? 'block' : 'none',
+                  opacity: isCanvasReady ? 1 : 0, 
+                  transition: 'opacity 0.3s' 
+                }}
+              />
             </div>
           </div>
-        )}
-        
-        {/* Stochastic Chart */}
-        {showStochastic && stochChartData && (
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg p-4 shadow-inner`}>
-            <div style={{ height: '150px' }}>
-              <Line data={stochChartData} options={stochasticChartOptions} />
+
+          {/* Secondary Indicators Container */}
+          {(showVolume || showRSI || showMACD || showStochastic) && (
+            <div className="space-y-4">
+              {/* Volume Chart */}
+              {showVolume && volumeChartData && (
+                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <div style={{ minHeight: '180px', height: '25vh', maxHeight: '300px', padding: '20px' }}>
+                    <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef} />
+                  </div>
+                </div>
+              )}
+
+              {/* RSI Chart */}
+              {showRSI && rsiChartData && canShowRSI && (
+                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <div style={{ minHeight: '150px', height: '20vh', maxHeight: '250px', padding: '16px' }}>
+                    <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef} />
+                  </div>
+                </div>
+              )}
+
+              {/* MACD Chart */}
+              {showMACD && macdChartData && canShowMACD && (
+                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <div style={{ minHeight: '180px', height: '25vh', maxHeight: '300px', padding: '20px' }}>
+                    <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
+                  </div>
+                </div>
+              )}
+              
+              {/* Stochastic Chart */}
+              {showStochastic && stochChartData && canShowStochastic && (
+                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <div style={{ minHeight: '150px', height: '20vh', maxHeight: '250px', padding: '16px' }}>
+                    <Line data={stochChartData} options={stochasticChartOptions} />
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

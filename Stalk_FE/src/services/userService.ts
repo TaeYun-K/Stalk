@@ -69,16 +69,35 @@ class UserService {
   }
 
   // 비밀번호 변경
-  static async changePassword(_userId: string, _data: PasswordForm): Promise<{ success: boolean; message: string }> {
-    // TODO: 실제 API 호출로 대체
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: '비밀번호가 성공적으로 변경되었습니다.'
-        });
-      }, 1000);
-    });
+  static async changePassword(_userId: string, data: PasswordForm): Promise<{ success: boolean; message: string }> {
+    try {
+      const token = AuthService.getAccessToken();
+      if (!token) throw new Error('로그인이 필요합니다.');
+
+      const response = await fetch(`/api/users/me/password`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword
+        })
+      });
+
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json.message || '비밀번호 변경에 실패했습니다.');
+      }
+
+      return { success: true, message: json.message || '비밀번호가 성공적으로 변경되었습니다.' };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.'
+      };
+    }
   }
 
   // 프로필 사진 업로드
@@ -97,15 +116,29 @@ class UserService {
 
   // 회원 탈퇴
   static async deleteAccount(_userId: string, _password: string): Promise<{ success: boolean; message: string }> {
-    // TODO: 실제 계정 삭제 로직
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: '회원 탈퇴가 완료되었습니다.'
-        });
-      }, 1000);
-    });
+    try {
+      const token = AuthService.getAccessToken();
+      if (!token) throw new Error('로그인이 필요합니다.');
+
+      const response = await fetch(`/api/users/me/deactivate`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json.message || '회원 탈퇴에 실패했습니다.');
+      }
+
+      return { success: true, message: json.message || '회원 탈퇴가 완료되었습니다.' };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '회원 탈퇴에 실패했습니다.'
+      };
+    }
   }
 
   // 사용자 아이디 중복 확인
