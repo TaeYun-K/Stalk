@@ -128,7 +128,7 @@ public class VideoAnalysisService {
   }
 
   /**
-   * GCS에 저장된 영상을 Gemini 모델을 사용하여 분석 (기존 코드와 동일)
+   * GCS에 저장된 영상을 Gemini 모델을 사용하여 분석
    *
    * @param gcsUri   분석할 영상의 GCS URI
    * @param mimeType 영상의 MIME 타입
