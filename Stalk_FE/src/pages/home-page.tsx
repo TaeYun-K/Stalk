@@ -38,6 +38,8 @@ const HomePage: React.FC = () => {
   const [reservations, setReservations] = useState<ApiReservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const pageSize = 4;
   
   // 예약 내역 가져오기
   const fetchReservations = async () => {
@@ -84,6 +86,11 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     fetchReservations();
   }, []);
+
+  // 예약 목록이 바뀔 때마다 첫 페이지로 초기화
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [reservations]);
 
   // 홈페이지에서 sidebar margin 완전히 무시
   useEffect(() => {
@@ -151,7 +158,7 @@ const HomePage: React.FC = () => {
         </div>
       </div>
 
-             {/* 예정된 상담 내역 - 로그인한 사용자에게만 표시 */}
+      {/* 예정된 상담 내역 - 로그인한 사용자에게만 표시 */}
        {isLoggedIn && (
          <section className="w-full mb-16 bg-gray-100 pt-10 pb-10 px-36">
            <div className="relative flex items-center gap-3 mb-8">
@@ -163,8 +170,22 @@ const HomePage: React.FC = () => {
               &gt;
              </button>
            </div>
-           {/* 내 예약 내역 카드 */}
-             <div className='flex flex-row gap-4'>
+            {/* 내 예약 내역 카드 (최대 4개 표시, 좌우 이동) */}
+             <div className='flex flex-row items-center gap-4 overflow-hidden'>
+               {/* Prev arrow */}
+               {reservations.length > pageSize && (
+                 <button
+                   aria-label="이전 예약들"
+                   onClick={() => setCurrentIndex((prev) => Math.max(0, prev - pageSize))}
+                   disabled={currentIndex === 0}
+                   className={`px-3 py-6 text-xl font-bold rounded-lg transition-colors ${currentIndex === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700 hover:text-blue-500'}`}
+                 >
+                   ◀
+                 </button>
+               )}
+
+               {/* Cards */}
+               <div className='flex flex-row gap-4 flex-1 overflow-hidden'>
                {loading ? (
                  <div className="text-gray-500">로딩 중...</div>
                ) : error ? (
@@ -172,7 +193,9 @@ const HomePage: React.FC = () => {
                ) : reservations.length === 0 ? (
                  <div className="text-gray-500">현재 예정된 상담 내역이 없습니다</div>
                ) : (
-                 reservations.map((reservation) => {
+                 reservations
+                   .slice(currentIndex, currentIndex + pageSize)
+                   .map((reservation) => {
                    const reservationDate = new Date(`${reservation.consultationDate}T${reservation.consultationTime}`);
                    const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][reservationDate.getDay()];
                    const formattedDate = `${reservation.consultationDate.split('-').join('. ')}(${dayOfWeek})`;
@@ -182,7 +205,7 @@ const HomePage: React.FC = () => {
                      <button 
                       key={reservation.reservationId} 
                       onClick={() => navigate(`/mypage?tab=내 상담 내역`)}
-                      className="p-6 transition-all duration-300 bg-white rounded-lg border border-gray-300 border-semibold w-fit"
+                      className="p-6 transition-all duration-300 bg-white rounded-lg border border-gray-300 border-semibold w-fit hover:shadow-lg hover:border-blue-500 hover:bg-gray-50"
                       >
                        <div className="flex items-center justify-start">
                          <div className="flex flex-col justify-start gap-4">
@@ -199,6 +222,19 @@ const HomePage: React.FC = () => {
                      </button>
                    );
                  })
+               )}
+               </div>
+
+               {/* Next arrow */}
+               {reservations.length > pageSize && (
+                 <button
+                   aria-label="다음 예약들"
+                   onClick={() => setCurrentIndex((prev) => (prev + pageSize < reservations.length ? prev + pageSize : prev))}
+                   disabled={currentIndex + pageSize >= reservations.length}
+                   className={`px-3 py-6 text-xl font-bold rounded-lg transition-colors ${(currentIndex + pageSize >= reservations.length) ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700 hover:text-blue-500'}`}
+                 >
+                   ▶
+                 </button>
                )}
              </div>
          </section>

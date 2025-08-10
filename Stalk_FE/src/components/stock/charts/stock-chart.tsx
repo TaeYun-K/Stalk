@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -31,6 +32,7 @@ import {
   calculateHeikinAshi,
   calculateIchimoku
 } from '../utils/calculations';
+import { on } from 'events';
 
 ChartJS.register(
   CategoryScale,
@@ -65,6 +67,9 @@ interface ChartDataPoint {
 interface StockChartProps {
   selectedStock?: StockData | null;
   darkMode?: boolean;
+  session?: Session | null;
+  chartInfo?: ChartInfo | null;
+  onChartChange?: (info: ChartInfo) => void;
   realTimeUpdates?: boolean;
   chartType?: ChartType;
   period?: number;
@@ -73,17 +78,24 @@ interface StockChartProps {
 
 type ChartType = 'line';
 
+type ChartInfo = {
+  ticker: string;
+  period: string;
+};
+
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 
 const StockChart: React.FC<StockChartProps> = ({
   selectedStock,
   darkMode = false,
+  chartInfo,
+  onChartChange,
   realTimeUpdates = false,
   chartType: propChartType = 'line',
   period: propPeriod = 7,
-  drawingMode: propDrawingMode = false
+  drawingMode: propDrawingMode = false,
+  session
 }) => {
-  console.log("StockChart - 컴포넌트 렌더링됨:", selectedStock);
 
   const [chartData, setChartData] = useState<any>(null);
   const [volumeChartData, setVolumeChartData] = useState<any>(null);
@@ -91,7 +103,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [macdChartData, setMacdChartData] = useState<any>(null);
   const [stochChartData, setStochChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>('line');
-  const [period, setPeriod] = useState<string>(propPeriod.toString());
+  const [period, setPeriod] = useState<string>(chartInfo?.period ?? propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
@@ -117,6 +129,9 @@ const StockChart: React.FC<StockChartProps> = ({
   const rsiChartRef = useRef<any>(null);
   const macdChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
+
+  const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+  const chartKey = { ticker: getCurrentTicker(), period };
   
   const {
     initializeCanvas,
@@ -126,47 +141,70 @@ const StockChart: React.FC<StockChartProps> = ({
     undoLastShape,
     setDrawingTool,
     setStrokeColor,
-    setStrokeWidth
-  } = useDrawingCanvas(chartContainerRef);
+    setStrokeWidth,
+    getAllShapes,
+    applyRemoteChange,
+    applySnapshot
+  } = useDrawingCanvas(chartContainerRef, {
+
+    onChange: (change) => {
+      console.log('[DRAW→PARENT] change', change); 
+      if (!session) return;
+      const payload = { ...change, chart: chartKey };
+      const type =
+        change.type === 'add' || change.type === 'update' ? `drawing:${change.type}`
+        : change.type === 'delete' ? 'drawing:delete'
+        : 'drawing:clear';
+      session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
+    }
+  });
+
+  
+  // 외부 chartInfo 들어오면 내부 period 동기화
+  useEffect(() => {
+    if(!chartInfo) return;
+
+    if(chartInfo.period !== period) {
+      setPeriod(chartInfo.period);
+    }
+  }, [chartInfo?.ticker, chartInfo?.period]);
 
   useEffect(() => {
     if (propChartType !== chartType) {
       setChartType(propChartType);
     }
-    const newPeriod = propPeriod.toString();
-    if (newPeriod !== period) {
-      setPeriod(newPeriod);
-    }
     if (propDrawingMode !== isDrawingMode) {
       setIsDrawingMode(propDrawingMode);
     }
-  }, [propChartType, propPeriod, propDrawingMode]);
 
-  // Update internal period state when prop changes
-  useEffect(() => {
-    console.log("StockChart - propPeriod changed to:", propPeriod);
-    setPeriod(propPeriod.toString());
-  }, [propPeriod]);
-
-  useEffect(() => {
-    console.log('=== useEffect Triggered ===');
-    console.log('Ticker:', selectedStock?.ticker);
-    console.log('Period:', period);
-    if (selectedStock?.ticker) {
-      console.log("StockChart - 데이터 가져오기 시작:", selectedStock.ticker, "Period:", period);
-      fetchChartData();
+    // period: chartInfo가 없을 때만 보조로 반영
+    if (!chartInfo && propPeriod != null) {
+      const newPeriod = String(propPeriod);
+      if (newPeriod !== period) setPeriod(newPeriod);
     }
-  }, [selectedStock?.ticker, period]);
+  }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
+  // ticker 변경시 fetch
   useEffect(() => {
-    if (!selectedStock?.ticker || !realTimeUpdates) return;
+    const ticker = getCurrentTicker();
 
-    const interval = setInterval(() => {
-      fetchChartData(true);
-    }, REAL_TIME_UPDATE_INTERVAL_MS);
+    if (chartInfo && period !== chartInfo.period) return;
 
-    return () => clearInterval(interval);
-  }, [selectedStock?.ticker, period, realTimeUpdates]);
+    console.log('=== FETCH TRIGGER ===', { selectedTicker: selectedStock?.ticker, chartInfoTicker: chartInfo?.ticker, usedTicker: ticker, period });
+
+    if(!ticker) return;
+    fetchChartData(); //내부에서 getCurrentTicker와 period 사용
+
+  }, [chartInfo?.ticker, selectedStock?.ticker, period]); 
+
+  // 실시간 업데이트 interval
+  useEffect(() => {
+  const ticker = getCurrentTicker();
+  if (!ticker || !realTimeUpdates) return;
+
+  const id = setInterval(() => fetchChartData(true), REAL_TIME_UPDATE_INTERVAL_MS);
+  return () => clearInterval(id);
+  }, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
 
   // Single effect to manage canvas lifecycle with proper cleanup
   useEffect(() => {
@@ -231,6 +269,60 @@ const StockChart: React.FC<StockChartProps> = ({
     };
   }, [isDrawingMode, period, chartData]); // All dependencies that should trigger re-init
 
+  // 드로잉 시그널 수신 핸들러 등록
+  useEffect(() => {
+    if (!session) return;
+
+    console.log('[RECV] registering handlers');
+
+    // 수신 페이로드 유효성/차트키 체크
+    const isForThisChart = (msg: any) =>
+      msg?.chart?.ticker === chartKey.ticker && msg?.chart?.period === chartKey.period;
+
+    // add/update 수신 → 도형 반영
+    // 드로잉 추가 수신 처리
+    const onAdd = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'add', shape: msg.shape, version: msg.version });
+    };
+
+    // 드로잉 갱신 수신 처리
+    const onUpdate = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'update', shape: msg.shape, version: msg.version });
+    };
+
+    // 드로잉 삭제 수신 처리
+    const onDelete = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'delete', id: msg.id, version: msg.version });
+    };
+
+    // 전체 지우기 수신 처리
+    const onClear = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (!isForThisChart(msg)) return;
+      applyRemoteChange({ type: 'clear', version: msg.version } as any);
+    };
+
+    // OpenVidu 시그널 리스너 등록
+    session.on('signal:drawing:add', onAdd);
+    session.on('signal:drawing:update', onUpdate);
+    session.on('signal:drawing:delete', onDelete);
+    session.on('signal:drawing:clear', onClear);
+
+    // 언마운트 시 정리
+    return () => {
+      session.off('signal:drawing:add', onAdd);
+      session.off('signal:drawing:update', onUpdate);
+      session.off('signal:drawing:delete', onDelete);
+      session.off('signal:drawing:clear', onClear);
+    };
+  }, [session, chartKey.ticker, chartKey.period, applyRemoteChange]);
+
   // Removed duplicate effect - drawing mode is now handled in the main canvas initialization effect
 
   // Update charts when indicators change - with safety delay
@@ -243,6 +335,54 @@ const StockChart: React.FC<StockChartProps> = ({
       return () => clearTimeout(timer);
     }
   }, [chartData, rawData, showMA20, showMA50, showEMA12, showEMA26, showBollingerBands, showVWAP, showIchimoku, showRSI, showMACD, showStochastic]);
+
+  // 동기화 요청/응답 처리
+  useEffect(() => {
+    if (!session) return;
+
+    // 동기화 요청 수신 처리
+    const onSyncReq = async (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+
+      // 스냅샷 생성 후 응답 전송
+      const shapes = getAllShapes();
+      const response = {
+        type: 'sync-response',
+        chart: chartKey,
+        shapes,
+        version: undefined // 훅에서 관리 중이면 필요 시 버전도 포함 가능
+      };
+      session.signal({ type: 'drawing:sync-response', data: JSON.stringify(response) }).catch(console.error);
+    };
+
+    // 동기화 응답 수신 처리
+    const onSyncRes = (e: any) => {
+      const msg = JSON.parse(e.data);
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      console.log('[SYNC] apply snapshot', msg.shapes?.length);
+      applySnapshot(msg.shapes, msg.version);
+    };
+
+    // 리스너 등록
+    session.on('signal:drawing:sync-request', onSyncReq);
+    session.on('signal:drawing:sync-response', onSyncRes);
+
+    // 정리
+    return () => {
+      session.off('signal:drawing:sync-request', onSyncReq);
+      session.off('signal:drawing:sync-response', onSyncRes);
+    };
+  }, [session, chartKey.ticker, chartKey.period, getAllShapes, applySnapshot]);
+
+  // 드로잉 모드 켰을 때 또는 차트 변경 시 동기화 요청
+  useEffect(() => {
+    if (!session) return;
+    if (isDrawingMode) {
+      requestSync();
+    }
+  }, [session, isDrawingMode, chartKey.ticker, chartKey.period]);
+
 
   const fetchChartData = async (isUpdate = false) => {
     if (isLoading) {
@@ -257,7 +397,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
     try {
       // More comprehensive market type detection - same logic as in use-stock-data.ts
-      const ticker = selectedStock?.ticker || '';
+      const ticker = getCurrentTicker();
       let marketType: string;
       
       if (ticker.startsWith('9') || ticker.startsWith('3')) {
@@ -827,11 +967,15 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const handlePeriodChange = (newPeriod: string) => {
-    console.log('=== Period Change Debug ===');
-    console.log('Current period:', period);
-    console.log('New period:', newPeriod);
-    console.log('Selected ticker:', selectedStock?.ticker);
     setPeriod(newPeriod);
+
+    const ticker = getCurrentTicker();
+    if(ticker) {
+      onChartChange?.({
+        ticker,
+        period: newPeriod
+      });
+    }
   };
 
   const handleChartTypeChange = (newType: ChartType) => {
@@ -852,6 +996,16 @@ const StockChart: React.FC<StockChartProps> = ({
       case 'ichimoku': setShowIchimoku(value); break;
       case 'volume': setShowVolume(value); break;
     }
+  };
+
+  // 드로잉 데이터 동기화 요청 전송
+  const requestSync = () => {
+    if (!session) return;
+    // 동기화 요청 브로드캐스트
+    session.signal({
+      type: 'drawing:sync-request',
+      data: JSON.stringify({ type: 'sync-request', chart: chartKey })
+    }).catch(console.error);
   };
 
   // Determine tick settings based on period
@@ -1230,11 +1384,13 @@ const StockChart: React.FC<StockChartProps> = ({
     return volume.toLocaleString();
   };
 
-  if (!selectedStock) {
+  const ticker = getCurrentTicker();
+  const displayname = selectedStock?.name ?? `${ticker} (공유)`;
+  if (!ticker) {
     return (
       <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg`}>
         <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} text-base py-16`}>
-          주식을 선택하면 차트가 표시됩니다.
+          주식을 선택하거나 공유된 차트를 기다려 주세요.
         </div>
       </div>
     );
@@ -1364,12 +1520,11 @@ const StockChart: React.FC<StockChartProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 flex-1">
                 <h2 className={`text-lg font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {selectedStock?.name || '종목을 선택하세요'}
-                </h2>
-                {selectedStock && (
+                  {selectedStock?.name || '공유 차트'}
+                </h2>                
                   <>
                     <span className={`text-sm px-2 py-0.5 rounded font-medium ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
-                      {selectedStock.ticker}
+                      {displayname /* getCurrentTicker() 결과 */}
                     </span>
                     {rawData && (
                       <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
@@ -1377,7 +1532,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       </span>
                     )}
                   </>
-                )}
+                
                 <div className="flex-1">
                   <ChartControls
                     period={period}
@@ -1465,7 +1620,7 @@ const StockChart: React.FC<StockChartProps> = ({
               {/* Always render the canvas container to avoid DOM manipulation issues */}
               <div 
                 id="drawing-canvas" 
-                className="absolute inset-0 pointer-events-none"
+                className={`absolute inset-0 ${isDrawingMode ? 'pointer-events-auto' : 'pointer-events-none'}`}
                 style={{ 
                   display: isDrawingMode ? 'block' : 'none',
                   opacity: isCanvasReady ? 1 : 0, 

@@ -5,6 +5,13 @@
 
 <mapper namespace="com.Stalk.project.api.advisor.dao.AdvisorMapper">
 
+  <!-- 전문가 승인 여부 확인 -->
+  <select id="isApprovedAdvisor" resultType="Boolean">
+    SELECT is_approved
+    FROM advisor
+    WHERE advisor_id = #{advisorId}
+  </select>
+
   <!-- ReviewDto를 위한 ResultMap 정의 -->
   <resultMap id="ReviewResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
     <result property="review_id" column="review_id" jdbcType="BIGINT"/>
@@ -49,6 +56,7 @@
     INNER JOIN users u ON a.advisor_id = u.id
     LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
     WHERE a.is_approved = 1
+    AND a.is_profile_completed = 1
     <if test="preferredTradeStyle != null and preferredTradeStyle.size() > 0">
       AND adi.preferred_trade_style IN
       <foreach item="style" collection="preferredTradeStyle" open="(" separator="," close=")">

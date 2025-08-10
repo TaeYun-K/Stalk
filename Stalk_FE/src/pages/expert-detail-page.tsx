@@ -1140,6 +1140,7 @@ const ExpertDetailPage: React.FC = () => {
                 return (
                   <>
                     {/* 모든 사용자(전문가 본인 포함)에게 예약하기 버튼 표시 */}
+                    {currentUserInfo?.name !== expertData?.name && (
                     <button
                       onClick={() => {
                         // 토큰 확인
@@ -1186,7 +1187,8 @@ const ExpertDetailPage: React.FC = () => {
                     >
                       예약하기
                     </button>
-
+                    )}
+                    
                     {/* 전문가 간 예약 제한 오류 메시지 */}
                     {expertReservationError && (
                       <div className="w-full mb-3 p-3 border border-red-300 bg-red-50 text-red-600 rounded-lg text-sm text-center">

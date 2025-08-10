@@ -1,6 +1,6 @@
 package com.Stalk.project.api.ai.controller;
 
-import com.Stalk.project.api.ai.dto.VideoAnalysisResponse;
+import com.Stalk.project.api.ai.dto.out.VideoAnalysisResponse;
 import com.Stalk.project.api.ai.entity.AnalysisResult;
 import com.Stalk.project.api.ai.service.VideoAnalysisService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
+/*
+ * @RestController를 통해 이 클래스의 모든 메소드가 HTTP 응답 본문(Body)으로 직접 데이터를 반환함을 명시
+ */
 @RestController
 @RequestMapping("/api/ai")
 public class VideoAnalysisController {
@@ -32,12 +35,14 @@ public class VideoAnalysisController {
    * @return 분석 결과 DTO를 포함한 ResponseEntity
    */
   @PostMapping("/analyze-video")
+  // videoFile이라는 키(key)로 전송한 영상 파일(MultipartFile)을 파라미터로 받음
   public ResponseEntity<?> analyzeVideo(@RequestParam("videoFile") MultipartFile file) {
     if (file.isEmpty()) {
       return ResponseEntity.badRequest().body("Please select a file to upload.");
     }
 
     try {
+      // videoAnalysisService.processAndSaveAnalysis(file)를 호출하여 영상 분석 및 저장을 위임
       AnalysisResult result = videoAnalysisService.processAndSaveAnalysis(file);
       VideoAnalysisResponse responseDto = new VideoAnalysisResponse(
           result.getId(),
@@ -47,7 +52,7 @@ public class VideoAnalysisController {
       );
       return ResponseEntity.ok(responseDto);
     } catch (IOException e) {
-      // 로깅 프레임워크를 사용하여 에러를 기록하는 것이 좋습니다.
+      // 로깅 프레임워크를 사용하여 에러를 기록
       e.printStackTrace();
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to analyze video: " + e.getMessage());

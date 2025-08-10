@@ -4,7 +4,7 @@ import {
   Session,
   Subscriber,
 } from "openvidu-browser";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
@@ -28,7 +28,6 @@ interface LocationState {
   userRole?: 'ADVISOR' | 'USER';  // 사용자 역할 추가
 }
 
-
 interface StockData {
   ticker: string;
   name: string;
@@ -40,6 +39,11 @@ interface ChatMessage {
   message: string;
   timestamp: Date;
   type : "system" | "user";
+}
+
+interface ChartInfo {
+  ticker: string;
+  period: string;
 }
 
 type HoveredButton =
@@ -74,7 +78,12 @@ const VideoConsultationPage: React.FC = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [subscriberStatusMap, setSubscriberStatusMap] = useState<Record<string, { audio: boolean; video: boolean }>>({});
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [isInSession] = useState(true);
+  const ovTokenRef = useRef<string | null>(ovToken ?? sessionStorage.getItem("ovToken"));
+  const consultationIdRef = useRef<string | null>(consultationId ?? sessionStorage.getItem("consultationId"));
 
+  // 차트 관련 상태
+  const [currentChart, setCurrentChart] = useState<ChartInfo | null>(null);
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
@@ -97,145 +106,8 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] = useState<boolean>(true);
 
-  
-  useEffect(() => {
-    console.log('Component mounted, checking conditions for initialization...');
-    console.log('ovToken exists:', !!ovToken);
-    console.log('consultationId:', consultationId);
-    console.log('userRole:', userInfo?.role);
 
-    // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
-    if (ovToken && consultationId) {
-    const initializeConsultation = async () => {
-      try {
-        console.log('Starting consultation initialization...');
-        
-        // 1. 미디어 권한 확인
-        const hasPermissions = await checkMediaPermissions();
-        if (!hasPermissions) {
-          console.warn('Media permissions denied, cannot proceed');
-          return;
-        }
-
-        // 2. 사용자 정보 가져오기
-        console.log('Fetching user info...');
-        await fetchUserInfo();
-
-        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
-        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
-        
-      } catch (error) {
-        console.error('Error during consultation initialization:', error);
-        alert('상담 초기화 중 오류가 발생했습니다.');
-      }
-    };
-
-    initializeConsultation();
-    } else {
-      console.warn('Missing required data for consultation:', {
-        hasToken: !!ovToken,
-        hasConsultationId: !!consultationId
-    });
-    }
-  }, [ovToken, consultationId]); // ovToken과 consultationId가 변경될 때만 실행
-
-  // 사용자 로딩 후 OpenVidu 초기화
-  useEffect(() => {
-    console.log('User info state changed:', {
-      isLoadingUserInfo,
-      hasUserInfo: !!userInfo,
-      hasToken: !!ovToken,
-      hasSession: !!session
-    });
-
-    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
-    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
-      console.log('All conditions met, initializing OpenVidu...');
-      initializeOpenVidu();
-    }
-  }, [isLoadingUserInfo, userInfo, ovToken, session]);
-
-  // 타이머 업데이트
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, TIMER_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, []);
-
-  // 로컬 비디오 렌더링을 위한 useEffect
-  useEffect(() => {
-    if (publisher && isVideoEnabled) {
-      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
-      if (videoElement) {
-        videoElement.srcObject = publisher.stream.getMediaStream();
-        videoElement.play().catch((e) => {
-          console.error("Error playing local video:", e);
-        });
-      }
-    }
-  }, [publisher]);
-
-  // 로컬 비디오 연결 & 차트 전환 시 연결
-  useEffect(() => {
-    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces || showParticipants)) {
-      setTimeout(() => {
-        attachLocalVideo(publisher);
-      }, 100);
-    }
-  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces, showParticipants]);
-
-  // 실시간 채팅 읽음 상태 변경
-  useEffect(() => {
-  if (showChat) {
-    setHasUnreadMessages(false); // ✅ 열자마자 알림 꺼짐
-    }
-  }, [showChat]);
-
-
-
-
-  // 페이지 이탈 방지 훅
-  const usePreventNavigation = (enabled: boolean) => {
-    const navigate = useNavigate();
-
-    useEffect(() => {
-      if (!enabled) return;
-
-      // 🔒 1. 브라우저 새로고침 / 닫기 방지
-      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-        e.preventDefault();
-        e.returnValue = '';
-      };
-
-      // 🔒 2. 뒤로가기 방지
-      const handlePopState = (e: PopStateEvent) => {
-        e.preventDefault();
-        // 뒤로가기 막고 알림창 보여주기 (선택)
-        const confirmLeave = window.confirm('상담이 종료되지 않았습니다. 정말 나가시겠습니까?');
-        if (confirmLeave) {
-          window.removeEventListener('beforeunload', handleBeforeUnload);
-          navigate(-1); // 실제 뒤로가기
-        } else {
-          // ❌ 뒤로가기 중단: 앞으로 한 번 더 이동 (뒤로 간 걸 다시 앞으로 감)
-          window.history.pushState(null, '', window.location.href);
-        }
-      };
-
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      window.addEventListener('popstate', handlePopState);
-      // popstate 트리거를 위해 현재 상태 push (뒤로가기 가능하게 만들어줘야 감지 가능)
-      window.history.pushState(null, '', window.location.href);
-
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        window.removeEventListener('popstate', handlePopState);
-      };
-    }, [enabled, navigate]);
-  };
-  usePreventNavigation(true);
-
-  // 참가자 역할 구분을 위한 함수들
+  // 참가자 역할 구분을 위한 함수
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
     try {
       if (subscriber.stream.connection.data) {
@@ -250,6 +122,7 @@ const VideoConsultationPage: React.FC = () => {
     return userInfo?.role === 'ADVISOR' ? 'USER' : 'ADVISOR';
   };
 
+  // 참가자 이름 가져오기
   const getParticipantName = (subscriber: Subscriber): string => {
     try {
       if (subscriber.stream.connection.data) {
@@ -263,6 +136,7 @@ const VideoConsultationPage: React.FC = () => {
     return '참가자';
   };
 
+  // 참가자 역할 표시 이름 가져오기
   const getRoleDisplayName = (role: 'ADVISOR' | 'USER'): string => {
     return role === 'ADVISOR' ? '전문가' : '의뢰인';
   };
@@ -295,6 +169,7 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
+  // 대화 시간 계산 함수
   const getDuration = (): string => {
     const diff = Math.floor(
       (currentTime.getTime() - consultationStartTime.getTime()) / 1000
@@ -546,13 +421,278 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 상담 종료 함수
+  // 비디오 토글 함수
+  const toggleVideo = async () => {
+    console.log('toggleVideo called, current state:', isVideoEnabled);
+    if (!publisher) {
+      console.warn('Publisher not available');
+      return;
+    }
+  
+    const newVideoState = !isVideoEnabled;
+  
+    try {
+      if (newVideoState) {
+        // 비디오 켜기
+        await publisher.publishVideo(true);
+        
+          setTimeout(() => {
+          attachLocalVideo(publisher);
+        }, 100); // 100ms 후 시도
+      } else {
+        // 비디오 끄기
+        await publisher.publishVideo(false);
+        console.log('Video disabled');
+      }
+  
+      setIsVideoEnabled(newVideoState);
+    } catch (error) {
+      console.error("Error toggling video:", error);
+      alert(newVideoState ? "카메라를 시작할 수 없습니다." : "카메라를 중지할 수 없습니다.");
+    }
+  };
+
+  // 오디오 토글 함수
+  const toggleAudio = async () => {
+    console.log('toggleAudio called, current state:', isAudioEnabled);
+    if (!publisher) {
+      console.warn('Publisher not available');
+      return;
+    }
+  
+    const newAudioState = !isAudioEnabled;
+  
+    try {
+      if (newAudioState) {
+        // 오디오 켜기
+        await publisher.publishAudio(true);
+        console.log('Audio enabled');
+      } else {
+        // 오디오 끄기
+        await publisher.publishAudio(false);
+        console.log('Audio disabled');
+      }
+  
+      setIsAudioEnabled(newAudioState);
+    } catch (error) {
+      console.error("Error toggling audio:", error);
+      alert(newAudioState ? "마이크를 시작할 수 없습니다." : "마이크를 중지할 수 없습니다.");
+    }
+  };
+
+  // 카메라와 마이크 권한 확인 함수
+  const checkMediaPermissions = async () => {
+    try {
+      console.log('Checking media permissions...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      console.log('Media permissions granted');
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error('Media permissions denied:', error);
+      alert('카메라와 마이크 권한이 필요합니다. 브라우저 설정을 확인해주세요.');
+      return false;
+    }
+  };
+
+  // 화면 공유 토글 함수
+  const toggleScreenShare = async () => {
+    if (!isScreenSharing && ov && session) {
+      try {
+        const screenPublisher = await ov.initPublisherAsync(undefined, {
+          videoSource: "screen",
+          publishAudio: false,
+          publishVideo: true,
+        });
+        await session.publish(screenPublisher);
+        setIsScreenSharing(true);
+      } catch (error) {
+        console.error("Error sharing screen:", error);
+      }
+    } else {
+      setIsScreenSharing(false);
+    }
+  };
+
+  // 채팅 메시지 전송 함수
+  const sendChatMessage = () => {
+    if (newMessage.trim() && session) {
+      const message: ChatMessage = {
+        id: Date.now().toString(),
+        sender: getCurrentUserDisplayName(),
+        message: newMessage.trim(),
+        timestamp: new Date(),
+        type: "user",
+      };
+      setChatMessages((prev) => [...prev, message]);
+      setNewMessage("");
+
+      session.signal({
+        type: "chat",
+        data: JSON.stringify(message),
+      }).catch((error) => {
+        console.error("채팅 메시지 전송 실패:", error);
+      });
+    }
+  };
+
+  // 현재 사용자 이름 가져오기
+  const getCurrentUserDisplayName = (): string => {
+    if (isLoadingUserInfo) {
+      return '로딩 중...';
+    }
+
+    if (userInfo?.name) {
+      return userInfo.name;
+    }
+
+    // 이름이 없을 경우에만 역할 기반 기본값 사용
+    return userInfo?.role === 'ADVISOR' ? '전문가' : '의뢰인';
+  };
+
+  // 차트 변경 감지 후 signaling
+  const handleChartChange = (info: ChartInfo) => {
+    // 로컬 상태 업데이트
+    setCurrentChart(info);
+
+    // signaling
+    if (session) {
+      session.signal({
+        type: 'chart:change',
+        data: JSON.stringify(info)
+      }).then(() => {
+          console.log('[chart] sent:', info);
+      }).catch(err => console.error('Chart change signaling failed', err));
+    }
+  };
+
+  // 차트 선택 시 signaling
+  useEffect(() => {
+    if (!session) return;
+    if (!selectedStock?.ticker) return;
+
+    if (currentChart?.ticker !== selectedStock.ticker) {
+      const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7' };
+      setCurrentChart(info);
+      session.signal({
+        type: 'chart:change',
+        data: JSON.stringify(info)
+      }).then(() => console.log('[chart] sent (auto-select):', info))
+        .catch(console.error);
+    }
+  }, [session, selectedStock?.ticker]);
+
+  // 차트 변경 이벤트 수신
+  useEffect(() => {
+    if (!session) return;
+    const onChartChange = (e: any) => {
+      const info = JSON.parse(e.data) as ChartInfo;
+      console.log('[chart] recv:', info);
+      setCurrentChart(info);
+    };
+    session.on('signal:chart:change', onChartChange);
+    return () => { session.off('signal:chart:change', onChartChange); };
+  }, [session]);
+
+  // 신규 입장 시 현재 차트 요청
+  useEffect(() => {
+    if (!session) return;
+    session.signal({ type: 'chart:sync_request' }).catch(console.error);
+  }, [session]);
+
+  // 차트 동기화 요청을 수신하면 현재 차트 응답
+  useEffect(() => {
+    if (!session) return;
+    const onSyncReq = async () => {
+      if (publisher && currentChart) {
+        await session.signal({
+          type: 'chart:sync_state',
+          data: JSON.stringify(currentChart),
+        });
+      }
+    };
+    session.on('signal:chart:sync_request', onSyncReq);
+    return () => { session.off('signal:chart:sync_request', onSyncReq); };
+  }, [session, publisher, currentChart]);
+
+  // 응답을 수신해서 차트 랜더링
+  useEffect(() => {
+    if (!session) return;
+    const onSyncState = (e: any) => {
+      const info = JSON.parse(e.data) as ChartInfo;
+      setCurrentChart(info);
+    };
+    session.on('signal:chart:sync_state', onSyncState);
+    return () => { session.off('signal:chart:sync_state', onSyncState); };
+  }, [session]);
+
+  // 녹화 시작
+  const handleStartRecording = async () => {
+    if (!ovSessionId || !consultationId) {
+      alert("세션 정보가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
+      setRecordingId(ovSessionId);
+      setIsRecording(true);
+    } catch (e) {
+      alert("녹화 시작에 실패했습니다.");
+      console.error(e);
+    }
+  };
+
+  // 녹화 종료
+  const handleStopRecording = async () => {
+    if (!recordingId) {
+      alert("녹화 ID가 없습니다.");
+      return;
+    }
+    try {
+      const token = AuthService.getAccessToken();
+      await axios.post(
+        `/api/recordings/stop/${recordingId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setIsRecording(false);
+      setRecordingId(null);
+    } catch (e) {
+      alert("녹화 종료에 실패했습니다.");
+      console.error(e);
+    }
+  };
+
+    // 상담 종료 함수
   const leaveSession = async (): Promise<void> => {
 
     const token = AuthService.getAccessToken();
+    const id =
+    consultationIdRef.current ||
+    sessionStorage.getItem("consultationId") ||
+    consultationId || null;
+
+
     try {
       // 1) 백엔드에 세션 종료 POST 요청
-      await axios.post(`/api/consultations/${consultationId}/session/close`, 
+      await axios.post(`/api/consultations/${id}/session/close`,
         {}, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -606,184 +746,214 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
-  // 비디오 및 오디오 토글 함수들
-  const toggleVideo = async () => {
-    console.log('toggleVideo called, current state:', isVideoEnabled);
-    if (!publisher) {
-      console.warn('Publisher not available');
-      return;
-    }
-  
-    const newVideoState = !isVideoEnabled;
-  
-    try {
-      if (newVideoState) {
-        // 비디오 켜기
-        await publisher.publishVideo(true);
-        
-          setTimeout(() => {
-          attachLocalVideo(publisher);
-        }, 100); // 100ms 후 시도
-      } else {
-        // 비디오 끄기
-        await publisher.publishVideo(false);
-        console.log('Video disabled');
-      }
-  
-      setIsVideoEnabled(newVideoState);
-    } catch (error) {
-      console.error("Error toggling video:", error);
-      alert(newVideoState ? "카메라를 시작할 수 없습니다." : "카메라를 중지할 수 없습니다.");
-    }
-  };
+    // 상태 변화를 추적하는 ref 추가
+  const isInSessionRef = useRef(isInSession);
+  useEffect(() => {
+    isInSessionRef.current = isInSession;
+  }, [isInSession]);
 
-  const toggleAudio = async () => {
-    console.log('toggleAudio called, current state:', isAudioEnabled);
-    if (!publisher) {
-      console.warn('Publisher not available');
-      return;
+  // session storage에 상담 ID 저장
+  useEffect(() => {
+    if (ovToken) {
+      ovTokenRef.current = ovToken;
+      sessionStorage.setItem("ovToken", ovToken);
     }
-  
-    const newAudioState = !isAudioEnabled;
-  
-    try {
-      if (newAudioState) {
-        // 오디오 켜기
-        await publisher.publishAudio(true);
-        console.log('Audio enabled');
-      } else {
-        // 오디오 끄기
-        await publisher.publishAudio(false);
-        console.log('Audio disabled');
-      }
-  
-      setIsAudioEnabled(newAudioState);
-    } catch (error) {
-      console.error("Error toggling audio:", error);
-      alert(newAudioState ? "마이크를 시작할 수 없습니다." : "마이크를 중지할 수 없습니다.");
+    if (consultationId) {
+      consultationIdRef.current = consultationId;
+      sessionStorage.setItem("consultationId", consultationId);
     }
-  };
+  }, [ovToken, consultationId]);
 
-  // 카메라와 마이크 권한 확인 함수
-  const checkMediaPermissions = async () => {
-    try {
-      console.log('Checking media permissions...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
-      console.log('Media permissions granted');
-      stream.getTracks().forEach(track => track.stop());
-      return true;
-    } catch (error) {
-      console.error('Media permissions denied:', error);
-      alert('카메라와 마이크 권한이 필요합니다. 브라우저 설정을 확인해주세요.');
-      return false;
-    }
-  };
+  // ovToken과 consultationId가 변경될 때 openvidu 초기화
+  useEffect(() => {
+    console.log('Component mounted, checking conditions for initialization...');
+    console.log('ovToken exists:', !!ovToken);
+    console.log('consultationId:', consultationId);
+    console.log('userRole:', userInfo?.role);
 
-  const toggleScreenShare = async () => {
-    if (!isScreenSharing && ov && session) {
+    // OpenVidu 토큰과 상담 정보가 있는 경우에만 초기화
+    if (ovToken && consultationId) {
+    const initializeConsultation = async () => {
       try {
-        const screenPublisher = await ov.initPublisherAsync(undefined, {
-          videoSource: "screen",
-          publishAudio: false,
-          publishVideo: true,
-        });
-        await session.publish(screenPublisher);
-        setIsScreenSharing(true);
+        console.log('Starting consultation initialization...');
+        
+        // 1. 미디어 권한 확인
+        const hasPermissions = await checkMediaPermissions();
+        if (!hasPermissions) {
+          console.warn('Media permissions denied, cannot proceed');
+          return;
+        }
+
+        // 2. 사용자 정보 가져오기
+        console.log('Fetching user info...');
+        await fetchUserInfo();
+
+        // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
+        console.log('User info fetch completed, OpenVidu initialization will be handled separately');
+        
       } catch (error) {
-        console.error("Error sharing screen:", error);
+        console.error('Error during consultation initialization:', error);
+        alert('상담 초기화 중 오류가 발생했습니다.');
       }
+    };
+
+    initializeConsultation();
     } else {
-      setIsScreenSharing(false);
+      console.warn('Missing required data for consultation:', {
+        hasToken: !!ovToken,
+        hasConsultationId: !!consultationId
+    });
     }
-  };
+  }, [ovToken, consultationId]); 
 
-  const sendChatMessage = () => {
-    if (newMessage.trim() && session) {
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        sender: getCurrentUserDisplayName(),
-        message: newMessage.trim(),
-        timestamp: new Date(),
-        type: "user",
-      };
-      setChatMessages((prev) => [...prev, message]);
-      setNewMessage("");
+  // 사용자 로딩 후 OpenVidu 초기화
+  useEffect(() => {
+    console.log('User info state changed:', {
+      isLoadingUserInfo,
+      hasUserInfo: !!userInfo,
+      hasToken: !!ovToken,
+      hasSession: !!session
+    });
 
-      session.signal({
-        type: "chat",
-        data: JSON.stringify(message),
-      }).catch((error) => {
-        console.error("채팅 메시지 전송 실패:", error);
-      });
+    // 조건 확인: 사용자 정보 로딩 완료, 사용자 정보 존재, 토큰 존재, 세션이 아직 없음
+    if (!isLoadingUserInfo && userInfo && ovToken && !session) {
+      console.log('All conditions met, initializing OpenVidu...');
+      initializeOpenVidu();
     }
-  };
+  }, [isLoadingUserInfo, userInfo, ovToken, session]);
 
-  const getCurrentUserDisplayName = (): string => {
-    if (isLoadingUserInfo) {
-      return '로딩 중...';
+  // 타이머 업데이트
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, TIMER_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 로컬 비디오 렌더링을 위한 useEffect
+  useEffect(() => {
+    if (publisher && isVideoEnabled) {
+      const videoElement = document.getElementById("local-video-element") as HTMLVideoElement;
+      if (videoElement) {
+        videoElement.srcObject = publisher.stream.getMediaStream();
+        videoElement.play().catch((e) => {
+          console.error("Error playing local video:", e);
+        });
+      }
     }
+  }, [publisher]);
 
-    if (userInfo?.name) {
-      return userInfo.name;
+  // 로컬 비디오 연결 & 차트 전환 시 연결
+  useEffect(() => {
+    if (publisher && isVideoEnabled && (!showStockChart || showParticipantFaces || showParticipants)) {
+      setTimeout(() => {
+        attachLocalVideo(publisher);
+      }, 100);
     }
+  }, [publisher, isVideoEnabled, showStockChart, showParticipantFaces, showParticipants]);
 
-    // 이름이 없을 경우에만 역할 기반 기본값 사용
-    return userInfo?.role === 'ADVISOR' ? '전문가' : '의뢰인';
-  };
-
-  // 녹화 시작
-  const handleStartRecording = async () => {
-    if (!ovSessionId || !consultationId) {
-      alert("세션 정보가 없습니다.");
-      return;
+  // 실시간 채팅 읽음 상태 변경
+  useEffect(() => {
+  if (showChat) {
+    setHasUnreadMessages(false); // ✅ 열자마자 알림 꺼짐
     }
-    try {
-      const token = AuthService.getAccessToken();
-      await axios.post(
-        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+  }, [showChat]);
+
+  // 채팅 창이 닫힐 때 읽음 상태 초기화
+  useEffect(() => {
+    if (!showChat) {
+      setHasUnreadMessages(false);
+    }
+  }, [showChat]);
+
+  // 새로고침으로 떠났다면, 재로드 직후 마이페이지로
+  useEffect(() => {
+    const flag = sessionStorage.getItem('navigateToMyPageAfterReload');
+    if (flag === '1') {
+      sessionStorage.removeItem('navigateToMyPageAfterReload');
+      navigate('/mypage', { replace: true });
+    }
+  }, [navigate]);
+
+  // 브라우저 뒤로가기 버튼 처리
+  useEffect(() => {
+    const handlePopState = async (_e: PopStateEvent) => {
+      // 뒤로가기를 눌러도 결국 현재 URL로 고정
+      window.history.pushState(null, '', window.location.href);
+
+      const ok = window.confirm('상담을 종료하고 나가시겠습니까?');
+      if (!ok) return;
+
+      // 🔸 leaveSession 내부에서 이미 /mypage 로 navigate 하므로,
+      // 여기서 따로 navigate(-1) 호출하지 않습니다.
+      await leaveSession();
+    };
+
+    // 🔹 처음 마운트 시 더미 state 하나 넣어, 첫 뒤로가기를 우리가 가로챔
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
+
+  // 새로고침/창 닫기 경고 및 처리 로직 추가
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isInSessionRef.current) {
+        // 사용자에게 경고 메시지를 표시
+        e.preventDefault();
+        e.returnValue = ""; 
+        
+        sessionStorage.setItem('navigateToMyPageAfterReload', '1');
+      }
+    };
+
+    const handleUnload = async () => {
+      // 창이 닫히거나 새로고침될 때 leaveSession 호출
+      // 이 부분은 브라우저에 따라 비동기 API가 실행되지 않을 수 있음.
+      // 하지만, 최대한 시도하는 것이 좋음.
+      if (isInSessionRef.current) {
+        // Navigator.sendBeacon 또는 동기 XHR 요청을 사용하면 더 확실하지만
+        // 간단한 fetch/axios 요청도 시도해 볼 수 있음.
+        const id = consultationIdRef.current;
+        const token = AuthService.getAccessToken();
+
+        if (id && token) {
+          // 동기 XHR 요청 예시 (브라우저가 닫히기 전에 완료되도록)
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/consultations/${id}/session/close`, false); // 'false'로 동기 설정
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.send();
+          console.log("동기 요청으로 상담 종료 API 시도 완료");
         }
-      );
-      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
-      setRecordingId(ovSessionId);
-      setIsRecording(true);
-    } catch (e) {
-      alert("녹화 시작에 실패했습니다.");
-      console.error(e);
-    }
-  };
+      }
+    };
 
-  // 녹화 종료
-  const handleStopRecording = async () => {
-    if (!recordingId) {
-      alert("녹화 ID가 없습니다.");
-      return;
-    }
-    try {
-      const token = AuthService.getAccessToken();
-      await axios.post(
-        `/api/recordings/stop/${recordingId}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      setIsRecording(false);
-      setRecordingId(null);
-    } catch (e) {
-      alert("녹화 종료에 실패했습니다.");
-      console.error(e);
-    }
-  };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("unload", handleUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("unload", handleUnload);
+    };
+  }, []); // 의존성 배열을 비워 한 번만 실행되도록 함
+
+  // 시그널 수신
+  useEffect(() => {
+    if (!session) return;
+
+    const handler = (event: any) => {
+      const info: ChartInfo = JSON.parse(event.data);
+      setCurrentChart(info);
+    };
+
+    session.on('signal:chart:change', handler);
+
+    return () => {
+      session.off('signal:chart:change', handler);
+    };
+  }, [session]);
+
 
   return (
     <div className="h-screen bg-gray-900 text-white flex flex-col">
@@ -1018,7 +1188,13 @@ const VideoConsultationPage: React.FC = () => {
               <div className="flex-1 p-4 min-h-0">
                 <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
                   <div className="flex-1 overflow-hidden">
-                    <StockChart selectedStock={selectedStock} darkMode={true} />
+                    <StockChart 
+                      selectedStock={selectedStock} 
+                      darkMode={true} 
+                      session={session}
+                      chartInfo={currentChart}
+                      onChartChange={handleChartChange}
+                      />
                   </div>
                 </div>
               </div>
@@ -1354,6 +1530,7 @@ const VideoConsultationPage: React.FC = () => {
                 console.log("Chat button clicked - showStockChart:", showStockChart, "showChat:", showChat);
                 if (showChat) {
                   setShowChat(false);
+                  setHasUnreadMessages(false);
                 } else {
                   setShowChat(true);
                   setShowParticipants(false); // Close participants when opening chat
@@ -1432,7 +1609,7 @@ const VideoConsultationPage: React.FC = () => {
               )}
               {hoveredButton === "stock" && (
                 <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
-                  {showStockChart ? "비디오 뷰로 전환" : "차트 보기"}
+                  {showStockChart ? "차트 닫기" : "차트 보기"}
                 </div>
               )}
             </button>
