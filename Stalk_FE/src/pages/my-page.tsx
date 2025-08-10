@@ -1,22 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate  } from 'react-router-dom';
-import NewNavbar from '@/components/new-navbar';
-import { useAuth } from '@/context/AuthContext';
-import profileDefault from '@/assets/images/profiles/Profile_default.svg';
-import profileCat from '@/assets/images/profiles/Profile_cat.svg';
-import profileCheek from '@/assets/images/profiles/Profile_cheek.svg';
-import profileFox from '@/assets/images/profiles/Profile_fox.svg';
-import profilePanda from '@/assets/images/profiles/Profile_panda.svg';
-import profilePuppy from '@/assets/images/profiles/Profile_puppy.svg';
-import profileRabbit from '@/assets/images/profiles/Profile_rabbit.svg';
-import certificationExample from '@/assets/images/dummy/certification_example.svg';
-import ConsultationService from '@/services/consultationService';
-import AuthService from '@/services/authService';
-import ScheduleService from '@/services/scheduleService';
-import AdvisorService from '@/services/advisorService';
-import UserService from '@/services/userService';
-import FavoriteService, { FavoriteAdvisorResponseDto } from '@/services/favoriteService';
-import { ApprovalHistoryResponse, CertificateApprovalRequest, ConsultationDiaryResponse, VideoRecording } from '@/types';
+import React, { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import NewNavbar from "@/components/new-navbar";
+import { useAuth } from "@/context/AuthContext";
+import profileDefault from "@/assets/images/profiles/Profile_default.svg";
+import profileCat from "@/assets/images/profiles/Profile_cat.svg";
+import profileCheek from "@/assets/images/profiles/Profile_cheek.svg";
+import profileFox from "@/assets/images/profiles/Profile_fox.svg";
+import profilePanda from "@/assets/images/profiles/Profile_panda.svg";
+import profilePuppy from "@/assets/images/profiles/Profile_puppy.svg";
+import profileRabbit from "@/assets/images/profiles/Profile_rabbit.svg";
+import certificationExample from "@/assets/images/dummy/certification_example.svg";
+import ConsultationService from "@/services/consultationService";
+import AuthService from "@/services/authService";
+import ScheduleService from "@/services/scheduleService";
+import AdvisorService from "@/services/advisorService";
+import UserService from "@/services/userService";
+import FavoriteService, {
+  FavoriteAdvisorResponseDto,
+} from "@/services/favoriteService";
+import {
+  ApprovalHistoryResponse,
+  CertificateApprovalRequest,
+  ConsultationDiaryResponse,
+  VideoRecording,
+} from "@/types";
 
 interface ConsultationItem {
   id: string;
@@ -26,6 +33,14 @@ interface ConsultationItem {
   expert: string;
   videoConsultation: string;
   action: string;
+}
+
+// 영상 분석 결과 타입 정의
+interface VideoAnalysisResult {
+  analysisId: number;
+  fileName: string;
+  summary: string;
+  processedAt: string;
 }
 
 // 백엔드 API 응답 타입 정의
@@ -78,6 +93,10 @@ const MyPage = () => {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
 
+  // 영상 분석 결과 상태
+  const [videoAnalysisResult, setVideoAnalysisResult] =
+    useState<VideoAnalysisResult | null>(null);
+
   // 찜한 전문가 목록 로드
   useEffect(() => {
     const isExpertUser = userProfile?.role === "ADVISOR";
@@ -85,6 +104,42 @@ const MyPage = () => {
       loadFavoriteAdvisors();
     }
   }, [activeTab, userProfile]);
+
+  // 영상 분석 처리 함수
+  const handleVideoAnalysis = async (videoUrl: string) => {
+    try {
+      const token = AuthService.getAccessToken();
+      if (!token) {
+        alert("로그인이 필요합니다. 다시 로그인해주세요.");
+        return;
+      }
+
+      console.log("분석할 비디오 URL:", videoUrl);
+
+      const analysisResponse = await fetch("/api/ai/analyze-video", {
+        method: "POST",
+        headers: {
+          // JWT 토큰 헤더 추가
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ videoUrl: videoUrl }),
+      });
+
+      if (analysisResponse.ok) {
+        const result = await analysisResponse.json();
+        alert("영상 분석이 완료되었습니다!");
+        console.log("분석 결과:", result);
+        setVideoAnalysisResult(result);
+      } else {
+        const errorData = await analysisResponse.json();
+        throw new Error(errorData.message || "분석 실패");
+      }
+    } catch (error) {
+      console.error("영상 분석 중 오류:", error);
+      alert("영상 분석 중 오류가 발생했습니다.");
+    }
+  };
 
   // 찜한 전문가 목록 로드 함수
   const loadFavoriteAdvisors = async () => {
@@ -225,12 +280,12 @@ const MyPage = () => {
   const [diaryError, setDiaryError] = useState<string | null>(null);
 
   // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
-  const isExpert = userProfile?.role === 'ADVISOR';
-  
+  const isExpert = userProfile?.role === "ADVISOR";
+
   // 전문가 페이지 수정 탭 선택 시 라우팅 (렌더 중 navigate 방지)
   useEffect(() => {
     const routeToUpdate = async () => {
-      if (activeTab !== '전문가 페이지 수정' || !isExpert) return;
+      if (activeTab !== "전문가 페이지 수정" || !isExpert) return;
       try {
         // 내 advisorId 조회
         const status = await AdvisorService.getProfileStatus();
@@ -243,7 +298,7 @@ const MyPage = () => {
     };
     routeToUpdate();
   }, [activeTab, isExpert, navigate]);
-  
+
   // 날짜 선택 시 기존 스케줄 데이터 로드
   useEffect(() => {
     if (selectedScheduleDate && isExpert) {
@@ -443,34 +498,38 @@ const MyPage = () => {
         const scheduledConsultations: ConsultationItem[] = [];
         const completedConsultations: ConsultationItem[] = [];
 
-        reservations.forEach((reservation: {
-          reservationId?: number | string;
-          date?: string;
-          time?: string;
-          content?: string;
-          advisorName?: string;
-          advisorUserId?: string;
-          status?: 'COMPLETED' | string;
-        }) => {
-          const consultationItem: ConsultationItem = {
-            id: reservation.reservationId?.toString() || "",
-            date: reservation.date || "",
-            time: reservation.time || "",
-            content: reservation.content || "상담 요청",
-            expert:
-              reservation.advisorName || reservation.advisorUserId || "전문가",
-            videoConsultation:
-              reservation.status === "COMPLETED" ? "상담 완료" : "상담 입장",
-            action:
-              reservation.status === "COMPLETED" ? "상세보기" : "취소 요청",
-          };
+        reservations.forEach(
+          (reservation: {
+            reservationId?: number | string;
+            date?: string;
+            time?: string;
+            content?: string;
+            advisorName?: string;
+            advisorUserId?: string;
+            status?: "COMPLETED" | string;
+          }) => {
+            const consultationItem: ConsultationItem = {
+              id: reservation.reservationId?.toString() || "",
+              date: reservation.date || "",
+              time: reservation.time || "",
+              content: reservation.content || "상담 요청",
+              expert:
+                reservation.advisorName ||
+                reservation.advisorUserId ||
+                "전문가",
+              videoConsultation:
+                reservation.status === "COMPLETED" ? "상담 완료" : "상담 입장",
+              action:
+                reservation.status === "COMPLETED" ? "상세보기" : "취소 요청",
+            };
 
-          if (reservation.status === "COMPLETED") {
-            completedConsultations.push(consultationItem);
-          } else {
-            scheduledConsultations.push(consultationItem);
+            if (reservation.status === "COMPLETED") {
+              completedConsultations.push(consultationItem);
+            } else {
+              scheduledConsultations.push(consultationItem);
+            }
           }
-        });
+        );
 
         setRealConsultationData({
           "상담 전": scheduledConsultations,
@@ -518,15 +577,22 @@ const MyPage = () => {
   // 비밀번호 변경 제출 핸들러 (API 연동)
   const submitPasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      alert('모든 비밀번호 항목을 입력해주세요.');
+    if (
+      !passwordForm.currentPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmPassword
+    ) {
+      alert("모든 비밀번호 항목을 입력해주세요.");
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert('새 비밀번호와 확인 비밀번호가 일치하지 않습니다.');
+      alert("새 비밀번호와 확인 비밀번호가 일치하지 않습니다.");
       return;
     }
-    const result = await UserService.changePassword(userProfile?.userId || '', passwordForm);
+    const result = await UserService.changePassword(
+      userProfile?.userId || "",
+      passwordForm
+    );
     alert(result.message);
     if (result.success) setShowPasswordModal(false);
   };
@@ -758,6 +824,7 @@ const MyPage = () => {
     setSelectedConsultation(null);
     setConsultationDiary(null);
     setDiaryError(null);
+    setVideoAnalysisResult(null);
     setActiveTab("내 상담 내역");
   };
 
@@ -1804,27 +1871,24 @@ const MyPage = () => {
                           📹 상담 녹화 영상
                         </h3>
                         <div className="space-y-4">
-                          {consultationDiary.recordings.map((recording: VideoRecording, index: number) => (
-                            <div key={recording.id} className="border border-gray-200 rounded-lg p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <h4 className="font-medium text-gray-900">녹화 영상 {index + 1}</h4>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  recording.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                  recording.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {recording.status === 'COMPLETED' ? '완료' :
-                                   recording.status === 'PROCESSING' ? '처리중' : '대기중'}
-                                </span>
-                              </div>
-                              
-                              {/* 비디오 플레이어 */}
-                              <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-3">
-                                {recording.url ? (
-                                  <video 
-                                    controls 
-                                    className="w-full h-full rounded-lg"
-                                    src={recording.url}
+                          {consultationDiary.recordings.map(
+                            (recording: VideoRecording, index: number) => (
+                              <div
+                                key={recording.id}
+                                className="border border-gray-200 rounded-lg p-4"
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-medium text-gray-900">
+                                    녹화 영상 {index + 1}
+                                  </h4>
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      recording.status === "COMPLETED"
+                                        ? "bg-green-100 text-green-800"
+                                        : recording.status === "PROCESSING"
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-gray-100 text-gray-800"
+                                    }`}
                                   >
                                     {recording.status === "COMPLETED"
                                       ? "완료"
@@ -1858,6 +1922,33 @@ const MyPage = () => {
                                     </div>
                                   )}
                                 </div>
+
+                                {/* 영상 요약하기 버튼 */}
+                                {recording.url && (
+                                  <div className="mb-3">
+                                    <button
+                                      onClick={() =>
+                                        handleVideoAnalysis(recording.url)
+                                      }
+                                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    >
+                                      <svg
+                                        className="w-5 h-5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                                        />
+                                      </svg>
+                                      영상 요약하기
+                                    </button>
+                                  </div>
+                                )}
 
                                 {/* 녹화 정보 */}
                                 <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
@@ -2095,6 +2186,152 @@ const MyPage = () => {
                         </ul>
                       </div>
                     </div>
+
+                    {/* 영상 분석 결과 */}
+                    {videoAnalysisResult && (
+                      <div className="mt-8 bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                            <svg
+                              className="w-6 h-6 text-blue-600"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                              />
+                            </svg>
+                            영상 분석 결과
+                          </h3>
+                          <div className="text-sm text-gray-500">
+                            {new Date(
+                              videoAnalysisResult.processedAt
+                            ).toLocaleString("ko-KR")}
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          {(() => {
+                            try {
+                              const summaryData = JSON.parse(
+                                videoAnalysisResult.summary
+                              );
+                              if (
+                                summaryData.lecture_content &&
+                                Array.isArray(summaryData.lecture_content) &&
+                                summaryData.lecture_content.length === 0 &&
+                                summaryData.key_takeaways?.main_subject ===
+                                  "이 영상에는 투자에 대한 내용이 포함되어 있지 않습니다."
+                              ) {
+                                return (
+                                  <div className="text-center py-8">
+                                    <div className="text-gray-500 text-lg font-medium">
+                                      이 영상에는 투자에 대한 내용이 포함되어
+                                      있지 않습니다.
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="space-y-6">
+                                  {summaryData.lecture_content &&
+                                    summaryData.lecture_content.length > 0 && (
+                                      <div>
+                                        <h4 className="text-lg font-semibold text-gray-900 mb-3">
+                                          📚 강의 내용
+                                        </h4>
+                                        <div className="space-y-3">
+                                          {summaryData.lecture_content.map(
+                                            (item: any, index: number) => (
+                                              <div
+                                                key={index}
+                                                className="bg-white rounded-lg p-4 border border-gray-200"
+                                              >
+                                                <h5 className="font-medium text-blue-600 mb-2">
+                                                  {item.topic}
+                                                </h5>
+                                                <p className="text-gray-700 leading-relaxed">
+                                                  {item.details}
+                                                </p>
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  {summaryData.key_takeaways && (
+                                    <div>
+                                      <h4 className="text-lg font-semibold text-gray-900 mb-3">
+                                        🎯 핵심 요약
+                                      </h4>
+                                      <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-3">
+                                        <div>
+                                          <h5 className="font-medium text-gray-900 mb-2">
+                                            주요 주제
+                                          </h5>
+                                          <p className="text-gray-700">
+                                            {
+                                              summaryData.key_takeaways
+                                                .main_subject
+                                            }
+                                          </p>
+                                        </div>
+                                        {summaryData.key_takeaways
+                                          .core_concepts &&
+                                          summaryData.key_takeaways
+                                            .core_concepts.length > 0 && (
+                                            <div>
+                                              <h5 className="font-medium text-gray-900 mb-2">
+                                                핵심 개념
+                                              </h5>
+                                              <ul className="list-disc list-inside space-y-1">
+                                                {summaryData.key_takeaways.core_concepts.map(
+                                                  (
+                                                    concept: string,
+                                                    index: number
+                                                  ) => (
+                                                    <li
+                                                      key={index}
+                                                      className="text-gray-700"
+                                                    >
+                                                      {concept}
+                                                    </li>
+                                                  )
+                                                )}
+                                              </ul>
+                                            </div>
+                                          )}
+                                        <div>
+                                          <h5 className="font-medium text-gray-900 mb-2">
+                                            결론 및 전략
+                                          </h5>
+                                          <p className="text-gray-700">
+                                            {
+                                              summaryData.key_takeaways
+                                                .conclusion_and_strategy
+                                            }
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            } catch {
+                              return (
+                                <div className="text-gray-700 whitespace-pre-wrap">
+                                  {videoAnalysisResult.summary}
+                                </div>
+                              );
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
@@ -2136,7 +2373,7 @@ const MyPage = () => {
                 ✕
               </button>
             </div>
-            
+
             <form className="space-y-6" onSubmit={submitPasswordChange}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2364,12 +2601,15 @@ const MyPage = () => {
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   onClick={async () => {
-                    const res = await UserService.deleteAccount(userProfile?.userId || '', '');
+                    const res = await UserService.deleteAccount(
+                      userProfile?.userId || "",
+                      ""
+                    );
                     alert(res.message);
                     if (res.success) {
                       AuthService.removeAccessToken();
                       setShowWithdrawalModal(false);
-                      navigate('/login');
+                      navigate("/login");
                     }
                   }}
                   className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
