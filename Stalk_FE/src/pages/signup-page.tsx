@@ -50,6 +50,43 @@ const SignupPage = () => {
     thirdPartyAgreement: false
   });
 
+  // 유효성 힌트 표시용 상태
+  const getPasswordValidation = () => {
+    if (!formData.password) return { isValid: true, errors: [] };
+    
+    const password = formData.password;
+    const errors = [];
+    
+    if (password.length < 8 || password.length > 20) {
+      errors.push('8~20자 길이');
+    }
+    if (!/(?=.*[0-9])/.test(password)) {
+      errors.push('숫자 포함');
+    }
+    if (!/(?=.*[a-z])/.test(password)) {
+      errors.push('소문자 포함');
+    }
+    if (!/(?=.*[A-Z])/.test(password)) {
+      errors.push('대문자 포함');
+    }
+    if (!/(?=.*[@#$%^&+=!])/.test(password)) {
+      errors.push('특수문자(@#$%^&+=!) 포함');
+    }
+    if (/\s/.test(password)) {
+      errors.push('공백 불가');
+    }
+    
+    return { isValid: errors.length === 0, errors };
+  };
+  
+  const passwordValidation = getPasswordValidation();
+
+  const isContactValid = (() => {
+    if (!formData.contact) return true; // 미입력 시 경고 비표시
+    const onlyDigits = formData.contact.replace(/[^0-9]/g, '');
+    return /^\d{9,11}$/.test(onlyDigits);
+  })();
+
   // URL 파라미터에서 사용자 타입 읽기
   useEffect(() => {
     const typeParam = searchParams.get('type');
@@ -543,17 +580,7 @@ const SignupPage = () => {
             <p className="text-lg text-gray-600">Sign up</p>
           </div>
 
-          {/* Error Message */}
-          {errorMessage && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center space-x-2 text-red-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm font-medium">{errorMessage}</span>
-              </div>
-            </div>
-          )}
+          {/* Error Message moved below submit button */}
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Profile Photo Section (Expert only) */}
             {userType === 'expert' && (
@@ -713,6 +740,27 @@ const SignupPage = () => {
                     required
                   />
                 </div>
+                {/* Password helper */}
+                <div className="text-left ml-[33%] -mt-2 mb-2 text-xs">
+                  {formData.password ? (
+                    passwordValidation.isValid ? (
+                      <div className="text-green-600">✓ 비밀번호 조건을 모두 만족합니다</div>
+                    ) : (
+                      <div className="text-red-600">
+                        
+                        <ul className="list-disc list-inside ml-2">
+                          {passwordValidation.errors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  ) : (
+                    <div className="text-gray-500">
+                      비밀번호는 8~20자, 숫자·대문자·소문자·특수문자 포함, 공백 불가
+                    </div>
+                  )}
+                </div>
 
                 {/* Confirm Password */}
                 <div className='flex flex-row items-center mb-2'>
@@ -776,6 +824,10 @@ const SignupPage = () => {
                       required
                     />
                   </div>
+                  {/* Contact helper */}
+                  <p className={`ml-[33%] -mt-2 mb-2 text-xs ${isContactValid ? 'text-gray-500' : 'text-red-600'}`}>
+                    숫자만 9~11자리 입력 (하이픈 제외)
+                  </p>
                 {/* Email */}
                 <div className='flex flex-row items-start mb-2'>
                   <h3 className="mt-3 w-2/6 text-sm font-medium text-gray-700 mb-2 text-left">
@@ -829,6 +881,10 @@ const SignupPage = () => {
                         >
                           {isEmailSent ? '인증번호 재발송' : '인증번호 보내기'}
                         </button>
+                        {/* Email helper */}
+                        <p className="text-xs text-gray-500 mt-2">
+                          유효한 이메일 주소 형식이어야 하며, 인증을 완료해야 회원가입이 가능합니다.
+                        </p>
                     </div>
                   
                 </div>
@@ -1071,6 +1127,16 @@ const SignupPage = () => {
                 >
                   {isSubmitting ? '처리 중...' : '회원가입 완료'}
                 </button>
+                {errorMessage && (
+                  <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-left">
+                    <div className="flex items-center space-x-2 text-red-600">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">{errorMessage}</span>
+                    </div>
+                  </div>
+                )}
                 {!isAllTermsAgreed && (
                   <p className="text-red-500 text-sm mt-5">
                     필수 약관에 모두 동의해주세요.
