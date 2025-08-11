@@ -168,27 +168,25 @@ const ExpertsPage = () => {
     console.log("첫 번째 전문가 스타일:", filteredExperts[0].preferredStyle);
   }
 
-  // 정렬 적용
   const sortedExperts = [...filteredExperts].sort((a, b) => {
-    // 현재 로그인한 사용자 정보 가져오기
     const currentUserInfo = AuthService.getUserInfo();
-    const currentUserName = currentUserInfo?.name; // 사용자 이름으로 매칭
+    const currentUserId = currentUserInfo?.id; // 👈 이제 숫자 ID 사용 가능
 
     // 로그인한 전문가의 글이 있다면 맨 위로 고정
-    if (userInfo?.role === "ADVISOR" && currentUserName) {
-      const aIsCurrentUser = a.name === currentUserName;
-      const bIsCurrentUser = b.name === currentUserName;
+    if (userInfo?.role === "ADVISOR" && currentUserId) {
+      const aIsCurrentUser = a.id === currentUserId;
+      const bIsCurrentUser = b.id === currentUserId;
 
-      if (aIsCurrentUser && !bIsCurrentUser) return -1; // a를 위로
-      if (!aIsCurrentUser && bIsCurrentUser) return 1; // b를 위로
+      if (aIsCurrentUser && !bIsCurrentUser) return -1;
+      if (!aIsCurrentUser && bIsCurrentUser) return 1;
+
+      console.log("로그인한 전문가가 존재하므로 해당 프로필을 맨 위에 고정");
     }
 
     // 일반 정렬 로직
     if (sortBy === "recent") {
-      // 최근 등록순 (createdAt 기준)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     } else if (sortBy === "many reviews") {
-      // 리뷰 많은순
       return b.reviewCount - a.reviewCount;
     }
     return 0;
@@ -424,13 +422,12 @@ const ExpertsPage = () => {
         {/* Expert Profiles */}
         <div className="space-y-6">
           {sortedExperts.map((expert) => {
-            // 현재 로그인한 사용자의 카드인지 확인
             const currentUserInfo = AuthService.getUserInfo();
-            const currentUserId = currentUserInfo?.Id;
+            const currentUserId = currentUserInfo?.id; // ✅ 소문자 id, 숫자 값
             const isCurrentUser =
               userInfo?.role === "ADVISOR" &&
               currentUserId &&
-              expert.id === currentUserId;
+              expert.id === currentUserId; // ✅ 숫자끼리 비교로 정상 매칭
 
             return (
               <div

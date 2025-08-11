@@ -42,7 +42,11 @@
                #{request.preferredTradeStyle},
                NOW(),
                NOW()
-             )
+             );
+
+    UPDATE advisor
+    SET is_profile_completed = 1
+    WHERE advisor_id = #{advisorId};
   </insert>
 
   <!-- 전문가 상세 정보 수정 -->
