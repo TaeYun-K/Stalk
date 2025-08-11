@@ -92,24 +92,21 @@ type ChartInfo = {
 const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
   const canvas: HTMLCanvasElement = chart.canvas;
   const canvasRect = canvas.getBoundingClientRect();
-
-  // 현재 오버레이는 chartContainerRef 전체를 덮고 있음
   const overlay = document.getElementById('drawing-canvas')!;
+  const overlayRect = overlay.getBoundingClientRect();
 
-  // DOM px → 캔버스 내부 px (DPR 고려)
   const scaleX = canvas.width / canvasRect.width;
   const scaleY = canvas.height / canvasRect.height;
 
-  // 1) DOM px -> 캔버스 전체 px
-  const xCanvasFull = (xStage - canvasRect.left) * scaleX;
-  const yCanvasFull = (yStage - canvasRect.top)  * scaleY;
+  // (오버레이 로컬 px → 페이지 px) → (캔버스 CSS px) → (캔버스 비트맵 px)
+  const xCanvasFullCss = (overlayRect.left + xStage) - canvasRect.left;
+  const yCanvasFullCss = (overlayRect.top  + yStage) - canvasRect.top;
+  const xCanvasFull = xCanvasFullCss * scaleX;
+  const yCanvasFull = yCanvasFullCss * scaleY;
 
-  // 2) chartArea 보정: chartArea 기준 px로 변환
+  // chartArea 원점 기준으로 변환
   const { left, top } = chart.chartArea;
-  const xCanvas = xCanvasFull - left;
-  const yCanvas = yCanvasFull - top;
-
-  return { x: xCanvas, y: yCanvas };
+  return { x: xCanvasFull - left, y: yCanvasFull - top };
 };
 
 // stage(px) -> canvas(chartArea px) -> data 좌표
@@ -172,15 +169,15 @@ const toPixelsShape = (shape: any, chart: any) => {
   if (!shape || shape.coordType !== 'data' || !chart?.scales?.x) return shape;
 
   const clone = { ...shape };
-  if (clone.attry && Array.isArray(clone.points)) {
+  if (clone.attrs && Array.isArray(clone.attrs.points)) {
     const flat: number[] = [];
-    for (let i = 0; i < clone.points.length; i += 2) {
+    for (let i = 0; i < clone.attrs.points.length; i += 2) {
       const s = dataToStagePxPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
       flat.push(s.x, s.y);
     }
     clone.attrs = { ...clone.attrs, points: flat };
-  } 
-  
+  }
+
   if (clone.p1 && clone.p2) {
     clone.p1 = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
     clone.p2 = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
@@ -212,48 +209,39 @@ const toPixelsShape = (shape: any, chart: any) => {
 };
 
 // shape를 px -> data 변환
-const toDataShape = (shape: any, chart: any) => {
-  if (!shape || !chart?.scales?.x) return shape;
-  const clone = { ...shape };
-  if (clone.attrs && Array.isArray(clone.points)) {
-    const pts: number[] = [];
-    for (let i = 0; i < clone.points.length; i += 2) {
-      const d = stagePxToDataPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
-      pts.push(d.x, d.y);
+function toDataShape(shape: any, chart: any) {
+  // 방어: chart 스케일 없으면 변환 못 함
+  if (!chart || !chart.scales || !chart.scales.x || !chart.scales.y) return shape;
+
+  const clone = JSON.parse(JSON.stringify(shape)); // deep copy
+  clone.attrs = clone.attrs ?? {};
+
+  const pts = clone.attrs.points;
+
+  // 1) 선/폴리라인 계열: points 배열이 있을 때만 변환
+  if (Array.isArray(pts)) {
+    const out: number[] = [];
+    for (let i = 0; i < pts.length; i += 2) {
+      const d = stagePxToDataPoint(chart, pts[i], pts[i + 1]);
+      out.push(d.x, d.y);
     }
-    clone.attrs = { ...clone.attrs, points: pts };
-  } 
-  if (clone.p1 && clone.p2) {
-    clone.p1 = stagePxToDataPoint(chart, clone.p1.x, clone.p1.y);
-    clone.p2 = stagePxToDataPoint(chart, clone.p2.x, clone.p2.y);
+    clone.attrs.points = out;
+    clone.coordType = 'data';
+    return clone;
   }
 
-  // 3) 타입별 attrs 변환
-  if (clone.type === 'rectangle' && clone.attrs) {
-    const a = clone.attrs;
-    const p1 = stagePxToDataPoint(chart, a.x, a.y);
-    const p2 = stagePxToDataPoint(chart, a.x + a.width, a.y + a.height);
-    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  // 2) 점/레이블 등 (x,y) 사용하는 타입을 위한 옵션 처리
+  if (typeof clone.attrs.x === 'number' && typeof clone.attrs.y === 'number') {
+    const d = stagePxToDataPoint(chart, clone.attrs.x, clone.attrs.y);
+    clone.attrs.x = d.x;
+    clone.attrs.y = d.y;
+    clone.coordType = 'data';
+    return clone;
   }
 
-  if (clone.type === 'circle' && clone.attrs) {
-    const a = clone.attrs;
-    const c = stagePxToDataPoint(chart, a.x, a.y);
-    const r = stagePxToDataPoint(chart, a.x + a.radius, a.y);
-    const rx = Math.abs(r.x - c.x);
-    // data 공간에선 radiusX/Y로 들고 싶다면 여기에 radiusX/Y 저장도 가능
-    clone.attrs = { ...a, x: c.x, y: c.y, radiusX: rx, radiusY: rx, radius: rx };
-  }
-
-  if (clone.type === 'text' && clone.attrs) {
-    const a = clone.attrs;
-    const p = stagePxToDataPoint(chart, a.x, a.y);
-    clone.attrs = { ...a, x: p.x, y: p.y };
-  }
-
-  clone.coordType = 'data';
+  // 3) 변환할 좌표가 없으면 원본 반환(예외 방지)
   return clone;
-};
+}
 
 // 타입 가드
 const hasShape = (c: any): c is { type: 'add'|'update'; shape: any; version: number } =>
@@ -755,7 +743,7 @@ const StockChart: React.FC<StockChartProps> = ({
     // YYYYMMDD → Date
     if (raw && raw.length === 8 && /^\d{8}$/.test(raw)) {
       const y = +raw.slice(0,4), m = +raw.slice(4,6)-1, d = +raw.slice(6,8);
-      return new Date(y, m, d).getTime(); // ms timestamp
+      return Date.UTC(y, m, d);; // ms timestamp
     }
     // HH:MM (intraday) 같은 케이스는 오늘 날짜와 합성하거나, 백엔드에서 full datetime을 내려주면 best
     if (raw && raw.includes(':')) {
