@@ -122,6 +122,13 @@ public enum BaseResponseStatus {
   INVALID_TOKEN(HttpStatus.UNAUTHORIZED, false, 2008, "유효하지 않은 토큰입니다."),
   EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, false, 2009, "만료된 토큰입니다."),
   TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, false, 2010, "토큰이 없습니다."),
+
+  // 닉네임 중복 에러 코드 추가
+  NICKNAME_DUPLICATION(HttpStatus.CONFLICT, false, 2011, "이미 사용중인 닉네임입니다."),
+  // 파일 업로드 실패 에러 코드 추가
+  FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 2012, "파일 업로드에 실패했습니다."),
+
+
   // ===== 토큰/인증 관련 에러 (2100번대) =====
   MISSING_TOKEN(HttpStatus.UNAUTHORIZED, false, 2101, "인증 토큰이 필요합니다."),
   INVALID_TOKEN_FORMAT(HttpStatus.UNAUTHORIZED, false, 2102, "토큰 형식이 올바르지 않습니다."),

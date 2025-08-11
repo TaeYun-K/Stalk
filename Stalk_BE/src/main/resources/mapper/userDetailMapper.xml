@@ -44,19 +44,12 @@
     WHERE id = #{userId}
   </select>
 
-  <!-- 사용자 비활성화 (Soft Delete) -->
-  <update id="deactivateUser">
-    UPDATE users
-    SET is_active  = 0,
-        deleted_at = NOW(),
-        user_id    = CONCAT('deactivated_', user_id, '_', UNIX_TIMESTAMP()),
-        nickname   = CONCAT('탈퇴한사용자_', id),
-        email      = CONCAT('deactivated_', id, '@deleted.com'),
-        contact    = NULL, -- 연락처 정보 삭제
-        password   = NULL  -- 비밀번호 정보 삭제
-    WHERE id = #{userId}
+  <select id="findByNickname" resultType="com.Stalk.project.api.signup.entity.User">
+    SELECT *
+    FROM users
+    WHERE nickname = #{nickname}
       AND is_active = 1
-  </update>
+  </select>
 
   <!-- 사용자 정보 업데이트 쿼리 -->
   <update id="updateUserProfile">
@@ -78,4 +71,27 @@
     WHERE id = #{userId}
   </update>
 
+
+  <!-- 사용자 비활성화 (Soft Delete) -->
+  <update id="deactivateUser">
+    UPDATE users
+    SET is_active  = 0,
+        deleted_at = NOW(),
+        user_id    = CONCAT('deactivated_', user_id, '_', UNIX_TIMESTAMP()),
+        nickname   = CONCAT('탈퇴한사용자_', id),
+        email      = CONCAT('deactivated_', id, '@deleted.com'),
+        contact    = NULL, -- 연락처 정보 삭제
+        password   = NULL  -- 비밀번호 정보 삭제
+    WHERE id = #{userId}
+      AND is_active = 1
+  </update>
+
+  <!-- 프로필 업데이트 (닉네임, 이미지 경로) -->
+  <update id="updateProfile" parameterType="com.Stalk.project.api.signup.entity.User">
+    UPDATE users
+    SET nickname   = #{nickname},
+        image      = #{image},
+        updated_at = NOW()
+    WHERE id = #{id}
+  </update>
 </mapper>

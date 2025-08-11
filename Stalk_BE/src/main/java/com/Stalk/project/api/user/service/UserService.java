@@ -7,9 +7,19 @@ import static com.Stalk.project.global.response.BaseResponseStatus.USER_NOT_FOUN
 import com.Stalk.project.api.login.service.AuthService;
 import com.Stalk.project.api.signup.entity.User;
 import com.Stalk.project.api.user.dto.in.PasswordChangeRequestDto;
+import com.Stalk.project.api.user.dto.in.ProfileUpdateRequestDto;
+import com.Stalk.project.api.user.dto.out.ProfileUpdateResponseDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +30,7 @@ import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +39,9 @@ public class UserService {
   private final UserProfileMapper userProfileMapper;
   private final AuthService authService;
   private final PasswordEncoder passwordEncoder;
+
+  @Value("${file.upload-dir}")
+  private String uploadDir;
 
   public UserProfileResponseDto getUserProfile(Long userId) {
     // 기존 메서드 유지
@@ -183,5 +197,52 @@ public class UserService {
 
     // @Transactional에 의해 메소드 종료 시 변경 감지(Dirty Checking)로 자동 업데이트
     // userRepository.save(user); // 명시적으로 호출해도 무방
+  }
+
+  @Transactional
+  public ProfileUpdateResponseDto updateNicknameAndImage(Long userId,
+      ProfileUpdateRequestDto requestDto) {
+    // 사용자 존재 여부 확인
+    User user = userProfileMapper.findUserById(userId);
+    if (user == null) {
+      throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
+    }
+
+    // 닉네임 중복 확인 (자기 자신은 제외)
+    String newNickname = requestDto.getNickname();
+    userProfileMapper.findByNickname(newNickname).ifPresent(foundUser -> {
+      if (!Objects.equals(foundUser.getId(), userId)) {
+        throw new BaseException(BaseResponseStatus.NICKNAME_DUPLICATION);
+      }
+    });
+
+    // 프로필 이미지가 새로 업로드되었는지 확인
+    MultipartFile profileImageFile = requestDto.getProfileImage();
+    if (profileImageFile != null && !profileImageFile.isEmpty()) {
+
+      // 새 이미지 로컬에 업로드
+      try {
+        String originalFilename = profileImageFile.getOriginalFilename();
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+          extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+        String uniqueFilename = UUID.randomUUID().toString() + extension;
+
+        // 물리적 저장 경로: {uploadDir}/profile/{uniqueFilename}
+        Path physicalPath = Paths.get(uploadDir, "profile", uniqueFilename);
+        Files.createDirectories(physicalPath.getParent());
+        profileImageFile.transferTo(physicalPath.toFile());
+
+      } catch (IOException e) {
+        throw new BaseException(BaseResponseStatus.FILE_UPLOAD_FAILED, e);
+      }
+    }
+
+    // DB에 변경된 User 객체 정보 업데이트
+    userProfileMapper.updateProfile(user);
+
+    // 변경된 정보로 응답 DTO 생성 및 반환
+    return new ProfileUpdateResponseDto(user.getId(), user.getNickname(), user.getImage());
   }
 }
