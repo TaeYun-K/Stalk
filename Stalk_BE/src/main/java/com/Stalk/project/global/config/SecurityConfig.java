@@ -164,6 +164,9 @@ public class SecurityConfig {
             // 회원, 로그인 관련 API - 인증 없이 열어둘 엔드포인트
             .requestMatchers("/api/auth/**").permitAll()
 
+            // 전문가 목록, 정보 관련 - 인증 없이 열어두기
+            .requestMatchers("/api/advisors/**").permitAll()
+
             // 회원 탈퇴 API는 인증된 사용자만 접근 가능하도록 설정
             .requestMatchers(HttpMethod.PATCH, "/api/users/me/deactivate").authenticated()
 
