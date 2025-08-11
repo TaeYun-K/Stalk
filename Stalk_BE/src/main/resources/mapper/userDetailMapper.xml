@@ -7,16 +7,18 @@
   <!-- 사용자 프로필 조회 -->
   <select id="findUserProfileById"
     resultType="com.Stalk.project.api.user.dto.out.UserProfileResponseDto">
-    SELECT user_id as userId,
-           name,
-           contact,
-           email,
-           image   as profileImage,
-           role
+    SELECT id,                    <!-- 👈 새로 추가: 숫자 기본키 -->
+    user_id as userId,
+    name,
+    nickname,              <!-- 👈 새로 추가: 커뮤니티 닉네임 -->
+    contact,
+    email,
+    image   as profileImage,
+    role
     FROM users
     WHERE id = #{userId}
-      AND is_active = 1
-      AND deleted_at IS NULL
+    AND is_active = 1
+    AND deleted_at IS NULL
   </select>
 
   <!-- ID로 사용자 정보 조회 -->
