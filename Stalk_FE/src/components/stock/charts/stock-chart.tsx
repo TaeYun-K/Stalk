@@ -108,23 +108,23 @@ type OpenViduSignalEvent = {
   type: string;
 };
 
+const getDpr = (chart: any) =>
+  chart?.currentDevicePixelRatio ?? window.devicePixelRatio ?? 1;
 
 // 캔버스/오버레이 사이 좌표 변환 함수
 const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
-  const canvas: HTMLCanvasElement = chart.canvas;
-  const canvasRect = canvas.getBoundingClientRect();
-  const overlay = document.getElementById('drawing-canvas')!;
-  const overlayRect = overlay.getBoundingClientRect();
+  const dpr = getDpr(chart);
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const overlayRect = document.getElementById('drawing-canvas')!.getBoundingClientRect();
 
-  // const dpr = getDpr(chart); // 제거
+  const xCanvasCss = (overlayRect.left + xStage) - canvasRect.left; // CSS px
+  const yCanvasCss = (overlayRect.top  + yStage) - canvasRect.top;  // CSS px
 
-  // overlay 로컬(CSS px) → 캔버스(CSS px)
-  const xCanvasCss = (overlayRect.left + xStage) - canvasRect.left;
-  const yCanvasCss = (overlayRect.top + yStage) - canvasRect.top;
+  const { left, top } = chart.chartArea; // 캔버스 px
+  const xCanvas = xCanvasCss * dpr; // CSS -> 캔버스 px
+  const yCanvas = yCanvasCss * dpr;
 
-  // chartArea 원점(CSS px) 기준으로 변환
-  const { left, top } = chart.chartArea;
-  return { x: xCanvasCss - left, y: yCanvasCss - top }; // DPR 없이
+  return { x: xCanvas - left, y: yCanvas - top }; // chartArea 원점 기준(캔버스 px)
 };
 
 // stage(px) -> canvas(chartArea px) -> data 좌표
@@ -135,21 +135,19 @@ const stagePxToDataPoint = (chart: any, sx: number, sy: number) => {
 
 // 캔버스/오버레이 사이 좌표 변환 함수 
 const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
-  const canvas: HTMLCanvasElement = chart.canvas;
-  const canvasRect = canvas.getBoundingClientRect();
-  const overlay = document.getElementById('drawing-canvas')!;
-  const overlayRect = overlay.getBoundingClientRect();
+  const dpr = getDpr(chart);
+  const { left, top } = chart.chartArea; // 캔버스 px
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const overlayRect = document.getElementById('drawing-canvas')!.getBoundingClientRect();
 
-  // const dpr = getDpr(chart); // 제거
-  const { left, top } = chart.chartArea;
+  const xCanvasAbs = xCanvas + left; // 캔버스 px
+  const yCanvasAbs = yCanvas + top;  // 캔버스 px
 
-  // chartArea px(논리적) → 캔버스 전체 px(논리적)
-  const xCanvasCss = xCanvas + left; // DPR 없이 더함
-  const yCanvasCss = yCanvas + top;
+  const xCanvasCss = xCanvasAbs / dpr; // 캔버스 -> CSS px
+  const yCanvasCss = yCanvasAbs / dpr;
 
-  // CSS px → 오버레이 로컬(px)
   const xStage = xCanvasCss + (canvasRect.left - overlayRect.left);
-  const yStage = yCanvasCss + (canvasRect.top - overlayRect.top);
+  const yStage = yCanvasCss + (canvasRect.top  - overlayRect.top);
   return { x: xStage, y: yStage };
 };
 
@@ -383,13 +381,14 @@ const StockChart: React.FC<StockChartProps> = ({
     const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
     if (!chart || !ovl || !chart.chartArea) return;
 
-    const { left, top, width, height } = chart.chartArea;
+    const dpr = getDpr(chart);
+    const { left, top, width, height } = chart.chartArea; // 캔버스 px
 
-    // 캔버스 엘리먼트의 상대적인 위치를 기준으로 오버레이 캔버스 위치/크기 조정
-    ovl.style.left = `${left}px`; // DPR 없이
-    ovl.style.top = `${top}px`;
-    ovl.style.width = `${width}px`;
-    ovl.style.height = `${height}px`;
+    // CSS px로 환산해서 스타일 지정
+    ovl.style.left = `${left   / dpr}px`;
+    ovl.style.top  = `${top    / dpr}px`;
+    ovl.style.width  = `${width  / dpr}px`;
+    ovl.style.height = `${height / dpr}px`;
   };
 
   // chartArea 변동 감지 후

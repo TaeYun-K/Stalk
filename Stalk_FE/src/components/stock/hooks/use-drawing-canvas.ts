@@ -725,13 +725,11 @@ export const useDrawingCanvas = (
     console.log('Konva Stage 생성 중...', { width, height });
 
     // Konva Stage 생성 - use container ID string
-    const dpr = window.devicePixelRatio || 1;
     const stage = new Konva.Stage({
       container: 'drawing-canvas',
-      width: width * dpr,
-      height: height * dpr,
+      width: width,
+      height: height,
     });
-    stage.scale({ x: dpr, y: dpr });
 
     // Layer 생성
     const layer = new Konva.Layer({ listening: true });
