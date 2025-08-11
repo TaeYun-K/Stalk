@@ -95,12 +95,34 @@ const ExpertsPage = () => {
       expert.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       expert.shortIntro.toLowerCase().includes(searchTerm.toLowerCase());
 
-    // 카테고리 필터링 (다중 선택 지원)
+    // 카테고리를 두 그룹으로 미리 정의
+    const investmentStyles = ["단기", "중단기", "중기", "중장기", "장기"];
+    const certificateCategories = [
+      "금융투자상담사",
+      "증권분석사",
+      "CFA",
+      "CPA",
+    ];
+
+    // 선택된 카테고리를 두 그룹으로 분리
+    const selectedInvestmentStyles = selectedCategories.filter((category) =>
+      investmentStyles.includes(category)
+    );
+    const selectedCertificates = selectedCategories.filter((category) =>
+      certificateCategories.includes(category)
+    );
+
     let matchesCategories = true;
-    if (selectedCategories.length > 0) {
-      // 선택된 모든 카테고리를 만족해야 함 (AND 조건)
-      matchesCategories = selectedCategories.every((category) => {
-        // 카테고리와 preferredStyle 매칭
+
+    if (
+      selectedInvestmentStyles.length > 0 ||
+      selectedCertificates.length > 0
+    ) {
+      let investmentStyleMatch = true;
+      let certificateMatch = true;
+
+      // 투자성향 그룹 처리 (OR 조건)
+      if (selectedInvestmentStyles.length > 0) {
         const styleMap: Record<string, string> = {
           단기: "SHORT",
           중단기: "MID_SHORT",
@@ -109,15 +131,22 @@ const ExpertsPage = () => {
           장기: "LONG",
         };
 
-        const styleMatch = styleMap[category] === expert.preferredStyle;
-
-        // 자격증 이름에서도 카테고리 검색
-        const certMatch = expert.certificates.some((cert) =>
-          cert.certificateName.includes(category)
+        investmentStyleMatch = selectedInvestmentStyles.some(
+          (style) => styleMap[style] === expert.preferredStyle
         );
+      }
 
-        return styleMatch || certMatch;
-      });
+      // 자격증 그룹 처리 (OR 조건)
+      if (selectedCertificates.length > 0) {
+        certificateMatch = selectedCertificates.some((certCategory) =>
+          expert.certificates.some((cert) =>
+            cert.certificateName.includes(certCategory)
+          )
+        );
+      }
+
+      // 두 그룹 간 AND 처리
+      matchesCategories = investmentStyleMatch && certificateMatch;
     }
 
     return matchesSearch && matchesCategories;
@@ -337,14 +366,14 @@ const ExpertsPage = () => {
               </button>
               {/* Certificates */}
               <button
-                onClick={() => handleCategoryClick("금융투자분석사")}
+                onClick={() => handleCategoryClick("금융투자상담사")}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedCategories.includes("금융투자분석사")
+                  selectedCategories.includes("금융투자상담사")
                     ? "bg-blue-500 text-white hover:bg-blue-600"
                     : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700"
                 }`}
               >
-                금융투자분석사
+                금융투자상담사
               </button>
               <button
                 onClick={() => handleCategoryClick("CFA")}
@@ -397,11 +426,11 @@ const ExpertsPage = () => {
           {sortedExperts.map((expert) => {
             // 현재 로그인한 사용자의 카드인지 확인
             const currentUserInfo = AuthService.getUserInfo();
-            const currentUserName = currentUserInfo?.name;
+            const currentUserId = currentUserInfo?.Id;
             const isCurrentUser =
               userInfo?.role === "ADVISOR" &&
-              currentUserName &&
-              expert.name === currentUserName;
+              currentUserId &&
+              expert.id === currentUserId;
 
             return (
               <div
