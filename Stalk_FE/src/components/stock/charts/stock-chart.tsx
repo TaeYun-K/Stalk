@@ -88,40 +88,125 @@ type ChartInfo = {
   period: string;
 };
 
+// 캔버스/오버레이 사이 좌표 변환 함수
+const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
+  const canvas: HTMLCanvasElement = chart.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
+
+  // 현재 오버레이는 chartContainerRef 전체를 덮고 있음
+  const overlay = document.getElementById('drawing-canvas')!;
+
+  // DOM px → 캔버스 내부 px (DPR 고려)
+  const scaleX = canvas.width / canvasRect.width;
+  const scaleY = canvas.height / canvasRect.height;
+
+  // 1) DOM px -> 캔버스 전체 px
+  const xCanvasFull = (xStage - canvasRect.left) * scaleX;
+  const yCanvasFull = (yStage - canvasRect.top)  * scaleY;
+
+  // 2) chartArea 보정: chartArea 기준 px로 변환
+  const { left, top } = chart.chartArea;
+  const xCanvas = xCanvasFull - left;
+  const yCanvas = yCanvasFull - top;
+
+  return { x: xCanvas, y: yCanvas };
+};
+
+// stage(px) -> canvas(chartArea px) -> data 좌표
+const stagePxToDataPoint = (chart: any, sx: number, sy: number) => {
+  const c = stageToCanvasPx(chart, sx, sy);         // stage -> canvas(px)
+  return pxToData(chart, c.x, c.y);                 // canvas(px) -> data
+};
+
+// 캔버스/오버레이 사이 좌표 변환 함수 
+const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
+  const canvas: HTMLCanvasElement = chart.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
+  const overlay = document.getElementById('drawing-canvas')!;
+  const overlayRect = overlay.getBoundingClientRect();
+
+  const scaleX = canvas.width / canvasRect.width;
+  const scaleY = canvas.height / canvasRect.height;
+
+  // 1) chartArea px -> 캔버스 전체 px
+  const { left, top } = chart.chartArea;
+  const xCanvasFull = xCanvas + left;
+  const yCanvasFull = yCanvas + top;
+
+  // 2) 캔버스 전체 px -> DOM px -> 오버레이 좌표계(px)
+  const xStage = (xCanvasFull / scaleX) + (canvasRect.left - overlayRect.left);
+  const yStage = (yCanvasFull / scaleY) + (canvasRect.top  - overlayRect.top);
+  return { x: xStage, y: yStage };
+};
+
+// data 좌표 -> canvas(chartArea px) -> stage(px)
+const dataToStagePxPoint = (chart: any, dx: number, dy: number) => {
+  const c = dataToPx(chart, dx, dy);                // data -> canvas(px)
+  return canvasToStagePx(chart, c.x, c.y);          // canvas(px) -> stage(px)
+};
 
 // 데이터 좌표로 변환하기 위한 type
 type DataPoint = { x: number; y: number }; // x: timestamp(ms), y: price
 
 // px to data 변환
-const pxToData = (chart: any, px: number, py: number): DataPoint => ({
-  x: chart.scales.x.getValueForPixel(px),
-  y: chart.scales.y.getValueForPixel(py),
-});
+const pxToData = (chart: any, px: number, py: number) => {
+  const { left, top } = chart.chartArea;
+  const xCanvas = px + left;
+  const yCanvas = py + top;
+  return {
+    x: chart.scales.x.getValueForPixel(xCanvas),
+    y: chart.scales.y.getValueForPixel(yCanvas),
+  };
+};
 
 // data to px 
-const dataToPx = (chart: any, x: number, y: number) => ({
-  x: chart.scales.x.getPixelForValue(x),
-  y: chart.scales.y.getPixelForValue(y),
-});
+const dataToPx = (chart: any, xVal: number, yVal: number) => {
+  const xCanvas = chart.scales.x.getPixelForValue(xVal);
+  const yCanvas = chart.scales.y.getPixelForValue(yVal);
+  const { left, top } = chart.chartArea; // chartArea를 (0,0)로 변환
+  return { x: xCanvas - left, y: yCanvas - top };
+};
 
 // shape를 data -> px 로 변환
 const toPixelsShape = (shape: any, chart: any) => {
   if (!shape || shape.coordType !== 'data' || !chart?.scales?.x) return shape;
 
   const clone = { ...shape };
-  if (Array.isArray(clone.points)) {
+  if (clone.attry && Array.isArray(clone.points)) {
     const flat: number[] = [];
     for (let i = 0; i < clone.points.length; i += 2) {
-      const px = dataToPx(chart, clone.points[i], clone.points[i + 1]);
-      flat.push(px.x, px.y);
+      const s = dataToStagePxPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
+      flat.push(s.x, s.y);
     }
-    clone.points = flat;
-  } else if (clone.p1 && clone.p2) {
-    const a = dataToPx(chart, clone.p1.x, clone.p1.y);
-    const b = dataToPx(chart, clone.p2.x, clone.p2.y);
-    clone.p1 = a;
-    clone.p2 = b;
+    clone.attrs = { ...clone.attrs, points: flat };
+  } 
+  
+  if (clone.p1 && clone.p2) {
+    clone.p1 = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
   }
+
+  if (clone.type === 'rectangle' && clone.attrs) {
+    const a = clone.attrs;
+    const p1 = dataToStagePxPoint(chart, a.x, a.y);
+    const p2 = dataToStagePxPoint(chart, a.x + a.width, a.y + a.height);
+    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  }
+
+  if (clone.type === 'circle' && clone.attrs) {
+    const a = clone.attrs;
+    const c = dataToStagePxPoint(chart, a.x, a.y);
+    const r = dataToStagePxPoint(chart, a.x + (a.radiusX ?? a.radius), a.y);
+    const rx = Math.abs(r.x - c.x);
+    clone.attrs = { ...a, x: c.x, y: c.y, radius: rx };
+  }
+
+  if (clone.type === 'text' && clone.attrs) {
+    const a = clone.attrs;
+    const p = dataToStagePxPoint(chart, a.x, a.y);
+    clone.attrs = { ...a, x: p.x, y: p.y };
+  }
+
   clone.coordType = 'px';
   return clone;
 };
@@ -130,17 +215,42 @@ const toPixelsShape = (shape: any, chart: any) => {
 const toDataShape = (shape: any, chart: any) => {
   if (!shape || !chart?.scales?.x) return shape;
   const clone = { ...shape };
-  if (Array.isArray(clone.points)) {
+  if (clone.attrs && Array.isArray(clone.points)) {
     const pts: number[] = [];
     for (let i = 0; i < clone.points.length; i += 2) {
-      const d = pxToData(chart, clone.points[i], clone.points[i + 1]);
+      const d = stagePxToDataPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
       pts.push(d.x, d.y);
     }
-    clone.points = pts;
-  } else if (clone.p1 && clone.p2) {
-    clone.p1 = pxToData(chart, clone.p1.x, clone.p1.y);
-    clone.p2 = pxToData(chart, clone.p2.x, clone.p2.y);
+    clone.attrs = { ...clone.attrs, points: pts };
+  } 
+  if (clone.p1 && clone.p2) {
+    clone.p1 = stagePxToDataPoint(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = stagePxToDataPoint(chart, clone.p2.x, clone.p2.y);
   }
+
+  // 3) 타입별 attrs 변환
+  if (clone.type === 'rectangle' && clone.attrs) {
+    const a = clone.attrs;
+    const p1 = stagePxToDataPoint(chart, a.x, a.y);
+    const p2 = stagePxToDataPoint(chart, a.x + a.width, a.y + a.height);
+    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  }
+
+  if (clone.type === 'circle' && clone.attrs) {
+    const a = clone.attrs;
+    const c = stagePxToDataPoint(chart, a.x, a.y);
+    const r = stagePxToDataPoint(chart, a.x + a.radius, a.y);
+    const rx = Math.abs(r.x - c.x);
+    // data 공간에선 radiusX/Y로 들고 싶다면 여기에 radiusX/Y 저장도 가능
+    clone.attrs = { ...a, x: c.x, y: c.y, radiusX: rx, radiusY: rx, radius: rx };
+  }
+
+  if (clone.type === 'text' && clone.attrs) {
+    const a = clone.attrs;
+    const p = stagePxToDataPoint(chart, a.x, a.y);
+    clone.attrs = { ...a, x: p.x, y: p.y };
+  }
+
   clone.coordType = 'data';
   return clone;
 };
@@ -219,6 +329,43 @@ const StockChart: React.FC<StockChartProps> = ({
   const rsiChartRef = useRef<any>(null);
   const macdChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
+
+  const totalLen = chartRef.current?.data?.datasets?.[0]?.data?.length ?? 0;
+
+  
+
+  // price 차트 렌더 직후와 리사이즈마다 호출
+  const syncOverlayToChartArea = () => {
+    const chart = chartRef.current;
+    const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
+    const container = chartContainerRef.current;
+    if (!chart || !ovl || !chart.chartArea || !container) return;
+
+    const { left, top, width, height } = chart.chartArea;
+
+    // 캔버스가 컨테이너 안에서 어디에 놓였는지 보정
+    const canvas: HTMLCanvasElement = chart.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    const canvasOffsetX = canvasRect.left - containerRect.left;
+    const canvasOffsetY = canvasRect.top  - containerRect.top;
+
+    ovl.style.left   = `${canvasOffsetX + left}px`;
+    ovl.style.top    = `${canvasOffsetY + top}px`;
+    ovl.style.width  = `${width}px`;
+    ovl.style.height = `${height}px`;
+  };
+
+  // chartArea 변동 감지 후
+  const reprojectAllShapes = () => {
+    const chart = chartRef.current;
+    if (!chart?.scales?.x) return;
+    const shapesPx = getAllShapes();           // 현재 스테이지(px) 기준
+    const shapesData = shapesPx.map((s:any)=> toDataShape(s, chart));
+    const shapesPxNew = shapesData.map((s:any)=> toPixelsShape(s, chart));
+    applySnapshot(shapesPxNew);                // 깜빡임 줄이려면 배치 적용
+  };
 
   const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
   const chartKey = { ticker: getCurrentTicker(), period };
@@ -301,25 +448,11 @@ const StockChart: React.FC<StockChartProps> = ({
     onChange: (change) => {
       console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
-
-      const chart = chartRef.current;
+      
       const serialize = (shape: any) => {
-        const clone = { ...shape };
-        if (Array.isArray(clone.points)) {
-          // [x1,y1,x2,y2,...] 형태라면:
-          const pts = [];
-          for (let i=0;i<clone.points.length;i+=2) {
-            const d = pxToData(chart, clone.points[i], clone.points[i+1]);
-            pts.push(d.x, d.y);
-          }
-          clone.points = pts;
-          clone.coordType = 'data';
-        } else if (clone.p1 && clone.p2) {
-          clone.p1 = pxToData(chart, clone.p1.x, clone.p1.y);
-          clone.p2 = pxToData(chart, clone.p2.x, clone.p2.y);
-          clone.coordType = 'data';
-        }
-        return clone;
+        const chart = chartRef.current;
+        if(!chart?.scales?.x) return shape;
+        return toDataShape(shape, chart);
       };
 
       let type: string;
@@ -338,6 +471,23 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   });
 
+  // 차트 그려진 직후 정렬 시킴
+  useEffect(() => {
+    if (!chartRef.current?.scales?.x) return;
+    // 차트가 안정되도록 한 틱 뒤 정렬
+    const t = setTimeout(() => {
+      syncOverlayToChartArea();
+      // 차트 레이아웃이 바뀌었으니 기존 도형 재투영
+      reprojectAllShapes();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [chartData, period, darkMode, enableFutureSpace, futureDays]);
+
+  useEffect(() => {
+    const onResize = () => { syncOverlayToChartArea(); reprojectAllShapes(); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [/* 레이아웃에 영향 주는 의존성 없음 */]);
   
   // 외부 chartInfo 들어오면 내부 period 동기화
   useEffect(() => {
@@ -435,6 +585,7 @@ const StockChart: React.FC<StockChartProps> = ({
         if (canvasContainer && chartContainerRef.current) {
           try {
             console.log('Konva 캔버스 초기화 시작');
+            syncOverlayToChartArea();
             const stage = initializeCanvas();
             if (stage && mounted) {
               konvaStage.current = stage;
@@ -778,10 +929,10 @@ const StockChart: React.FC<StockChartProps> = ({
         
         setRawData(sortedData); // Store only real data for indicator calculations
         
-        const points = finalData.map(item => {
-          x : parseToTs(item.date)
-          y : item.close
-        });
+        const points = finalData.map(item => ({
+          x : parseToTs(item.date),
+          y : item.close,
+        }));
 
         const volumePoints = finalData.map((item, i) => ({
           x: parseToTs(item.date),
@@ -793,16 +944,6 @@ const StockChart: React.FC<StockChartProps> = ({
         const opens = finalData.map(item => item.open || item.close);
         const highs = finalData.map(item => item.high || item.close);
         const lows = finalData.map(item => item.low || item.close);
-
-        // Debug: Log the data we're trying to chart
-        console.log('Chart data debug:', {
-          labelsLength: labels.length,
-          pricesLength: prices.length,
-          firstPrice: prices[0],
-          lastPrice: prices[prices.length - 1],
-          hasNullPrices: prices.some(p => p == null || isNaN(p)),
-          priceRange: [Math.min(...prices), Math.max(...prices)]
-        });
 
         // Simplified line chart configuration
         const mainDataset = {
@@ -830,6 +971,7 @@ const StockChart: React.FC<StockChartProps> = ({
           datasets: [{
             label: '거래량',
             data: volumePoints,
+            parsing: { xAxisKey: 'x', yAxisKey: 'y' },
             backgroundColor: volumes.map((_, index) => {
               if (index === 0) return 'rgba(34, 197, 94, 0.6)';
               return prices[index] >= prices[index - 1] 
@@ -853,12 +995,6 @@ const StockChart: React.FC<StockChartProps> = ({
         });
         setVolumeChartData(newVolumeData);
         
-        console.log("StockChart - 차트 데이터 설정 완료", {
-          labels: newChartData.labels.length,
-          firstLabel: newChartData.labels[0],
-          lastLabel: newChartData.labels[newChartData.labels.length - 1],
-          datasets: newChartData.datasets.length
-        });
       } else {
         console.error("StockChart - 데이터가 없음:", responseData);
         setError('차트 데이터를 불러오는데 실패했습니다.');
@@ -1484,6 +1620,11 @@ const StockChart: React.FC<StockChartProps> = ({
     },
     scales: {
       x: {
+        type: 'time',
+        time: {
+        unit: (periodDays <= 7) ? 'day' : 'day', // 메인 차트와 맞춤
+        displayFormats: { day: 'MM/dd', month: 'yyyy-MM' }
+        },
         display: false,
       },
       y: {
@@ -1830,11 +1971,11 @@ const StockChart: React.FC<StockChartProps> = ({
                   <Line key={`price-${getCurrentTicker()}-${period}-main`} data={chartData} options={chartOptions} ref={chartRef}/>
                   
                   {/* Future period visual indicator - subtle overlay only */}
-                  {enableFutureSpace && futureDays > 0 && chartData.actualDataLength < chartData.labels.length && (
+                  {enableFutureSpace && futureDays > 0 && chartData.actualDataLength < totalLen && (
                     <div 
                       className="absolute top-0 bottom-0 pointer-events-none"
                       style={{
-                        left: `${(chartData.actualDataLength / chartData.labels.length) * 100}%`,
+                        left: `${(chartData.actualDataLength / totalLen) * 100}%`,
                         right: 0,
                         background: darkMode 
                           ? 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.02) 50%, rgba(59, 130, 246, 0.04) 100%)'

@@ -44,6 +44,21 @@ public class AdvisorResponseDto {
     @Schema(description = "자격증 목록")
     private List<CertificateDto> certificates;
 
+    // 프로필 이미지 URL을 전체 URL로 변환하는 메서드
+    public String getProfileImageUrl() {
+        if (this.profileImageUrl != null) {
+            // 이미 전체 URL인 경우 그대로 반환
+            if (this.profileImageUrl.startsWith("http://") || this.profileImageUrl.startsWith("https://")) {
+                return this.profileImageUrl;
+            }
+            // 상대경로인 경우 전체 URL로 변환
+            if (this.profileImageUrl.startsWith("/")) {
+                return "http://localhost:8081" + this.profileImageUrl;
+            }
+        }
+        return this.profileImageUrl;
+    }
+
     @Data
     @NoArgsConstructor
     public static class CertificateDto {

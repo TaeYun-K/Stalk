@@ -155,7 +155,8 @@ public class SecurityConfig {
                 "/css/**",
                 "/js/**",
                 "/images/**",
-                "/favicon.ico"
+                "/favicon.ico",
+                "/uploads/**"
             ).permitAll()
 
             // 결제 관련 API - 보안상 안전한 엔드포인트만 허용
