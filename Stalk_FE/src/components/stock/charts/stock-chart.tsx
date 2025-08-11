@@ -778,10 +778,10 @@ const StockChart: React.FC<StockChartProps> = ({
         
         setRawData(sortedData); // Store only real data for indicator calculations
         
-        const points = finalData.map(item => {
-          x : parseToTs(item.date)
-          y : item.close
-        });
+        const points = finalData.map(item => ({
+          x : parseToTs(item.date),
+          y : item.close,
+        }));
 
         const volumePoints = finalData.map((item, i) => ({
           x: parseToTs(item.date),
@@ -793,16 +793,6 @@ const StockChart: React.FC<StockChartProps> = ({
         const opens = finalData.map(item => item.open || item.close);
         const highs = finalData.map(item => item.high || item.close);
         const lows = finalData.map(item => item.low || item.close);
-
-        // Debug: Log the data we're trying to chart
-        console.log('Chart data debug:', {
-          labelsLength: labels.length,
-          pricesLength: prices.length,
-          firstPrice: prices[0],
-          lastPrice: prices[prices.length - 1],
-          hasNullPrices: prices.some(p => p == null || isNaN(p)),
-          priceRange: [Math.min(...prices), Math.max(...prices)]
-        });
 
         // Simplified line chart configuration
         const mainDataset = {
@@ -853,12 +843,6 @@ const StockChart: React.FC<StockChartProps> = ({
         });
         setVolumeChartData(newVolumeData);
         
-        console.log("StockChart - 차트 데이터 설정 완료", {
-          labels: newChartData.labels.length,
-          firstLabel: newChartData.labels[0],
-          lastLabel: newChartData.labels[newChartData.labels.length - 1],
-          datasets: newChartData.datasets.length
-        });
       } else {
         console.error("StockChart - 데이터가 없음:", responseData);
         setError('차트 데이터를 불러오는데 실패했습니다.');
