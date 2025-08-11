@@ -109,12 +109,6 @@ type OpenViduSignalEvent = {
 };
 
 
-const getDpr = (chart: any) => {
-  const canvas: HTMLCanvasElement = chart.canvas;
-  const rect = canvas.getBoundingClientRect();
-  return rect.width ? (canvas.width / rect.width) : (window.devicePixelRatio || 1);
-};
-
 // 캔버스/오버레이 사이 좌표 변환 함수
 const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
   const canvas: HTMLCanvasElement = chart.canvas;
@@ -361,7 +355,27 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const totalLen = chartRef.current?.data?.datasets?.[0]?.data?.length ?? 0;
 
-  
+  // scale 변경 감지해 시그널 전송
+  const sendChartState = () => {
+    const chart = chartRef.current;
+    if (!session || !chart?.scales?.x) return;
+
+    const data: ChartStateSignalData = {
+      ticker: getCurrentTicker(),
+      period,
+      scaleXMin: chart.scales.x.min,
+      scaleXMax: chart.scales.x.max,
+      scaleYMin: chart.scales.y.min,
+      scaleYMax: chart.scales.y.max,
+    };
+
+    session.signal({
+      type: 'chart:state-change',
+      data: JSON.stringify(data)
+    }).catch(console.error);
+
+    console.log('[SYNC_DEBUG] Sent chart state:', data);
+  };
 
   // price 차트 렌더 직후와 리사이즈마다 호출
   const syncOverlayToChartArea = () => {
@@ -536,47 +550,45 @@ const StockChart: React.FC<StockChartProps> = ({
 
     const onChartStateChange = (e: OpenViduSignalEvent) => {
       try {
-        if (!e.data) {
-          console.warn("Received a signal with no data.");
-          return;
-        }
-
+        if (!e.data) return;
         const msg: ChartStateSignalData = JSON.parse(e.data);
+        if (msg.ticker !== getCurrentTicker() || msg.period !== period) return;
+
         const chart = chartRef.current;
-        
-        // 현재 차트의 티커 및 기간과 일치하는지 확인
-        if (msg.ticker !== getCurrentTicker() || msg.period !== period) {
-          return;
-        }
-        
-        if (chart && msg.scaleXMin != null && msg.scaleYMin != null) {
-          // 수신된 스케일 정보를 차트에 적용
+        if (chart && msg.scaleXMin != null) {
           chart.scales.x.min = msg.scaleXMin;
           chart.scales.x.max = msg.scaleXMax;
           chart.scales.y.min = msg.scaleYMin;
           chart.scales.y.max = msg.scaleYMax;
-          
-          // 차트 업데이트
-          chart.update('none'); // 애니메이션 없이 즉시 업데이트
-          
-          // 차트 스케일이 변경되었으므로, 드로잉도 재투영
+          chart.update('none');
           reprojectAllShapes();
+          console.log('[SYNC_DEBUG] Applied remote scale:', { msgScaleXMax: msg.scaleXMax, localScaleXMax: chart.scales.x.max });
         }
       } catch (error) {
         console.error('Error applying remote chart state:', error);
       }
-  };
+    };
 
-  // OpenVidu 시그널 리스너 등록
-  session.on('signal:chart:state-change', onChartStateChange);
+    // OpenVidu 시그널 리스너 등록
+    session.on('signal:chart:state-change', onChartStateChange);
 
-  // 컴포넌트 언마운트 시 리스너 정리
-  return () => {
-    session.off('signal:chart:state-change', onChartStateChange);
-  };
+    // 컴포넌트 언마운트 시 리스너 정리
+    return () => {
+      session.off('signal:chart:state-change', onChartStateChange);
+    };
   }, [session, period, chartRef.current]);
 
   
+  //futureDays/chartData 변경 useEffect 수정
+  useEffect(() => {
+    if (!chartRef.current?.scales?.x) return;
+    const t = setTimeout(() => {
+      syncOverlayToChartArea();
+      reprojectAllShapes();
+      sendChartState(); // 추가: scale 동기화 전송
+    }, 0);
+    return () => clearTimeout(t);
+  }, [chartData, period, darkMode, enableFutureSpace, futureDays]);
 
   // 차트 그려진 직후 정렬 시킴
   useEffect(() => {
@@ -1642,40 +1654,19 @@ const StockChart: React.FC<StockChartProps> = ({
           pinch: {
             enabled: true,
           },
-          onZoom: ({ chart }: { chart: Chart }) => {
-            const newChartInfo = {
-              ticker: getCurrentTicker(),
-              period,
-              scaleXMin: chart.scales.x.min,
-              scaleXMax: chart.scales.x.max,
-              scaleYMin: chart.scales.y.min,
-              scaleYMax: chart.scales.y.max,
-            };
-            // OpenVidu 시그널로 차트 상태 전송
-            session?.signal({
-              type: 'chart:state-change',
-              data: JSON.stringify(newChartInfo),
-            }).catch(console.error);
+          mode : 'x',
+          onZoomComplete: ({ chart }) => {
+            sendChartState();
+            reprojectAllShapes();
           },
         },
         pan: {
           enabled: true, // 패닝 활성화
           mode: 'x',
           // 패닝 이벤트 발생 시 실행될 함수
-          onPan: ({ chart }: {chart : Chart}) => {
-            const newChartInfo = {
-              ticker: getCurrentTicker(),
-              period,
-              scaleXMin: chart.scales.x.min,
-              scaleXMax: chart.scales.x.max,
-              scaleYMin: chart.scales.y.min,
-              scaleYMax: chart.scales.y.max,
-            };
-            // OpenVidu 시그널로 차트 상태 전송
-            session?.signal({
-              type: 'chart:state-change',
-              data: JSON.stringify(newChartInfo),
-            }).catch(console.error);
+          onPanComplete: ({ chart }) => {
+            sendChartState();
+            reprojectAllShapes();
           },
         },
       },
