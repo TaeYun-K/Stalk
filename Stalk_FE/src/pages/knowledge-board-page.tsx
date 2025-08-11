@@ -54,10 +54,10 @@ const KnowledgeBoardPage = () => {
 
   const loadPostDetail = async () => {
     if (!postId) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const data = await CommunityService.getPostDetail(parseInt(postId));
       setPostDetail(data);
@@ -72,7 +72,7 @@ const KnowledgeBoardPage = () => {
 
   const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!window.confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
       return;
     }
@@ -91,10 +91,10 @@ const KnowledgeBoardPage = () => {
     e.stopPropagation();
     navigate(`/write-post?edit=${postId}`);
   };
-  
+
   const loadComments = async () => {
     if (!postId) return;
-    
+
     try {
       const data = await CommunityService.getComments(parseInt(postId));
       setComments(data.content || []); // items -> content로 수정
@@ -314,7 +314,7 @@ const KnowledgeBoardPage = () => {
                 {postDetail.content}
               </span>
             </div>
-            
+
             {/* 댓글 */}
             <div className='flex flex-col gap-4'>
               {/* 댓글 Title */}
@@ -322,20 +322,20 @@ const KnowledgeBoardPage = () => {
                 <h2 className='flex items-center justify-between text-xl font-semibold text-gray-900'>댓글</h2>
                 <h3 className='text-sm text-gray-500'>Comment</h3>
               </div>
-              
+
               {/* 댓글 작성 */}
               <div className='flex flex-col gap-2'>
                 <div className='flex flex-row gap-3 items-center justify-between'>
-                  <input 
-                    type="text" 
-                    placeholder='댓글을 입력해주세요.' 
+                  <input
+                    type="text"
+                    placeholder='댓글을 입력해주세요.'
                     className={`pl-5 py-2 w-full border rounded-full focus:outline-none focus:ring-1 ${currentUser?.role === 'ADVISOR' ? 'border-blue-500 focus:ring-blue-500' : 'border-gray-300'}`}
                     value={commentInput}
                     onChange={(e) => setCommentInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     disabled={!currentUser || currentUser.role !== 'ADVISOR'}
                   />
-                  <button 
+                  <button
                     className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-2 text-sm rounded-full ${(!currentUser || currentUser.role !== 'ADVISOR') ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-500 text-white'}`}
                     onClick={handleCommentSubmit}
                     disabled={!currentUser || currentUser.role !== 'ADVISOR'}
@@ -351,7 +351,7 @@ const KnowledgeBoardPage = () => {
                   <p className='text-xs text-gray-500 pl-3'>댓글 작성은 전문가만 가능합니다. 전문가 승인 후 이용해주세요.</p>
                 )}
               </div>
-              
+
               {/* 댓글 목록 */}
               <div className='flex flex-col gap-5'>
                 {comments.map((comment) => (
@@ -398,7 +398,7 @@ const KnowledgeBoardPage = () => {
                               수정
                             </button>
                             <p className='text-sm text-gray-500'>|</p>
-                            <button 
+                            <button
                               className='text-sm text-gray-500 hover:text-red-500 hover:font-semibold'
                               onClick={() => handleCommentDelete(comment.commentId)}
                             >
@@ -434,4 +434,3 @@ const KnowledgeBoardPage = () => {
 };
 
 export default KnowledgeBoardPage;
-

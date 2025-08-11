@@ -7,15 +7,16 @@ interface RankingStock {
   price: number;
   change: number;
   changeRate: number;
-  volume: number;
-  marketCap?: number;
+  volume: string;
+  marketCap?: string;
+  tradeValue?: string;
 }
 
 interface StockRankingTableProps {
   stocks: RankingStock[];
   onStockClick: (stock: RankingStock) => void;
-  rankingType: 'volume' | 'gainers' | 'losers';
-  onRankingTypeChange: (type: 'volume' | 'gainers' | 'losers') => void;
+  rankingType: 'volume' | 'gainers' | 'losers' | 'marketCap' | 'tradeValue';
+  onRankingTypeChange: (type: 'volume' | 'gainers' | 'losers' | 'marketCap' | 'tradeValue') => void;
   title: string;
   marketType: '전체' | 'kospi' | 'kosdaq';
   onMarketTypeChange: (market: '전체' | 'kospi' | 'kosdaq') => void;
@@ -44,14 +45,6 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
     }
   };
 
-  const formatNumber = (num: number): string => {
-    if (num >= 100000000) {
-      return `${(num / 100000000).toFixed(1)}억`;
-    } else if (num >= 10000) {
-      return `${(num / 10000).toFixed(1)}만`;
-    }
-    return num.toLocaleString();
-  };
 
   return (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm overflow-hidden`}>
@@ -127,6 +120,34 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
         >
           거래량 TOP
         </button>
+        <button
+          onClick={() => onRankingTypeChange('marketCap')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            rankingType === 'marketCap'
+              ? darkMode 
+                ? 'bg-gray-700 text-purple-400 border-b-2 border-purple-400' 
+                : 'bg-purple-50 text-purple-600 border-b-2 border-purple-600'
+              : darkMode
+                ? 'text-gray-400 hover:text-gray-200'
+                : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          시가총액 TOP
+        </button>
+        <button
+          onClick={() => onRankingTypeChange('tradeValue')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            rankingType === 'tradeValue'
+              ? darkMode 
+                ? 'bg-gray-700 text-yellow-400 border-b-2 border-yellow-400' 
+                : 'bg-yellow-50 text-yellow-600 border-b-2 border-yellow-600'
+              : darkMode
+                ? 'text-gray-400 hover:text-gray-200'
+                : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          거래대금 TOP
+        </button>
       </div>
 
       {/* Table */}
@@ -157,7 +178,7 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
               <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
                 darkMode ? 'text-gray-300' : 'text-gray-500'
               }`}>
-                거래량
+                {rankingType === 'marketCap' ? '시가총액' : rankingType === 'tradeValue' ? '거래대금' : '거래량'}
               </th>
             </tr>
           </thead>
@@ -202,7 +223,7 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
                   <td className={`px-4 py-3 text-right text-sm ${
                     darkMode ? 'text-gray-300' : 'text-gray-900'
                   }`}>
-                    {formatNumber(stock.volume)}
+                    {rankingType === 'marketCap' ? (stock.marketCap || '0') : rankingType === 'tradeValue' ? (stock.tradeValue || '0') : (stock.volume || '0')}
                   </td>
                 </tr>
               );

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
-  CategoryScale,
   LinearScale,
+  CategoryScale,
+  TimeScale,
   PointElement,
   LineElement,
   Title,
@@ -20,6 +21,7 @@ import AuthService from '../../../services/authService';
 import DrawingToolbar from '../chart-controls/drawing-toolbar';
 import ChartControls from '../chart-controls/chart-controls';
 import TechnicalIndicators from '../chart-controls/technical-indicators';
+import EnhancedTechnicalIndicators from '../chart-controls/enhanced-technical-indicators';
 import { useDrawingCanvas } from '../hooks/use-drawing-canvas';
 import { 
   calculateMA, 
@@ -32,9 +34,10 @@ import {
   calculateHeikinAshi,
   calculateIchimoku
 } from '../utils/calculations';
-import { on } from 'events';
+import 'chartjs-adapter-date-fns';
 
 ChartJS.register(
+  TimeScale,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -74,6 +77,8 @@ interface StockChartProps {
   chartType?: ChartType;
   period?: number;
   drawingMode?: boolean;
+  enableFutureSpace?: boolean;
+  futureSpaceDays?: number;
 }
 
 type ChartType = 'line';
@@ -82,6 +87,177 @@ type ChartInfo = {
   ticker: string;
   period: string;
 };
+
+// 캔버스/오버레이 사이 좌표 변환 함수
+const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
+  const canvas: HTMLCanvasElement = chart.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
+
+  // 현재 오버레이는 chartContainerRef 전체를 덮고 있음
+  const overlay = document.getElementById('drawing-canvas')!;
+
+  // DOM px → 캔버스 내부 px (DPR 고려)
+  const scaleX = canvas.width / canvasRect.width;
+  const scaleY = canvas.height / canvasRect.height;
+
+  // 1) DOM px -> 캔버스 전체 px
+  const xCanvasFull = (xStage - canvasRect.left) * scaleX;
+  const yCanvasFull = (yStage - canvasRect.top)  * scaleY;
+
+  // 2) chartArea 보정: chartArea 기준 px로 변환
+  const { left, top } = chart.chartArea;
+  const xCanvas = xCanvasFull - left;
+  const yCanvas = yCanvasFull - top;
+
+  return { x: xCanvas, y: yCanvas };
+};
+
+// stage(px) -> canvas(chartArea px) -> data 좌표
+const stagePxToDataPoint = (chart: any, sx: number, sy: number) => {
+  const c = stageToCanvasPx(chart, sx, sy);         // stage -> canvas(px)
+  return pxToData(chart, c.x, c.y);                 // canvas(px) -> data
+};
+
+// 캔버스/오버레이 사이 좌표 변환 함수 
+const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
+  const canvas: HTMLCanvasElement = chart.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
+  const overlay = document.getElementById('drawing-canvas')!;
+  const overlayRect = overlay.getBoundingClientRect();
+
+  const scaleX = canvas.width / canvasRect.width;
+  const scaleY = canvas.height / canvasRect.height;
+
+  // 1) chartArea px -> 캔버스 전체 px
+  const { left, top } = chart.chartArea;
+  const xCanvasFull = xCanvas + left;
+  const yCanvasFull = yCanvas + top;
+
+  // 2) 캔버스 전체 px -> DOM px -> 오버레이 좌표계(px)
+  const xStage = (xCanvasFull / scaleX) + (canvasRect.left - overlayRect.left);
+  const yStage = (yCanvasFull / scaleY) + (canvasRect.top  - overlayRect.top);
+  return { x: xStage, y: yStage };
+};
+
+// data 좌표 -> canvas(chartArea px) -> stage(px)
+const dataToStagePxPoint = (chart: any, dx: number, dy: number) => {
+  const c = dataToPx(chart, dx, dy);                // data -> canvas(px)
+  return canvasToStagePx(chart, c.x, c.y);          // canvas(px) -> stage(px)
+};
+
+// 데이터 좌표로 변환하기 위한 type
+type DataPoint = { x: number; y: number }; // x: timestamp(ms), y: price
+
+// px to data 변환
+const pxToData = (chart: any, px: number, py: number) => {
+  const { left, top } = chart.chartArea;
+  const xCanvas = px + left;
+  const yCanvas = py + top;
+  return {
+    x: chart.scales.x.getValueForPixel(xCanvas),
+    y: chart.scales.y.getValueForPixel(yCanvas),
+  };
+};
+
+// data to px 
+const dataToPx = (chart: any, xVal: number, yVal: number) => {
+  const xCanvas = chart.scales.x.getPixelForValue(xVal);
+  const yCanvas = chart.scales.y.getPixelForValue(yVal);
+  const { left, top } = chart.chartArea; // chartArea를 (0,0)로 변환
+  return { x: xCanvas - left, y: yCanvas - top };
+};
+
+// shape를 data -> px 로 변환
+const toPixelsShape = (shape: any, chart: any) => {
+  if (!shape || shape.coordType !== 'data' || !chart?.scales?.x) return shape;
+
+  const clone = { ...shape };
+  if (clone.attry && Array.isArray(clone.points)) {
+    const flat: number[] = [];
+    for (let i = 0; i < clone.points.length; i += 2) {
+      const s = dataToStagePxPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
+      flat.push(s.x, s.y);
+    }
+    clone.attrs = { ...clone.attrs, points: flat };
+  } 
+  
+  if (clone.p1 && clone.p2) {
+    clone.p1 = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
+  }
+
+  if (clone.type === 'rectangle' && clone.attrs) {
+    const a = clone.attrs;
+    const p1 = dataToStagePxPoint(chart, a.x, a.y);
+    const p2 = dataToStagePxPoint(chart, a.x + a.width, a.y + a.height);
+    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  }
+
+  if (clone.type === 'circle' && clone.attrs) {
+    const a = clone.attrs;
+    const c = dataToStagePxPoint(chart, a.x, a.y);
+    const r = dataToStagePxPoint(chart, a.x + (a.radiusX ?? a.radius), a.y);
+    const rx = Math.abs(r.x - c.x);
+    clone.attrs = { ...a, x: c.x, y: c.y, radius: rx };
+  }
+
+  if (clone.type === 'text' && clone.attrs) {
+    const a = clone.attrs;
+    const p = dataToStagePxPoint(chart, a.x, a.y);
+    clone.attrs = { ...a, x: p.x, y: p.y };
+  }
+
+  clone.coordType = 'px';
+  return clone;
+};
+
+// shape를 px -> data 변환
+const toDataShape = (shape: any, chart: any) => {
+  if (!shape || !chart?.scales?.x) return shape;
+  const clone = { ...shape };
+  if (clone.attrs && Array.isArray(clone.points)) {
+    const pts: number[] = [];
+    for (let i = 0; i < clone.points.length; i += 2) {
+      const d = stagePxToDataPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
+      pts.push(d.x, d.y);
+    }
+    clone.attrs = { ...clone.attrs, points: pts };
+  } 
+  if (clone.p1 && clone.p2) {
+    clone.p1 = stagePxToDataPoint(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = stagePxToDataPoint(chart, clone.p2.x, clone.p2.y);
+  }
+
+  // 3) 타입별 attrs 변환
+  if (clone.type === 'rectangle' && clone.attrs) {
+    const a = clone.attrs;
+    const p1 = stagePxToDataPoint(chart, a.x, a.y);
+    const p2 = stagePxToDataPoint(chart, a.x + a.width, a.y + a.height);
+    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  }
+
+  if (clone.type === 'circle' && clone.attrs) {
+    const a = clone.attrs;
+    const c = stagePxToDataPoint(chart, a.x, a.y);
+    const r = stagePxToDataPoint(chart, a.x + a.radius, a.y);
+    const rx = Math.abs(r.x - c.x);
+    // data 공간에선 radiusX/Y로 들고 싶다면 여기에 radiusX/Y 저장도 가능
+    clone.attrs = { ...a, x: c.x, y: c.y, radiusX: rx, radiusY: rx, radius: rx };
+  }
+
+  if (clone.type === 'text' && clone.attrs) {
+    const a = clone.attrs;
+    const p = stagePxToDataPoint(chart, a.x, a.y);
+    clone.attrs = { ...a, x: p.x, y: p.y };
+  }
+
+  clone.coordType = 'data';
+  return clone;
+};
+
+// 타입 가드
+const hasShape = (c: any): c is { type: 'add'|'update'; shape: any; version: number } =>
+  c?.type === 'add' || c?.type === 'update';
 
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 
@@ -94,7 +270,9 @@ const StockChart: React.FC<StockChartProps> = ({
   chartType: propChartType = 'line',
   period: propPeriod = 7,
   drawingMode: propDrawingMode = false,
-  session
+  session,
+  enableFutureSpace = true,
+  futureSpaceDays: initialFutureDays = 0
 }) => {
 
   const [chartData, setChartData] = useState<any>(null);
@@ -109,19 +287,41 @@ const StockChart: React.FC<StockChartProps> = ({
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
   const [rawData, setRawData] = useState<ChartDataPoint[]>([]);
   const [isCanvasReady, setIsCanvasReady] = useState<boolean>(false);
+  const [futureDays, setFutureDays] = useState<number>(initialFutureDays);
+  const [isDraggingFuture, setIsDraggingFuture] = useState(false);
+  const [dragStartX, setDragStartX] = useState<number>(0);
+  const [initialDragDays, setInitialDragDays] = useState<number>(0);
+  const [activeIndicatorTab, setActiveIndicatorTab] = useState<'volume' | 'rsi' | 'macd' | 'stochastic'>('volume');
+  const [hoveredHelp, setHoveredHelp] = useState<string | null>(null);
+  const [localRSIPeriod, setLocalRSIPeriod] = useState<string>('');
   
-  // Technical indicators states
-  const [showVolume, setShowVolume] = useState<boolean>(true);
-  const [showMA20, setShowMA20] = useState<boolean>(false);
-  const [showMA50, setShowMA50] = useState<boolean>(false);
-  const [showEMA12, setShowEMA12] = useState<boolean>(false);
-  const [showEMA26, setShowEMA26] = useState<boolean>(false);
-  const [showRSI, setShowRSI] = useState<boolean>(false);
-  const [showMACD, setShowMACD] = useState<boolean>(false);
-  const [showBollingerBands, setShowBollingerBands] = useState<boolean>(false);
-  const [showStochastic, setShowStochastic] = useState<boolean>(false);
-  const [showVWAP, setShowVWAP] = useState<boolean>(false);
-  const [showIchimoku, setShowIchimoku] = useState<boolean>(false);
+  // Enhanced Technical indicators states with configurable periods
+  const [indicatorSettings, setIndicatorSettings] = useState({
+    ma20: { enabled: false, period: 20 },
+    ma50: { enabled: false, period: 50 },
+    ema12: { enabled: false, period: 12 },
+    ema26: { enabled: false, period: 26 },
+    rsi: { enabled: false, period: 14 },
+    macd: { enabled: false },
+    bollinger: { enabled: false, period: 20, stdDev: 2 },
+    stochastic: { enabled: false },
+    vwap: { enabled: false },
+    ichimoku: { enabled: false },
+    volume: { enabled: true }
+  });
+  
+  // Keep backward compatibility
+  const showVolume = indicatorSettings.volume.enabled;
+  const showMA20 = indicatorSettings.ma20.enabled;
+  const showMA50 = indicatorSettings.ma50.enabled;
+  const showEMA12 = indicatorSettings.ema12.enabled;
+  const showEMA26 = indicatorSettings.ema26.enabled;
+  const showRSI = indicatorSettings.rsi.enabled;
+  const showMACD = indicatorSettings.macd.enabled;
+  const showBollingerBands = indicatorSettings.bollinger.enabled;
+  const showStochastic = indicatorSettings.stochastic.enabled;
+  const showVWAP = indicatorSettings.vwap.enabled;
+  const showIchimoku = indicatorSettings.ichimoku.enabled;
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
@@ -130,8 +330,106 @@ const StockChart: React.FC<StockChartProps> = ({
   const macdChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
 
+  const totalLen = chartRef.current?.data?.datasets?.[0]?.data?.length ?? 0;
+
+  
+
+  // price 차트 렌더 직후와 리사이즈마다 호출
+  const syncOverlayToChartArea = () => {
+    const chart = chartRef.current;
+    const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
+    const container = chartContainerRef.current;
+    if (!chart || !ovl || !chart.chartArea || !container) return;
+
+    const { left, top, width, height } = chart.chartArea;
+
+    // 캔버스가 컨테이너 안에서 어디에 놓였는지 보정
+    const canvas: HTMLCanvasElement = chart.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    const canvasOffsetX = canvasRect.left - containerRect.left;
+    const canvasOffsetY = canvasRect.top  - containerRect.top;
+
+    ovl.style.left   = `${canvasOffsetX + left}px`;
+    ovl.style.top    = `${canvasOffsetY + top}px`;
+    ovl.style.width  = `${width}px`;
+    ovl.style.height = `${height}px`;
+  };
+
+  // chartArea 변동 감지 후
+  const reprojectAllShapes = () => {
+    const chart = chartRef.current;
+    if (!chart?.scales?.x) return;
+    const shapesPx = getAllShapes();           // 현재 스테이지(px) 기준
+    const shapesData = shapesPx.map((s:any)=> toDataShape(s, chart));
+    const shapesPxNew = shapesData.map((s:any)=> toPixelsShape(s, chart));
+    applySnapshot(shapesPxNew);                // 깜빡임 줄이려면 배치 적용
+  };
+
   const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
   const chartKey = { ticker: getCurrentTicker(), period };
+
+  // Generate future dates for drawing space
+  const generateFutureDates = (lastDate: string, days: number): string[] => {
+    const dates: string[] = [];
+    if (!lastDate || lastDate.length < 8) return dates;
+    
+    // Parse YYYYMMDD format
+    const year = parseInt(lastDate.substring(0, 4));
+    const month = parseInt(lastDate.substring(4, 6)) - 1; // JS months are 0-indexed
+    const day = parseInt(lastDate.substring(6, 8));
+    const startDate = new Date(year, month, day);
+    
+    let addedDays = 0;
+    let currentDate = new Date(startDate);
+    
+    while (addedDays < days) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      
+      // Skip weekends for stock market
+      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+        const dateStr = currentDate.getFullYear().toString() +
+          (currentDate.getMonth() + 1).toString().padStart(2, '0') +
+          currentDate.getDate().toString().padStart(2, '0');
+        dates.push(dateStr);
+        addedDays++;
+      }
+    }
+    
+    return dates;
+  };
+
+  // Handle mouse events for dragging future space
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!enableFutureSpace) return;
+    if (isDrawingMode) return; // Don't interfere with drawing mode
+    
+    // Allow dragging from anywhere on the chart
+    setIsDraggingFuture(true);
+    setDragStartX(e.clientX);
+    setInitialDragDays(futureDays); // Remember initial state when drag starts
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingFuture || !enableFutureSpace) return;
+
+    const deltaX = dragStartX - e.clientX; // Reversed: dragging left increases days
+    const deltaDays = Math.round(deltaX / 20); // 20 pixels = 1 day for very smooth control
+    
+    // Calculate based on initial days when drag started, not current value
+    const newFutureDays = Math.max(
+      0, // Allow 0 days (no future space)
+      Math.min(180, initialDragDays + deltaDays) // Max 180 days (6 months), add to initial
+    );
+    
+    setFutureDays(newFutureDays);
+  };
+
+  const handleMouseUp = () => {
+    setIsDraggingFuture(false);
+  };
   
   const {
     initializeCanvas,
@@ -150,15 +448,46 @@ const StockChart: React.FC<StockChartProps> = ({
     onChange: (change) => {
       console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
-      const payload = { ...change, chart: chartKey };
-      const type =
-        change.type === 'add' || change.type === 'update' ? `drawing:${change.type}`
-        : change.type === 'delete' ? 'drawing:delete'
-        : 'drawing:clear';
+      
+      const serialize = (shape: any) => {
+        const chart = chartRef.current;
+        if(!chart?.scales?.x) return shape;
+        return toDataShape(shape, chart);
+      };
+
+      let type: string;
+      let payload: any = { ...change, chart: { ticker: getCurrentTicker(), period } };
+
+        if (hasShape(change)) {
+          type = `drawing:${change.type}`; // add/update
+          payload.shape = serialize(change.shape); // ✅ 이때만 shape 접근
+        } else if (change.type === 'delete') {
+          type = 'drawing:delete';         // id, version만 있음
+        } else {
+          type = 'drawing:clear';          // clear
+        }
+
       session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
     }
   });
 
+  // 차트 그려진 직후 정렬 시킴
+  useEffect(() => {
+    if (!chartRef.current?.scales?.x) return;
+    // 차트가 안정되도록 한 틱 뒤 정렬
+    const t = setTimeout(() => {
+      syncOverlayToChartArea();
+      // 차트 레이아웃이 바뀌었으니 기존 도형 재투영
+      reprojectAllShapes();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [chartData, period, darkMode, enableFutureSpace, futureDays]);
+
+  useEffect(() => {
+    const onResize = () => { syncOverlayToChartArea(); reprojectAllShapes(); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [/* 레이아웃에 영향 주는 의존성 없음 */]);
   
   // 외부 chartInfo 들어오면 내부 period 동기화
   useEffect(() => {
@@ -184,6 +513,15 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
+  // 언마운트/변경 시 destroy
+  useEffect(() => {
+    return () => {
+      try { volumeChartRef.current?.destroy?.(); } catch {}
+      try { rsiChartRef.current?.destroy?.(); } catch {}
+      try { macdChartRef.current?.destroy?.(); } catch {}
+    };
+  }, [activeIndicatorTab]);
+
   // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
@@ -195,7 +533,15 @@ const StockChart: React.FC<StockChartProps> = ({
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
-  }, [chartInfo?.ticker, selectedStock?.ticker, period]); 
+  }, [chartInfo?.ticker, selectedStock?.ticker, period]);
+  
+  // Reprocess chart data when futureDays changes
+  useEffect(() => {
+    if (rawData && rawData.length > 0 && enableFutureSpace) {
+      // Trigger a re-fetch to add future dates
+      fetchChartData(true);
+    }
+  }, [futureDays]); 
 
   // 실시간 업데이트 interval
   useEffect(() => {
@@ -239,6 +585,7 @@ const StockChart: React.FC<StockChartProps> = ({
         if (canvasContainer && chartContainerRef.current) {
           try {
             console.log('Konva 캔버스 초기화 시작');
+            syncOverlayToChartArea();
             const stage = initializeCanvas();
             if (stage && mounted) {
               konvaStage.current = stage;
@@ -284,14 +631,20 @@ const StockChart: React.FC<StockChartProps> = ({
     const onAdd = (e: any) => {
       const msg = JSON.parse(e.data);
       if (!isForThisChart(msg)) return;
-      applyRemoteChange({ type: 'add', shape: msg.shape, version: msg.version });
+      const chart = chartRef.current;
+      if (!chart?.scales?.x) return; // 차트 준비 전이면 스킵하거나 큐에 저장
+      const shapePx = toPixelsShape(msg.shape, chart);
+      applyRemoteChange({ type: 'add', shape: shapePx, version: msg.version });
     };
 
     // 드로잉 갱신 수신 처리
     const onUpdate = (e: any) => {
       const msg = JSON.parse(e.data);
       if (!isForThisChart(msg)) return;
-      applyRemoteChange({ type: 'update', shape: msg.shape, version: msg.version });
+      const chart = chartRef.current;
+      if (!chart?.scales?.x) return;
+      const shapePx = toPixelsShape(msg.shape, chart);
+      applyRemoteChange({ type: 'update', shape: shapePx, version: msg.version });
     };
 
     // 드로잉 삭제 수신 처리
@@ -334,7 +687,15 @@ const StockChart: React.FC<StockChartProps> = ({
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [chartData, rawData, showMA20, showMA50, showEMA12, showEMA26, showBollingerBands, showVWAP, showIchimoku, showRSI, showMACD, showStochastic]);
+  }, [chartData, rawData, indicatorSettings]);
+
+  // Update secondary indicator charts when settings change
+  useEffect(() => {
+    if (rawData && rawData.length > 0) {
+      updateSeparateChartIndicators();
+    }
+  }, [rawData, indicatorSettings.rsi, indicatorSettings.macd, indicatorSettings.stochastic, indicatorSettings.volume]);
+
 
   // 동기화 요청/응답 처리
   useEffect(() => {
@@ -346,11 +707,14 @@ const StockChart: React.FC<StockChartProps> = ({
       if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
 
       // 스냅샷 생성 후 응답 전송
-      const shapes = getAllShapes();
+      const chart = chartRef.current;
+      const shapesPx = getAllShapes();
+      const shapesData = shapesPx.map((s: any) => toDataShape(s, chart));
+
       const response = {
         type: 'sync-response',
         chart: chartKey,
-        shapes,
+        shapes : shapesData,
         version: undefined // 훅에서 관리 중이면 필요 시 버전도 포함 가능
       };
       session.signal({ type: 'drawing:sync-response', data: JSON.stringify(response) }).catch(console.error);
@@ -360,8 +724,11 @@ const StockChart: React.FC<StockChartProps> = ({
     const onSyncRes = (e: any) => {
       const msg = JSON.parse(e.data);
       if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      const chart = chartRef.current;
+      if (!chart?.scales?.x) return;
+      const shapesPx = (msg.shapes || []).map((s: any) => toPixelsShape(s, chart));
       console.log('[SYNC] apply snapshot', msg.shapes?.length);
-      applySnapshot(msg.shapes, msg.version);
+      applySnapshot(shapesPx, msg.version);
     };
 
     // 리스너 등록
@@ -383,6 +750,23 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [session, isDrawingMode, chartKey.ticker, chartKey.period]);
 
+  // 차트 x축을 TimeScale로 전환하는 함수
+  const parseToTs = (raw: string) => {
+    // YYYYMMDD → Date
+    if (raw && raw.length === 8 && /^\d{8}$/.test(raw)) {
+      const y = +raw.slice(0,4), m = +raw.slice(4,6)-1, d = +raw.slice(6,8);
+      return new Date(y, m, d).getTime(); // ms timestamp
+    }
+    // HH:MM (intraday) 같은 케이스는 오늘 날짜와 합성하거나, 백엔드에서 full datetime을 내려주면 best
+    if (raw && raw.includes(':')) {
+      const [hh, mm] = raw.split(':').map(Number);
+      const now = new Date();
+      const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+      return dt.getTime();
+    }
+    // fallback
+    return Date.now();
+  };
 
   const fetchChartData = async (isUpdate = false) => {
     if (isLoading) {
@@ -519,64 +903,75 @@ const StockChart: React.FC<StockChartProps> = ({
         
         
         const sortedData = [...validData].sort((a, b) => a.date.localeCompare(b.date));
-        setRawData(sortedData); // Store raw data for indicator calculations
         
+        // Add future dates if enabled
+        let finalData = sortedData;
+        let actualDataLength = sortedData.length;
+
+        if (enableFutureSpace && sortedData.length > 0) {
+          const lastDate = sortedData[sortedData.length - 1].date;
+          const futureDateStrings = generateFutureDates(lastDate, futureDays);
+          
+          // Create placeholder data points for future dates
+          const futureDataPoints: ChartDataPoint[] = futureDateStrings.map(date => ({
+            date,
+            close: NaN, // NaN so the line doesn't continue
+            volume: 0,
+            open: NaN,
+            high: NaN,
+            low: NaN,
+            change: 0,
+            changeRate: 0
+          }));
+          
+          finalData = [...sortedData, ...futureDataPoints];
+        }
         
-        const labels = sortedData.map(item => {
-          const date = item.date;
-          // Check if it's time format (HH:MM) for intraday
-          if (date && date.includes(':')) {
-            return date; // Return time as-is for intraday
-          }
-          // For dates in YYYYMMDD format
-          if (date && date.length === 8) {
-            const month = date.substring(4, 6);
-            const day = date.substring(6, 8);
-            return `${month}/${day}`;
-          }
-          // Fallback
-          return date || '';
-        });
+        setRawData(sortedData); // Store only real data for indicator calculations
+        
+        const points = finalData.map(item => ({
+          x : parseToTs(item.date),
+          y : item.close,
+        }));
 
-        const prices = sortedData.map(item => item.close);
-        const volumes = sortedData.map(item => item.volume);
-        const opens = sortedData.map(item => item.open || item.close);
-        const highs = sortedData.map(item => item.high || item.close);
-        const lows = sortedData.map(item => item.low || item.close);
+        const volumePoints = finalData.map((item, i) => ({
+          x: parseToTs(item.date),
+          y: item.volume
+        }));
 
-        // Debug: Log the data we're trying to chart
-        console.log('Chart data debug:', {
-          labelsLength: labels.length,
-          pricesLength: prices.length,
-          firstPrice: prices[0],
-          lastPrice: prices[prices.length - 1],
-          hasNullPrices: prices.some(p => p == null || isNaN(p)),
-          priceRange: [Math.min(...prices), Math.max(...prices)]
-        });
+        const prices = finalData.map(item => item.close);
+        const volumes = finalData.map(item => item.volume);
+        const opens = finalData.map(item => item.open || item.close);
+        const highs = finalData.map(item => item.high || item.close);
+        const lows = finalData.map(item => item.low || item.close);
 
         // Simplified line chart configuration
         const mainDataset = {
           label: '종가',
-          data: prices,
+          data: points,
           borderColor: '#3b82f6',
           backgroundColor: 'transparent',
           borderWidth: 2,
           fill: false,
           pointRadius: 1,
           tension: 0.1,
+          spanGaps: false, // Don't connect NaN values
         };
         
+        // Just use the main dataset without the current time indicator
+        const datasets = [mainDataset];
+        
         const newChartData = {
-          labels,
-          datasets: [mainDataset],
+          datasets,
+          actualDataLength, // Store for reference
         };
 
         // Create volume chart data
         const newVolumeData = {
-          labels,
           datasets: [{
             label: '거래량',
-            data: volumes,
+            data: volumePoints,
+            parsing: { xAxisKey: 'x', yAxisKey: 'y' },
             backgroundColor: volumes.map((_, index) => {
               if (index === 0) return 'rgba(34, 197, 94, 0.6)';
               return prices[index] >= prices[index - 1] 
@@ -594,15 +989,12 @@ const StockChart: React.FC<StockChartProps> = ({
         };
 
 
-        setChartData(newChartData);
+        setChartData({
+          datasets: [mainDataset],
+          actualDataLength,
+        });
         setVolumeChartData(newVolumeData);
         
-        console.log("StockChart - 차트 데이터 설정 완료", {
-          labels: newChartData.labels.length,
-          firstLabel: newChartData.labels[0],
-          lastLabel: newChartData.labels[newChartData.labels.length - 1],
-          datasets: newChartData.datasets.length
-        });
       } else {
         console.error("StockChart - 데이터가 없음:", responseData);
         setError('차트 데이터를 불러오는데 실패했습니다.');
@@ -629,14 +1021,31 @@ const StockChart: React.FC<StockChartProps> = ({
     if (!chart || !chart.data || !chart.data.datasets || chart.data.datasets.length === 0) {
       return;
     }
-
+    const fullXs: number[] = (chart.data.labels as number[]) ?? [];
+    const realXs: number[] = rawData.map(d => parseToTs(d.date));
     const prices = rawData.map(d => d.close);
     const highs = rawData.map(d => d.high || d.close);
     const lows = rawData.map(d => d.low || d.close);
     const volumes = rawData.map(d => d.volume);
+
+      // [{x,y}]로 만들고, 실데이터 뒤쪽은 y:null로 패딩하는 유틸
+    const toXY = (vals: Array<number | null | undefined>) => {
+      const pts: {x:number; y:number|null}[] = [];
+      // 실데이터 구간
+      const n = Math.min(vals.length, realXs.length);
+      for (let i = 0; i < n; i++) {
+        const v = vals[i];
+        pts.push({ x: realXs[i], y: (v == null || Number.isNaN(v)) ? null : v });
+      }
+      // 미래공간 패딩
+      for (let i = n; i < fullXs.length; i++) {
+        pts.push({ x: fullXs[i], y: null });
+      }
+      return pts;
+    };
     
     // SAFE APPROACH: Create a completely new dataset array instead of modifying existing
-    const newDatasets = [];
+    const newDatasets: any[] = [];
     
     // Always keep the main price line as the first dataset
     const mainDataset = chart.data.datasets[0];
@@ -646,52 +1055,46 @@ const StockChart: React.FC<StockChartProps> = ({
 
     // Add indicators only if requested and data is sufficient
     try {
-      // MA(20)
-      if (showMA20 && prices.length >= 20) {
-        const ma20Values = calculateMA(prices, 20);
+      // MA with configurable period
+      if (showMA20 && prices.length >= indicatorSettings.ma20.period) {
+        const maValues = calculateMA(prices, indicatorSettings.ma20.period);
         newDatasets.push({
-          label: 'MA(20)',
-          data: ma20Values,
+          label: 'MA',
+          data: maValues,
           borderColor: '#ef4444',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
+          parsing: false
         });
       }
 
-      // MA(50) 
-      if (showMA50 && prices.length >= 50) {
-        const ma50Values = calculateMA(prices, 50);
-        newDatasets.push({
-          label: 'MA(50)',
-          data: ma50Values,
-          borderColor: '#8b5cf6',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          fill: false,
-          pointRadius: 0,
-        });
-      }
+      // MA(50) - Removed per user request
 
-      // Bollinger Bands
-      if (showBollingerBands && prices.length >= 20) {
-        const bollingerResult = calculateBollingerBands(prices, 20, 2);
+      // Bollinger Bands with configurable period and stdDev
+      if (showBollingerBands && prices.length >= indicatorSettings.bollinger.period) {
+        const bollingerResult = calculateBollingerBands(
+          prices, 
+          indicatorSettings.bollinger.period, 
+          indicatorSettings.bollinger.stdDev || 2
+        );
         
         newDatasets.push({
           label: 'BB Upper',
-          data: bollingerResult.upperBand,
+          data: toXY(bollingerResult.upperBand),
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           borderDash: [2, 2],
           fill: false,
           pointRadius: 0,
+          parsing: false
         });
 
         newDatasets.push({
           label: 'BB Lower', 
-          data: bollingerResult.lowerBand,
+          data: toXY(bollingerResult.lowerBand),
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
           borderWidth: 1,
@@ -702,51 +1105,40 @@ const StockChart: React.FC<StockChartProps> = ({
 
         newDatasets.push({
           label: 'BB Middle',
-          data: bollingerResult.middleBand,
+          data: toXY(bollingerResult.middleBand),
           borderColor: 'rgba(249, 115, 22, 0.6)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
       }
 
-      // EMA(12)
-      if (showEMA12 && prices.length >= 12) {
-        const ema12Values = calculateEMA(prices, 12);
+      // EMA with configurable period
+      if (showEMA12 && prices.length >= indicatorSettings.ema12.period) {
+        const emaValues = calculateEMA(prices, indicatorSettings.ema12.period);
         newDatasets.push({
-          label: 'EMA(12)',
-          data: ema12Values,
+          label: 'EMA',
+          data: toXY(emaValues),
           borderColor: '#10b981',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           borderDash: [3, 3],
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
       }
 
-      // EMA(26)
-      if (showEMA26 && prices.length >= 26) {
-        const ema26Values = calculateEMA(prices, 26);
-        newDatasets.push({
-          label: 'EMA(26)',
-          data: ema26Values,
-          borderColor: '#14b8a6',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [3, 3],
-          fill: false,
-          pointRadius: 0,
-        });
-      }
+      // EMA(26) - Removed per user request
 
       // VWAP
       if (showVWAP) {
         const vwapValues = calculateVWAP(highs, lows, prices, volumes);
         newDatasets.push({
           label: 'VWAP',
-          data: vwapValues,
+          data: toXY(vwapValues),
           borderColor: '#f59e0b',
           backgroundColor: 'transparent',
           borderWidth: 2,
@@ -762,56 +1154,61 @@ const StockChart: React.FC<StockChartProps> = ({
         
         newDatasets.push({
           label: 'Tenkan',
-          data: ichimokuResult.tenkanSen,
+          data: toXY(ichimokuResult.tenkanSen),
           borderColor: '#3b82f6',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         newDatasets.push({
           label: 'Kijun',
-          data: ichimokuResult.kijunSen,
+          data: toXY(ichimokuResult.kijunSen),
           borderColor: '#dc2626',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         // Senkou Span A
         newDatasets.push({
           label: 'Senkou A',
-          data: ichimokuResult.senkouSpanA,
+          data: toXY(ichimokuResult.senkouSpanA),
           borderColor: 'rgba(34, 197, 94, 0.5)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         // Senkou Span B
         newDatasets.push({
           label: 'Senkou B',
-          data: ichimokuResult.senkouSpanB,
+          data: toXY(ichimokuResult.senkouSpanB),
           borderColor: 'rgba(239, 68, 68, 0.5)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         // Chikou Span
         newDatasets.push({
           label: 'Chikou',
-          data: ichimokuResult.chikouSpan,
+          data: toXY(ichimokuResult.chikouSpan),
           borderColor: '#a855f7',
           backgroundColor: 'transparent',
           borderWidth: 1,
           borderDash: [2, 2],
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
       }
 
@@ -844,14 +1241,14 @@ const StockChart: React.FC<StockChartProps> = ({
       return item.date;
     });
 
-    // RSI Chart
-    if (showRSI && prices.length >= 14) {
+    // RSI Chart with configurable period
+    if (showRSI && prices.length >= indicatorSettings.rsi.period) {
       try {
-        const rsiValues = calculateRSI(prices, 14);
+        const rsiValues = calculateRSI(prices, indicatorSettings.rsi.period);
         const newRsiData = {
           labels,
           datasets: [{
-            label: 'RSI',
+            label: `RSI(${indicatorSettings.rsi.period})`,
             data: rsiValues,
             borderColor: 'rgb(153, 102, 255)',
             backgroundColor: 'transparent',
@@ -983,19 +1380,18 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const handleIndicatorChange = (indicator: string, value: boolean) => {
-    switch(indicator) {
-      case 'ma20': setShowMA20(value); break;
-      case 'ma50': setShowMA50(value); break;
-      case 'ema12': setShowEMA12(value); break;
-      case 'ema26': setShowEMA26(value); break;
-      case 'rsi': setShowRSI(value); break;
-      case 'macd': setShowMACD(value); break;
-      case 'bollinger': setShowBollingerBands(value); break;
-      case 'stochastic': setShowStochastic(value); break;
-      case 'vwap': setShowVWAP(value); break;
-      case 'ichimoku': setShowIchimoku(value); break;
-      case 'volume': setShowVolume(value); break;
-    }
+    setIndicatorSettings(prev => ({
+      ...prev,
+      [indicator]: { ...prev[indicator as keyof typeof prev], enabled: value }
+    }));
+  };
+
+  // New handler for enhanced indicator settings
+  const handleEnhancedIndicatorChange = (indicator: string, config: any) => {
+    setIndicatorSettings(prev => ({
+      ...prev,
+      [indicator]: config
+    }));
   };
 
   // 드로잉 데이터 동기화 요청 전송
@@ -1071,7 +1467,18 @@ const StockChart: React.FC<StockChartProps> = ({
         padding: 12,
         displayColors: true,
         callbacks: {
+          title: function(context: any) {
+            const index = context[0]?.dataIndex;
+            if (chartData && index >= chartData.actualDataLength) {
+              return 'Future Period (예측 영역)';
+            }
+            return context[0]?.label || '';
+          },
           label: function(context: any) {
+            const index = context.dataIndex;
+            if (chartData && index >= chartData.actualDataLength && context.dataset.label === '종가') {
+              return 'No data - Draw predictions here';
+            }
             const label = context.dataset.label || '';
             const value = context.parsed.y;
             
@@ -1104,9 +1511,18 @@ const StockChart: React.FC<StockChartProps> = ({
     },
     scales: {
       x: {
-        display: true,
-        title: {
-          display: false,
+        type : 'time',
+        time : {
+          unit: (periodDays <= 7) ? 'day'     // 필요시 'minute','hour','day' 분기
+              : (periodDays <= 30) ? 'day'
+              : 'day',
+          tooltipFormat: 'yyyy-MM-dd HH:mm',  // 표시 포맷
+          displayFormats: {
+            minute: 'HH:mm',
+            hour: 'MM/dd HH:mm',
+            day: 'MM/dd',
+            month: 'yyyy-MM'
+          }
         },
         ticks: {
           maxTicksLimit: tickSettings.maxTicksLimit,
@@ -1204,6 +1620,11 @@ const StockChart: React.FC<StockChartProps> = ({
     },
     scales: {
       x: {
+        type: 'time',
+        time: {
+        unit: (periodDays <= 7) ? 'day' : 'day', // 메인 차트와 맞춤
+        displayFormats: { day: 'MM/dd', month: 'yyyy-MM' }
+        },
         display: false,
       },
       y: {
@@ -1402,100 +1823,19 @@ const StockChart: React.FC<StockChartProps> = ({
   const canShowStochastic = rawData && rawData.length >= 14;
   const canShowBollinger = rawData && rawData.length >= 20;
   const canShowMA20 = rawData && rawData.length >= 20;
-  const canShowMA50 = rawData && rawData.length >= 50;
+  const canShowMA50 = false; // Disabled per user request
   const canShowEMA12 = rawData && rawData.length >= 12;
-  const canShowEMA26 = rawData && rawData.length >= 26;
+  const canShowEMA26 = false; // Disabled per user request
   const canShowIchimoku = rawData && rawData.length >= 52;
 
   return (
-    <div className={`h-full w-full flex ${darkMode ? 'bg-gray-950' : 'bg-gray-50'}`}>
-      {/* Left Sidebar - Technical Indicators */}
-      <div className={`w-64 flex-shrink-0 ${darkMode ? 'bg-gray-900 border-r border-gray-800' : 'bg-white border-r border-gray-200'} flex flex-col z-10 h-full overflow-y-auto`}>
+    <div className={`h-full w-full flex ${darkMode ? 'bg-gray-950' : 'bg-gray-50'} relative`}>
+      {/* Left Sidebar - Enhanced Technical Indicators */}
+      <div className={`w-72 flex-shrink-0 ${darkMode ? 'bg-gray-900 border-r border-gray-800' : 'bg-white border-r border-gray-200'} flex flex-col h-full overflow-y-auto relative z-20`}>
         <div className="flex-1 overflow-y-auto">
-          <TechnicalIndicators
-            indicators={{
-              ma20: showMA20,
-              ma50: showMA50,
-              ema12: showEMA12,
-              ema26: showEMA26,
-              rsi: showRSI,
-              macd: showMACD,
-              bollinger: showBollingerBands,
-              stochastic: showStochastic,
-              vwap: showVWAP,
-              ichimoku: showIchimoku,
-              volume: showVolume,
-            }}
-            onIndicatorChange={(indicator, value) => {
-              // Check if indicator can be enabled based on data length
-              switch(indicator) {
-                case 'ma20': 
-                  if (!canShowMA20 && value) {
-                    alert('MA(20)을 표시하려면 최소 20개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowMA20(value); 
-                  break;
-                case 'ma50': 
-                  if (!canShowMA50 && value) {
-                    alert('MA(50)을 표시하려면 최소 50개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowMA50(value); 
-                  break;
-                case 'ema12': 
-                  if (!canShowEMA12 && value) {
-                    alert('EMA(12)를 표시하려면 최소 12개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowEMA12(value); 
-                  break;
-                case 'ema26': 
-                  if (!canShowEMA26 && value) {
-                    alert('EMA(26)을 표시하려면 최소 26개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowEMA26(value); 
-                  break;
-                case 'rsi': 
-                  if (!canShowRSI && value) {
-                    alert('RSI를 표시하려면 최소 14개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowRSI(value); 
-                  break;
-                case 'macd': 
-                  if (!canShowMACD && value) {
-                    alert('MACD를 표시하려면 최소 26개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowMACD(value); 
-                  break;
-                case 'bollinger': 
-                  if (!canShowBollinger && value) {
-                    alert('볼린저 밴드를 표시하려면 최소 20개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowBollingerBands(value); 
-                  break;
-                case 'stochastic': 
-                  if (!canShowStochastic && value) {
-                    alert('Stochastic을 표시하려면 최소 14개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowStochastic(value); 
-                  break;
-                case 'vwap': setShowVWAP(value); break;
-                case 'ichimoku': 
-                  if (!canShowIchimoku && value) {
-                    alert('일목균형표를 표시하려면 최소 52개의 데이터가 필요합니다.');
-                    return;
-                  }
-                  setShowIchimoku(value); 
-                  break;
-                case 'volume': setShowVolume(value); break;
-              }
-            }}
+          <EnhancedTechnicalIndicators
+            indicators={indicatorSettings}
+            onIndicatorChange={handleEnhancedIndicatorChange}
             darkMode={darkMode}
             disabledIndicators={{
               ma20: !canShowMA20,
@@ -1506,7 +1846,7 @@ const StockChart: React.FC<StockChartProps> = ({
               macd: !canShowMACD,
               bollinger: !canShowBollinger,
               stochastic: !canShowStochastic,
-              ichimoku: !canShowIchimoku,
+              ichimoku: !canShowIchimoku
             }}
           />
         </div>
@@ -1577,7 +1917,20 @@ const StockChart: React.FC<StockChartProps> = ({
         <div className={`flex-1 flex flex-col ${darkMode ? 'bg-gray-950' : 'bg-gray-50'} overflow-y-auto p-4`}>
           {/* Main Price Chart */}
           <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'} mb-4`}>
-            <div className="relative" style={{ minHeight: '400px', height: '50vh', maxHeight: '600px', padding: '24px' }} ref={chartContainerRef}>
+            <div 
+              className="relative" 
+              style={{ 
+                minHeight: '400px', 
+                height: '50vh', 
+                maxHeight: '600px', 
+                padding: '24px', 
+                cursor: isDraggingFuture ? 'ew-resize' : (isDrawingMode ? 'default' : 'grab')
+              }} 
+              ref={chartContainerRef}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}>
               {isLoading && (
                 <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10 rounded-xl">
                   <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-500"></div>
@@ -1614,7 +1967,25 @@ const StockChart: React.FC<StockChartProps> = ({
               )}
 
               {chartData && !isLoading && !error && (
-                <Line data={chartData} options={chartOptions} ref={chartRef} />
+                <>
+                  <Line key={`price-${getCurrentTicker()}-${period}-main`} data={chartData} options={chartOptions} ref={chartRef}/>
+                  
+                  {/* Future period visual indicator - subtle overlay only */}
+                  {enableFutureSpace && futureDays > 0 && chartData.actualDataLength < totalLen && (
+                    <div 
+                      className="absolute top-0 bottom-0 pointer-events-none"
+                      style={{
+                        left: `${(chartData.actualDataLength / totalLen) * 100}%`,
+                        right: 0,
+                        background: darkMode 
+                          ? 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.02) 50%, rgba(59, 130, 246, 0.04) 100%)'
+                          : 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.01) 50%, rgba(59, 130, 246, 0.02) 100%)',
+                        borderLeft: `1px dashed ${darkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.3)'}`
+                      }}
+                    />
+                  )}
+                  
+                </>
               )}
               
               {/* Always render the canvas container to avoid DOM manipulation issues */}
@@ -1630,46 +2001,338 @@ const StockChart: React.FC<StockChartProps> = ({
             </div>
           </div>
 
-          {/* Secondary Indicators Container */}
-          {(showVolume || showRSI || showMACD || showStochastic) && (
-            <div className="space-y-4">
-              {/* Volume Chart */}
-              {showVolume && volumeChartData && (
-                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-                  <div style={{ minHeight: '180px', height: '25vh', maxHeight: '300px', padding: '20px' }}>
-                    <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef} />
+          {/* Secondary Indicators Container with Tabs - Always Visible */}
+          <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+              {/* Tab Headers with Checkboxes and Controls */}
+              <div className={`flex items-center justify-between border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                <div className="flex">
+                  {/* Volume Tab */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => setActiveIndicatorTab('volume')}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                        activeIndicatorTab === 'volume'
+                          ? darkMode 
+                            ? 'bg-gray-800 text-blue-400 border-b-2 border-blue-400'
+                            : 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                          : darkMode
+                            ? 'text-gray-400 hover:text-gray-200'
+                            : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showVolume}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleEnhancedIndicatorChange('volume', { ...indicatorSettings.volume, enabled: !showVolume });
+                        }}
+                        className="w-3 h-3"
+                      />
+                      거래량
+                    </button>
+                    {/* Hover tooltip */}
+                    <div className={`absolute bottom-full left-0 mb-2 p-2 rounded shadow-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 ${
+                      darkMode ? 'bg-gray-800 text-gray-200' : 'bg-white text-gray-700 border'
+                    }`}>
+                      거래량을 막대 그래프로 표시합니다
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* RSI Chart */}
-              {showRSI && rsiChartData && canShowRSI && (
-                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-                  <div style={{ minHeight: '150px', height: '20vh', maxHeight: '250px', padding: '16px' }}>
-                    <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef} />
+                  {/* RSI Tab */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setActiveIndicatorTab('rsi')}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                        activeIndicatorTab === 'rsi'
+                          ? darkMode 
+                            ? 'bg-gray-800 text-blue-400 border-b-2 border-blue-400'
+                            : 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                          : darkMode
+                            ? 'text-gray-400 hover:text-gray-200'
+                            : 'text-gray-600 hover:text-gray-900'
+                      } ${!canShowRSI ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canShowRSI}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showRSI}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (canShowRSI) {
+                            handleEnhancedIndicatorChange('rsi', { ...indicatorSettings.rsi, enabled: !showRSI });
+                          }
+                        }}
+                        disabled={!canShowRSI}
+                        className="w-3 h-3"
+                      />
+                      RSI
+                      {showRSI && (
+                        <input
+                          type="text"
+                          value={localRSIPeriod || indicatorSettings.rsi.period}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const value = e.target.value;
+                            setLocalRSIPeriod(value); // Update local state immediately
+                            
+                            // Only update if it's a valid number
+                            if (value === '') return; // Allow empty for typing
+                            const numValue = parseInt(value);
+                            if (!isNaN(numValue) && numValue > 0 && numValue <= 100) {
+                              handleEnhancedIndicatorChange('rsi', { ...indicatorSettings.rsi, period: numValue });
+                            }
+                          }}
+                          onBlur={(e) => {
+                            e.stopPropagation();
+                            // On blur, ensure a valid value
+                            const value = e.target.value;
+                            const numValue = parseInt(value);
+                            if (isNaN(numValue) || numValue < 2) {
+                              setLocalRSIPeriod('14');
+                              handleEnhancedIndicatorChange('rsi', { ...indicatorSettings.rsi, period: 14 });
+                            } else if (numValue > 100) {
+                              setLocalRSIPeriod('100');
+                              handleEnhancedIndicatorChange('rsi', { ...indicatorSettings.rsi, period: 100 });
+                            } else {
+                              setLocalRSIPeriod(numValue.toString());
+                              handleEnhancedIndicatorChange('rsi', { ...indicatorSettings.rsi, period: numValue });
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-12 px-1 text-xs rounded border ${
+                            darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'
+                          }`}
+                          placeholder="14"
+                        />
+                      )}
+                      <div
+                        onMouseEnter={() => setHoveredHelp('rsi')}
+                        onMouseLeave={() => setHoveredHelp(null)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative"
+                      >
+                        <span className={`text-xs rounded-full w-4 h-4 flex items-center justify-center ${
+                          darkMode ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        }`}>
+                          ?
+                        </span>
+                      </div>
+                    </button>
+                    {/* Detailed RSI Explanation */}
+                    {hoveredHelp === 'rsi' && (
+                      <div className={`absolute top-full left-0 mt-2 p-3 rounded-lg shadow-xl text-xs w-80 z-[100] ${
+                        darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                      }`}>
+                        <h4 className={`font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          RSI (Relative Strength Index) - 상대강도지수
+                        </h4>
+                        <div className={`space-y-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <p>
+                            <strong>설명:</strong> RSI는 일정 기간 동안 주가의 상승폭과 하락폭을 비교하여 현재 주가가 과매수 또는 과매도 상태인지를 나타내는 모멘텀 지표입니다.
+                          </p>
+                          <p>
+                            <strong>계산:</strong> 0~100 사이의 값으로 표시되며, 일반적으로 14일 기간을 사용합니다.
+                          </p>
+                          <div>
+                            <strong>해석:</strong>
+                            <ul className="mt-1 ml-4 list-disc">
+                              <li>70 이상: 과매수 구간 (하락 전환 가능성)</li>
+                              <li>30 이하: 과매도 구간 (상승 전환 가능성)</li>
+                              <li>50 기준: 상승/하락 추세 판단</li>
+                            </ul>
+                          </div>
+                          <p>
+                            <strong>활용:</strong> 다이버전스(주가와 RSI의 반대 움직임)를 통해 추세 전환을 예측할 수 있습니다.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {/* MACD Chart */}
-              {showMACD && macdChartData && canShowMACD && (
-                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-                  <div style={{ minHeight: '180px', height: '25vh', maxHeight: '300px', padding: '20px' }}>
-                    <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
+                  {/* MACD Tab */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setActiveIndicatorTab('macd')}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                        activeIndicatorTab === 'macd'
+                          ? darkMode 
+                            ? 'bg-gray-800 text-blue-400 border-b-2 border-blue-400'
+                            : 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                          : darkMode
+                            ? 'text-gray-400 hover:text-gray-200'
+                            : 'text-gray-600 hover:text-gray-900'
+                      } ${!canShowMACD ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canShowMACD}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showMACD}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (canShowMACD) {
+                            handleEnhancedIndicatorChange('macd', { ...indicatorSettings.macd, enabled: !showMACD });
+                          }
+                        }}
+                        disabled={!canShowMACD}
+                        className="w-3 h-3"
+                      />
+                      MACD
+                      <div
+                        onMouseEnter={() => setHoveredHelp('macd')}
+                        onMouseLeave={() => setHoveredHelp(null)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative"
+                      >
+                        <span className={`text-xs rounded-full w-4 h-4 flex items-center justify-center ${
+                          darkMode ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        }`}>
+                          ?
+                        </span>
+                      </div>
+                    </button>
+                    {/* Detailed MACD Explanation */}
+                    {hoveredHelp === 'macd' && (
+                      <div className={`absolute top-full left-0 mt-2 p-3 rounded-lg shadow-xl text-xs w-80 z-[100] ${
+                        darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                      }`}>
+                        <h4 className={`font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          MACD (Moving Average Convergence Divergence)
+                        </h4>
+                        <div className={`space-y-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <p>
+                            <strong>설명:</strong> MACD는 두 이동평균선의 차이를 이용해 추세의 변화를 포착하는 지표입니다.
+                          </p>
+                          <div>
+                            <strong>구성요소:</strong>
+                            <ul className="mt-1 ml-4 list-disc">
+                              <li>MACD선: 12일 EMA - 26일 EMA</li>
+                              <li>시그널선: MACD의 9일 EMA</li>
+                              <li>히스토그램: MACD선 - 시그널선</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>매매신호:</strong>
+                            <ul className="mt-1 ml-4 list-disc">
+                              <li>골든크로스: MACD가 시그널선 상향돌파 (매수)</li>
+                              <li>데드크로스: MACD가 시그널선 하향돌파 (매도)</li>
+                              <li>0선 돌파: 추세 전환 신호</li>
+                            </ul>
+                          </div>
+                          <p>
+                            <strong>주의:</strong> 횡보장에서는 잦은 거짓 신호가 발생할 수 있습니다.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stochastic Tab */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setActiveIndicatorTab('stochastic')}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                        activeIndicatorTab === 'stochastic'
+                          ? darkMode 
+                            ? 'bg-gray-800 text-blue-400 border-b-2 border-blue-400'
+                            : 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                          : darkMode
+                            ? 'text-gray-400 hover:text-gray-200'
+                            : 'text-gray-600 hover:text-gray-900'
+                      } ${!canShowStochastic ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canShowStochastic}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showStochastic}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (canShowStochastic) {
+                            handleEnhancedIndicatorChange('stochastic', { ...indicatorSettings.stochastic, enabled: !showStochastic });
+                          }
+                        }}
+                        disabled={!canShowStochastic}
+                        className="w-3 h-3"
+                      />
+                      스토캐스틱
+                      <div
+                        onMouseEnter={() => setHoveredHelp('stochastic')}
+                        onMouseLeave={() => setHoveredHelp(null)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative"
+                      >
+                        <span className={`text-xs rounded-full w-4 h-4 flex items-center justify-center ${
+                          darkMode ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        }`}>
+                          ?
+                        </span>
+                      </div>
+                    </button>
+                    {/* Detailed Stochastic Explanation - Position adjusted to prevent cropping */}
+                    {hoveredHelp === 'stochastic' && (
+                      <div 
+                        className={`absolute mt-2 p-3 rounded-lg shadow-xl text-xs w-80 z-[100] ${
+                          darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                        }`}
+                        style={{
+                          top: '100%',
+                          right: 0, // Align to right edge instead of left to prevent right-side cropping
+                        }}
+                      >
+                        <h4 className={`font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          스토캐스틱 (Stochastic Oscillator)
+                        </h4>
+                        <div className={`space-y-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <p>
+                            <strong>설명:</strong> 일정 기간 동안의 최고가와 최저가 범위 내에서 현재 가격의 위치를 백분율로 나타내는 지표입니다.
+                          </p>
+                          <div>
+                            <strong>구성:</strong>
+                            <ul className="mt-1 ml-4 list-disc">
+                              <li>%K (빠른선): 현재 가격의 상대적 위치</li>
+                              <li>%D (느린선): %K의 3일 이동평균</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>매매신호:</strong>
+                            <ul className="mt-1 ml-4 list-disc">
+                              <li>80 이상: 과매수 구간 (매도 고려)</li>
+                              <li>20 이하: 과매도 구간 (매수 고려)</li>
+                              <li>%K와 %D 교차: 추세 전환 신호</li>
+                              <li>다이버전스: 추세 약화 신호</li>
+                            </ul>
+                          </div>
+                          <p>
+                            <strong>특징:</strong> 박스권 장세에서 특히 유용하며, 추세장에서는 과매수/과매도 상태가 지속될 수 있습니다.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-              
-              {/* Stochastic Chart */}
-              {showStochastic && stochChartData && canShowStochastic && (
-                <div className={`${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-lg border ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-                  <div style={{ minHeight: '150px', height: '20vh', maxHeight: '250px', padding: '16px' }}>
-                    <Line data={stochChartData} options={stochasticChartOptions} />
+              </div>
+
+              {/* Tab Content */}
+              <div style={{ minHeight: '200px', height: '25vh', maxHeight: '300px', padding: '20px' }}>
+                {/* Show chart based on active tab */}
+                {activeIndicatorTab === 'volume' && showVolume && volumeChartData ? (
+                  <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef}/>
+                ) : activeIndicatorTab === 'rsi' && showRSI && rsiChartData && canShowRSI ? (
+                  <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef}/>
+                ) : activeIndicatorTab === 'macd' && showMACD && macdChartData && canShowMACD ? (
+                  <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef}/>
+                ) : activeIndicatorTab === 'stochastic' && showStochastic && stochChartData && canShowStochastic ? (
+                  <Line data={stochChartData} options={stochasticChartOptions}/>
+                ) : (
+                  <div className={`flex items-center justify-center h-full ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <div className="text-center">
+                      <p className="text-sm mb-2">선택된 지표가 없습니다</p>
+                      <p className="text-xs">위 탭에서 체크박스를 클릭하여 지표를 활성화하세요</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          )}
         </div>
       </div>
     </div>

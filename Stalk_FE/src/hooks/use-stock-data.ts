@@ -156,7 +156,7 @@ export const useStockData = (
 const rankingCache = new Map<string, {data: any[], timestamp: number}>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketType?: string) => {
+export const useStockList = (category?: 'gainers' | 'losers' | 'volume' | 'marketCap' | 'tradeValue', marketType?: string) => {
   const [stocks, setStocks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,7 +186,9 @@ export const useStockList = (category?: 'gainers' | 'losers' | 'volume', marketT
       const categoryMap = {
         'volume': 'volume-ranking',
         'gainers': 'price-increase-ranking', 
-        'losers': 'price-decrease-ranking'
+        'losers': 'price-decrease-ranking',
+        'marketCap': 'market-cap-ranking',
+        'tradeValue': 'trade-value-ranking'
       };
       
       const endpoint = categoryMap[category || 'volume'];
