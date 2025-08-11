@@ -713,19 +713,32 @@ const MyPage = () => {
     return selectedAvatar ? selectedAvatar.image : profileDefault;
   };
 
+
   // 백엔드에서 받은 프로필 이미지 표시
   const getProfileImage = () => {
-    if (userProfile?.profileImage) {
-      const img = userProfile.profileImage;
-      // URL 혹은 절대/상대 경로면 그대로 사용
-      if (/^https?:\/\//.test(img) || img.startsWith('/')) {
-        return img;
-      }
-      // 아닌 경우 기존 아바타 id 매핑 시도 (하위 호환)
-      const avatar = avatarOptions.find((avatar) => avatar.id === img);
-      return avatar ? avatar.image : profileDefault;
+    // 1. 유저 프로필 정보나 이미지 경로가 없으면 기본 이미지 반환
+    if (!userProfile?.profileImage) {
+      // 선택된 미리보기 이미지가 있다면 그것을 보여주는 로직도 추가할 수 있습니다.
+      // return getSelectedProfileImage() || profileDefault;
+      return profileDefault;
     }
-    return getSelectedProfileImage();
+
+    const imagePath = userProfile.profileImage; // 예: "/uploads/image.png"
+
+    // 2. 경로가 http로 시작하는 완전한 URL이면 그대로 사용
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+
+    // 3. 경로가 '/'로 시작하는 상대 경로이면, 앞에 백엔드 서버 주소를 붙여줌
+    if (imagePath.startsWith('/')) {
+      console.log(`[ 절대 경로 생성 ] ${import.meta.env.VITE_API_URL}${imagePath}`);
+      return `${import.meta.env.VITE_API_URL}${imagePath}`;
+    }
+
+    // 4. 그 외의 경우 (예: 레거시 아바타 ID 등) 처리
+    const avatar = avatarOptions.find((avatar) => avatar.id === imagePath);
+    return avatar ? avatar.image : profileDefault;
   };
 
   // 스케줄 관리 관련 함수들
