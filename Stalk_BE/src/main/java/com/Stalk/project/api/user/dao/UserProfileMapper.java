@@ -3,6 +3,7 @@ package com.Stalk.project.api.user.dao;
 import com.Stalk.project.api.signup.entity.User;
 import com.Stalk.project.api.user.dto.in.UserUpdateRequestDto;
 import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
+import java.util.Optional;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -46,4 +47,7 @@ public interface UserProfileMapper {
    */
   Long deactivateUser(@Param("userId") Long userId);
 
+  Optional<User> findByNickname(String nickname);
+
+  void updateProfile(User user);
 }

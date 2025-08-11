@@ -1,7 +1,8 @@
 package com.Stalk.project.api.user.controller;
 
-import com.Stalk.project.api.login.service.MyUserDetails;
 import com.Stalk.project.api.user.dto.in.PasswordChangeRequestDto;
+import com.Stalk.project.api.user.dto.in.ProfileUpdateRequestDto;
+import com.Stalk.project.api.user.dto.out.ProfileUpdateResponseDto;
 import com.Stalk.project.global.util.SecurityUtil;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.api.user.dto.in.UserUpdateRequestDto;
@@ -15,7 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -58,6 +59,20 @@ public class UserController {
     return new BaseResponse<>(result);
   }
 
+  @PatchMapping(value = "/me/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(
+      summary = "내 프로필 수정 (닉네임, 프로필 이미지)",
+      description = "현재 로그인한 사용자의 닉네임과 프로필 이미지를 수정합니다.",
+      security = @SecurityRequirement(name = "Bearer Authentication")
+  )
+  public BaseResponse<ProfileUpdateResponseDto> updateMyProfile(
+      @Valid @ModelAttribute ProfileUpdateRequestDto requestDto) { // 새로 만든 DTO 사용
+
+    Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
+    ProfileUpdateResponseDto result = userService.updateNicknameAndImage(currentUserId, requestDto);
+    return new BaseResponse<>(result);
+  }
+
   /**
    * 회원 탈퇴 API
    *
@@ -89,4 +104,6 @@ public class UserController {
     userService.changePassword(currentUserId, requestDto);
     return new BaseResponse<>("비밀번호가 성공적으로 변경되었습니다.");
   }
+
+
 }
