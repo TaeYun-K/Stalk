@@ -1,5 +1,6 @@
 package com.Stalk.project.api.ai.controller;
 
+import com.Stalk.project.api.ai.dto.in.VideoAnalysisRequest;
 import com.Stalk.project.api.ai.dto.out.VideoAnalysisResponse;
 import com.Stalk.project.api.ai.entity.AnalysisResult;
 import com.Stalk.project.api.ai.service.VideoAnalysisService;
@@ -7,10 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
@@ -29,21 +29,20 @@ public class VideoAnalysisController {
   }
 
   /**
-   * 영상 파일을 받아 분석하고 결과를 반환하는 API 엔드포인트입니다.
+   * 영상 URL을 받아 분석하고 결과를 반환하는 API 엔드포인트
    *
-   * @param file 'videoFile'이라는 이름으로 전송된 영상 파일
+   * @param request 'videoUrl'을 포함하는 요청 본문
    * @return 분석 결과 DTO를 포함한 ResponseEntity
    */
   @PostMapping("/analyze-video")
-  // videoFile이라는 키(key)로 전송한 영상 파일(MultipartFile)을 파라미터로 받음
-  public ResponseEntity<?> analyzeVideo(@RequestParam("videoFile") MultipartFile file) {
-    if (file.isEmpty()) {
-      return ResponseEntity.badRequest().body("Please select a file to upload.");
+  public ResponseEntity<?> analyzeVideoFromUrl(@RequestBody VideoAnalysisRequest request) {
+    if (request.getVideoUrl() == null || request.getVideoUrl().trim().isEmpty()) {
+      return ResponseEntity.badRequest().body("Please provide a 'videoUrl'.");
     }
 
     try {
-      // videoAnalysisService.processAndSaveAnalysis(file)를 호출하여 영상 분석 및 저장을 위임
-      AnalysisResult result = videoAnalysisService.processAndSaveAnalysis(file);
+      // URL을 처리하는 서비스 메소드를 호출하도록 변경
+      AnalysisResult result = videoAnalysisService.processAndSaveAnalysisFromUrl(request.getVideoUrl());
       VideoAnalysisResponse responseDto = new VideoAnalysisResponse(
           result.getId(),
           result.getOriginalFileName(),
@@ -52,10 +51,9 @@ public class VideoAnalysisController {
       );
       return ResponseEntity.ok(responseDto);
     } catch (IOException e) {
-      // 로깅 프레임워크를 사용하여 에러를 기록
       e.printStackTrace();
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body("Failed to analyze video: " + e.getMessage());
+          .body("Failed to analyze video from URL: " + e.getMessage());
     }
   }
 }
