@@ -26,22 +26,22 @@ const ChartControls: React.FC<ChartControlsProps> = ({
   ];
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2 py-1.5 ${
-      darkMode ? 'bg-gray-900/40 border-gray-700/50' : 'bg-gray-50 border-gray-200'
-    } rounded-lg mb-2 border`}>
-      <span className={`text-xs font-medium ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+    <div className="inline-flex items-center gap-1.5">
+      <span className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
         기간:
       </span>
       {periods.map(p => (
         <button
           key={p.value}
           onClick={() => onPeriodChange(p.value)}
-          className={`px-2 py-1 text-xs rounded-md transition-all ${
+          className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all transform hover:scale-105 ${
             period === p.value
-              ? 'bg-blue-500 text-white shadow-sm'
+              ? darkMode
+                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                : 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
               : darkMode 
-                ? 'bg-gray-800/60 text-gray-400 hover:bg-gray-700/60 hover:text-gray-300' 
-                : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white' 
+                : 'bg-white/70 text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm'
           }`}
         >
           {p.label}

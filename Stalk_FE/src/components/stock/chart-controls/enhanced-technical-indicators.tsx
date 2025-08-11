@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface IndicatorConfig {
   enabled: boolean;
@@ -94,30 +95,10 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
   darkMode = false,
   disabledIndicators = {}
 }) => {
+
   const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
   const [hoveredIndicator, setHoveredIndicator] = useState<string | null>(null);
-  const [localPeriodValues, setLocalPeriodValues] = useState<{[key: string]: string}>({});
-
-  const handlePeriodChange = (indicator: string, value: string, field: string = 'period') => {
-    // Allow empty string for typing
-    if (value === '') {
-      const currentConfig = indicators[indicator as keyof IndicatorSettings];
-      onIndicatorChange(indicator, {
-        ...currentConfig,
-        [field]: 1 // Set to minimum value when empty
-      });
-      return;
-    }
-    
-    const numValue = parseInt(value);
-    if (!isNaN(numValue) && numValue > 0) {
-      const currentConfig = indicators[indicator as keyof IndicatorSettings];
-      onIndicatorChange(indicator, {
-        ...currentConfig,
-        [field]: numValue
-      });
-    }
-  };
+  const [editingValues, setEditingValues] = useState<{[key: string]: string}>({});
 
   const toggleIndicator = (indicator: string) => {
     const currentConfig = indicators[indicator as keyof IndicatorSettings];
@@ -136,7 +117,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
     secondaryPeriod?: { label: string; field: string; value: number }
   ) => {
     const isDisabled = disabledIndicators[key] || false;
-    
+
     return (
       <div className={`relative border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} py-3`}>
         <div className="flex items-center justify-between mb-2">
@@ -147,8 +128,8 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
               onChange={() => !isDisabled && toggleIndicator(key)}
               disabled={isDisabled}
               className={`rounded ${
-                darkMode 
-                  ? 'bg-gray-700 border-gray-600 text-blue-500' 
+                darkMode
+                  ? 'bg-gray-700 border-gray-600 text-blue-500'
                   : 'bg-white border-gray-300 text-blue-600'
               } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             />
@@ -158,15 +139,15 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
             onClick={() => !isDisabled && toggleIndicator(key)}>
               {label}
             </label>
-            <div 
+            <div
               className="relative group"
               onMouseEnter={() => setHoveredIndicator(key)}
               onMouseLeave={() => setHoveredIndicator(null)}
             >
               <button
                 className={`ml-1 text-xs rounded-full w-4 h-4 flex items-center justify-center ${
-                  darkMode 
-                    ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' 
+                  darkMode
+                    ? 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                     : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                 }`}
                 type="button"
@@ -175,7 +156,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
               </button>
               {/* Hover tooltip - Fixed positioning */}
               {hoveredIndicator === key && (
-                <div 
+                <div
                   className={`fixed p-3 rounded-lg shadow-xl text-xs w-80 z-[200] ${
                     darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
                   }`}
@@ -203,44 +184,54 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
               )}
             </div>
           </div>
-          
+
           {hasCustomPeriod && config.enabled && !isDisabled && (
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                value={localPeriodValues[key] !== undefined ? localPeriodValues[key] : (config.period || 20)}
+                value={editingValues[`${key}_period`] !== undefined
+                  ? editingValues[`${key}_period`]
+                  : (config.period || 20)}
+                onFocus={(e) => {
+                  setEditingValues(prev => ({
+                    ...prev,
+                    [`${key}_period`]: String(config.period || 20)
+                  }));
+                  e.target.select();
+                }}
                 onChange={(e) => {
                   const value = e.target.value;
-                  // Update local state immediately for smooth typing
-                  setLocalPeriodValues(prev => ({ ...prev, [key]: value }));
-                  
-                  // Only update the actual indicator if it's a valid number
-                  if (value === '') return; // Allow empty for typing
-                  const numValue = parseInt(value);
-                  if (!isNaN(numValue) && numValue > 0 && numValue <= 200) {
-                    handlePeriodChange(key, value);
-                  }
+                  setEditingValues(prev => ({
+                    ...prev,
+                    [`${key}_period`]: value
+                  }));
                 }}
                 onBlur={(e) => {
-                  // On blur, ensure a valid value
                   const value = e.target.value;
                   const numValue = parseInt(value);
-                  if (isNaN(numValue) || numValue < 1) {
-                    setLocalPeriodValues(prev => ({ ...prev, [key]: '20' }));
-                    handlePeriodChange(key, '20');
-                  } else if (numValue > 200) {
-                    setLocalPeriodValues(prev => ({ ...prev, [key]: '200' }));
-                    handlePeriodChange(key, '200');
-                  } else {
-                    handlePeriodChange(key, numValue.toString());
+
+                  let finalValue = 20;
+                  if (!isNaN(numValue) && numValue > 0) {
+                    finalValue = Math.min(Math.max(numValue, 1), 200);
                   }
+
+                  onIndicatorChange(key, {
+                    ...config,
+                    period: finalValue
+                  });
+
+                  // Clear editing state
+                  setEditingValues(prev => {
+                    const newState = { ...prev };
+                    delete newState[`${key}_period`];
+                    return newState;
+                  });
                 }}
                 className={`w-16 px-2 py-1 text-xs rounded border ${
-                  darkMode 
-                    ? 'bg-gray-800 border-gray-600 text-gray-200' 
+                  darkMode
+                    ? 'bg-gray-800 border-gray-600 text-gray-200'
                     : 'bg-white border-gray-300 text-gray-700'
                 }`}
-                placeholder="20"
               />
               <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 일
@@ -248,7 +239,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
             </div>
           )}
         </div>
-        
+
         {secondaryPeriod && config.enabled && !isDisabled && (
           <div className="flex items-center justify-end gap-2 mt-2">
             <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -256,11 +247,48 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
             </span>
             <input
               type="number"
-              value={secondaryPeriod.value}
-              onChange={(e) => handlePeriodChange(key, e.target.value, secondaryPeriod.field)}
+              step="0.1"
+              value={editingValues[`${key}_${secondaryPeriod.field}`] !== undefined
+                ? editingValues[`${key}_${secondaryPeriod.field}`]
+                : secondaryPeriod.value}
+              onFocus={(e) => {
+                setEditingValues(prev => ({
+                  ...prev,
+                  [`${key}_${secondaryPeriod.field}`]: String(secondaryPeriod.value)
+                }));
+                e.target.select();
+              }}
+              onChange={(e) => {
+                const value = e.target.value;
+                setEditingValues(prev => ({
+                  ...prev,
+                  [`${key}_${secondaryPeriod.field}`]: value
+                }));
+              }}
+              onBlur={(e) => {
+                const value = e.target.value;
+                const numValue = parseFloat(value);
+
+                let finalValue = secondaryPeriod.field === 'stdDev' ? 2 : 20;
+                if (!isNaN(numValue) && numValue > 0) {
+                  finalValue = numValue;
+                }
+
+                onIndicatorChange(key, {
+                  ...config,
+                  [secondaryPeriod.field]: finalValue
+                });
+
+                // Clear editing state
+                setEditingValues(prev => {
+                  const newState = { ...prev };
+                  delete newState[`${key}_${secondaryPeriod.field}`];
+                  return newState;
+                });
+              }}
               className={`w-16 px-2 py-1 text-xs rounded border ${
-                darkMode 
-                  ? 'bg-gray-800 border-gray-600 text-gray-200' 
+                darkMode
+                  ? 'bg-gray-800 border-gray-600 text-gray-200'
                   : 'bg-white border-gray-300 text-gray-700'
               }`}
               min="1"
@@ -283,16 +311,57 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
 
         <div className="space-y-1">
           {/* Price Overlays Only */}
-          <div className={`text-xs font-medium mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            차트 오버레이 지표
+          <div className={`relative flex items-center gap-2 mb-2`}>
+            <div className="relative">
+              <button
+                onMouseEnter={() => setHoveredIndicator('info')}
+                onMouseLeave={() => setHoveredIndicator(null)}
+                className={`w-4 h-4 rounded-full border flex items-center justify-center text-xs transition-colors ${
+                  darkMode
+                    ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
+                    : 'border-gray-400 text-gray-500 hover:border-blue-500 hover:text-blue-500'
+                }`}
+              >
+                ?
+              </button>
+
+              {hoveredIndicator === 'info' && createPortal(
+                <div
+                  className={`fixed p-3 rounded-lg shadow-xl border w-72 ${
+                    darkMode
+                      ? 'bg-gray-800 border-gray-600 text-gray-200'
+                      : 'bg-white border-gray-300 text-gray-700'
+                  }`}
+                  style={{
+                    zIndex: 2147483647,
+                    left: '240px',
+                    top: '200px',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  <div className="text-sm font-medium mb-2">지표 사용 가능 조건</div>
+                  <div className="text-xs space-y-1">
+                    <div>• RSI, MACD: 최소 14일 데이터 필요</div>
+                    <div>• 스토캐스틱: 최소 14일 데이터 필요</div>
+                    <div>• 볼린저 밴드: 최소 20일 데이터 필요</div>
+                    <div>• 일목균형표: 최소 52일 데이터 필요</div>
+                    <div>• 이동평균: 설정된 기간만큼 데이터 필요</div>
+                  </div>
+                  <div className="text-xs mt-2 opacity-75">
+                    데이터가 부족한 지표는 비활성화됩니다.
+                  </div>
+                </div>,
+                document.body
+              )}
+            </div>
           </div>
-          
-          {renderIndicatorControl('ma20', 'MA (이동평균)', indicators.ma20, indicatorExplanations.ma)}
-          {renderIndicatorControl('ema12', 'EMA (지수이동평균)', indicators.ema12, indicatorExplanations.ema)}
+
+          {renderIndicatorControl('ma20', 'MA', indicators.ma20, indicatorExplanations.ma)}
+          {renderIndicatorControl('ema12', 'EMA', indicators.ema12, indicatorExplanations.ema)}
           {renderIndicatorControl(
-            'bollinger', 
-            '볼린저 밴드', 
-            indicators.bollinger, 
+            'bollinger',
+            '볼린저밴드',
+            indicators.bollinger,
             indicatorExplanations.bollinger,
             true,
             { label: '표준편차', field: 'stdDev', value: indicators.bollinger.stdDev || 2 }
@@ -305,7 +374,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
         <div className={`mt-4 p-3 rounded-lg text-xs ${
           darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
         }`}>
-          <strong>팁:</strong> 여러 지표를 동시에 사용하면 차트가 복잡해질 수 있습니다. 
+          <strong>팁:</strong> 여러 지표를 동시에 사용하면 차트가 복잡해질 수 있습니다.
           2-3개의 지표를 선택하여 사용하는 것을 권장합니다.
         </div>
       </div>
