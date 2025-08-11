@@ -436,19 +436,58 @@ const StockChart: React.FC<StockChartProps> = ({
     onChange: (change) => {
       console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
+
+      const chart = chartRef.current;
+      if (!chart?.scales?.x || !chart?.scales?.y || !chart?.chartArea) {
+        console.warn('Chart not ready for coordinate conversion');
+        return;
+      }
       
       const serialize = (shape: any) => {
-        const chart = chartRef.current;
-        if(!chart?.scales?.x) return shape;
-        return toDataShape(shape, chart);
+        try {
+          const dataShape = toDataShape(shape, chart);
+      
+          // 변환된 좌표가 유효한지 검증
+          if (dataShape.attrs?.points) {
+            for (let i = 0; i < dataShape.attrs.points.length; i += 2) {
+              const x = dataShape.attrs.points[i];
+              const y = dataShape.attrs.points[i + 1];
+              if (!isFinite(x) || !isFinite(y)) {
+                console.error('Invalid coordinates after conversion:', { x, y });
+                return shape; // 변환 실패 시 원본 반환
+              }
+            }
+          }
+          
+          return dataShape;
+        } catch (error) {
+          console.error('Error in coordinate conversion:', error);
+          return shape; // 에러 시 원본 반환
+        }
       };
 
       let type: string;
-      let payload: any = { ...change, chart: { ticker: getCurrentTicker(), period } };
+      let payload: any = { 
+        ...change, chart: { ticker: getCurrentTicker(), period ,
+        chartInfo: {
+          chartAreaWidth: chart.chartArea.width,
+          chartAreaHeight: chart.chartArea.height,
+          scaleXMin: chart.scales.x.min,
+          scaleXMax: chart.scales.x.max,
+          scaleYMin: chart.scales.y.min,
+          scaleYMax: chart.scales.y.max,
+          canvasWidth: chart.canvas.width,
+          canvasHeight: chart.canvas.height
+        }
+        } };
 
         if (hasShape(change)) {
           type = `drawing:${change.type}`; // add/update
           payload.shape = serialize(change.shape); // ✅ 이때만 shape 접근
+
+          console.log('[COORD_DEBUG] Original shape:', change.shape);
+          console.log('[COORD_DEBUG] Converted shape:', payload.shape);
+
         } else if (change.type === 'delete') {
           type = 'drawing:delete';         // id, version만 있음
         } else {
@@ -501,14 +540,6 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
-  // 언마운트/변경 시 destroy
-  useEffect(() => {
-    return () => {
-      try { volumeChartRef.current?.destroy?.(); } catch {}
-      try { rsiChartRef.current?.destroy?.(); } catch {}
-      try { macdChartRef.current?.destroy?.(); } catch {}
-    };
-  }, [activeIndicatorTab]);
 
   // ticker 변경시 fetch
   useEffect(() => {
@@ -617,12 +648,52 @@ const StockChart: React.FC<StockChartProps> = ({
     // add/update 수신 → 도형 반영
     // 드로잉 추가 수신 처리
     const onAdd = (e: any) => {
-      const msg = JSON.parse(e.data);
-      if (!isForThisChart(msg)) return;
-      const chart = chartRef.current;
-      if (!chart?.scales?.x) return; // 차트 준비 전이면 스킵하거나 큐에 저장
-      const shapePx = toPixelsShape(msg.shape, chart);
-      applyRemoteChange({ type: 'add', shape: shapePx, version: msg.version });
+      try {
+        const msg = JSON.parse(e.data);
+        if (!isForThisChart(msg)) return;
+        
+        const chart = chartRef.current;
+        
+        // 송신자의 차트 정보와 비교 (옵션)
+        if (msg.chart?.chartInfo) {
+          const myInfo = {
+            chartAreaWidth: chart.chartArea.width,
+            chartAreaHeight: chart.chartArea.height,
+            scaleXMin: chart.scales.x.min,
+            scaleXMax: chart.scales.x.max,
+            scaleYMin: chart.scales.y.min,
+            scaleYMax: chart.scales.y.max
+          };
+          
+          console.log('[SYNC_DEBUG] Their chart info:', msg.chart.chartInfo);
+          console.log('[SYNC_DEBUG] My chart info:', myInfo);
+          
+          // 스케일 차이 경고
+          const xRangeDiff = Math.abs(
+            (myInfo.scaleXMax - myInfo.scaleXMin) - 
+            (msg.chart.chartInfo.scaleXMax - msg.chart.chartInfo.scaleXMin)
+          );
+          const yRangeDiff = Math.abs(
+            (myInfo.scaleYMax - myInfo.scaleYMin) - 
+            (msg.chart.chartInfo.scaleYMax - msg.chart.chartInfo.scaleYMin)
+          );
+          
+          if (xRangeDiff > 1000 || yRangeDiff > 100) { // 임계값 조정 필요
+            console.warn('Significant scale difference detected');
+          }
+        }
+        
+        const shapePx = toPixelsShape(msg.shape, chart);
+        
+        // 변환 결과 로깅 (디버깅용)
+        console.log('[RECV_DEBUG] Received shape:', msg.shape);
+        console.log('[RECV_DEBUG] Converted to px:', shapePx);
+        
+        applyRemoteChange({ type: 'add', shape: shapePx, version: msg.version });
+        
+      } catch (error) {
+        console.error('Error processing add signal:', error);
+      }
     };
 
     // 드로잉 갱신 수신 처리
