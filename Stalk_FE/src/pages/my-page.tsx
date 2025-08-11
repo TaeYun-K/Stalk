@@ -1084,7 +1084,7 @@ const MyPage = () => {
       
       // UserService.updateProfile 호출
       const result = await UserService.updateProfile(profileForm.nickname, profileImageFile);
-      
+      console.log("result:", result);
       if (result.success) {
         // 성공 시 모달 닫기 및 사용자 정보 새로고침
         setShowProfileEditModal(false);

@@ -49,5 +49,11 @@ public interface UserProfileMapper {
 
   Optional<User> findByNickname(String nickname);
 
-  void updateProfile(User user);
+  /**
+   * 사용자 프로필 정보(닉네임, 이미지) 업데이트
+   *
+   * @param user 업데이트할 사용자 정보 객체
+   * @return 업데이트된 행의 수
+   */
+  int updateProfile(User user);
 }

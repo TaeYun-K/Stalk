@@ -129,7 +129,7 @@ class UserService {
       if (profileImage) {
         formData.append('profileImage', profileImage);
       }
-
+      console.log("formData:", formData);
       const response = await fetch(`/api/users/me/profile`, {
         method: 'PATCH',
         headers: {
