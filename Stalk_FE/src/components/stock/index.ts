@@ -1,6 +1,5 @@
 // Main components
 export { default as StockChart } from './charts/stock-chart';
-export { default as SimpleStockChart } from './charts/simple-stock-chart';
 export { default as StockSearch } from './stock-search';
 export { default as StockDetailHeader } from './stock-detail-header';
 export { default as StockRankingTable } from './stock-ranking-table';
