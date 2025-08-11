@@ -335,30 +335,35 @@ const StockChart: React.FC<StockChartProps> = ({
   
 
   // price 차트 렌더 직후와 리사이즈마다 호출
-const syncOverlayToChartArea = () => {
-  const chart = chartRef.current;
-  const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
-  const container = chartContainerRef.current;
-  if (!chart || !ovl || !chart.chartArea || !container) return;
+  const syncOverlayToChartArea = () => {
+    const chart = chartRef.current;
+    const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
+    const container = chartContainerRef.current;
+    if (!chart || !ovl || !chart.chartArea || !container) return;
 
-  const canvas: HTMLCanvasElement = chart.canvas;
-  const canvasRect = canvas.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
+    const canvas: HTMLCanvasElement = chart.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
 
-  const dpr = getDpr(chart);
-  const leftCss   = chart.chartArea.left   / dpr;
-  const topCss    = chart.chartArea.top    / dpr;
-  const widthCss  = chart.chartArea.width  / dpr;
-  const heightCss = chart.chartArea.height / dpr;
+    // DPR(비트맵 px / CSS px)
+    const dpr = canvasRect.width ? (canvas.width / canvasRect.width) : (window.devicePixelRatio || 1);
 
-  const canvasOffsetX = canvasRect.left - containerRect.left;
-  const canvasOffsetY = canvasRect.top  - containerRect.top;
+    // chartArea(비트맵 px) → CSS px로 변환
+    const leftCss   = chart.chartArea.left   / dpr;
+    const topCss    = chart.chartArea.top    / dpr;
+    const widthCss  = chart.chartArea.width  / dpr;
+    const heightCss = chart.chartArea.height / dpr;
 
-  ovl.style.left   = `${canvasOffsetX + leftCss}px`;
-  ovl.style.top    = `${canvasOffsetY + topCss}px`;
-  ovl.style.width  = `${widthCss}px`;
-  ovl.style.height = `${heightCss}px`;
-};
+    // 컨테이너 내 캔버스 위치(CSS px)
+    const canvasOffsetX = canvasRect.left - containerRect.left;
+    const canvasOffsetY = canvasRect.top  - containerRect.top;
+
+    // 오버레이 배치(CSS px)
+    ovl.style.left   = `${canvasOffsetX + leftCss}px`;
+    ovl.style.top    = `${canvasOffsetY + topCss}px`;
+    ovl.style.width  = `${widthCss}px`;
+    ovl.style.height = `${heightCss}px`;
+  };
 
   // chartArea 변동 감지 후
   const reprojectAllShapes = () => {
