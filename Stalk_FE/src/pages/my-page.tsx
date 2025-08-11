@@ -517,12 +517,12 @@ const MyPage = () => {
                 reservation.advisorUserId?.toString() ||
                 "전문가",
               videoConsultation:
-                reservation.status === "COMPLETED" ? "상담 완료" : "상담 입장",
+                reservation.status === "APPROVED" ? "상담 완료" : "상담 입장",
               action:
-                reservation.status === "COMPLETED" ? "상세보기" : "취소 요청",
+                reservation.status === "APPROVED" ? "상세보기" : "취소 요청",
             };
 
-            if (reservation.status === "COMPLETED") {
+            if (reservation.status === "APPROVED") {
               completedConsultations.push(consultationItem);
             } else {
               scheduledConsultations.push(consultationItem);
