@@ -14,6 +14,8 @@ import ConsultationService from "@/services/consultationService";
 import AuthService from "@/services/authService";
 import ScheduleService from "@/services/scheduleService";
 import AdvisorService from "@/services/advisorService";
+import ReservationService from "@/services/reservationService";
+import { CancelReservationModal } from "@/components/modals";
 import UserService from "@/services/userService";
 import FavoriteService, {
   FavoriteAdvisorResponseDto,
@@ -47,6 +49,7 @@ interface VideoAnalysisResult {
 interface UserProfileResponse {
   userId: string;
   name: string;
+  nickname: string;  // 닉네임 필드 추가
   contact: string;
   email: string;
   profileImage: string;
@@ -95,6 +98,20 @@ const MyPage = () => {
   const [videoAnalysisResult, setVideoAnalysisResult] =
     useState<VideoAnalysisResult | null>(null);
 
+  // 예약 취소 모달 상태
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReservationId, setCancelReservationId] = useState<number | null>(null);
+  const [cancelReason, setCancelReason] = useState<
+    'PERSONAL_REASON' | 'SCHEDULE_CHANGE' | 'HEALTH_ISSUE' | 'NO_LONGER_NEEDED' | 'OTHER'
+  >('PERSONAL_REASON');
+  const [cancelMemo, setCancelMemo] = useState<string>("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  // 프로필 수정 상태
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [profileUpdateError, setProfileUpdateError] = useState<string | null>(null);
+
   // 찜한 전문가 목록 로드
   useEffect(() => {
     const isExpertUser = userProfile?.role === "ADVISOR";
@@ -136,6 +153,39 @@ const MyPage = () => {
     } catch (error) {
       console.error("영상 분석 중 오류:", error);
       alert("영상 분석 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 상담 취소 모달 열기
+  const handleCancelConsultation = (item: ConsultationItem) => {
+    const idNum = Number(item.id);
+    if (!Number.isFinite(idNum)) {
+      alert("유효하지 않은 예약 ID 입니다.");
+      return;
+    }
+    setCancelReservationId(idNum);
+    setCancelReason('PERSONAL_REASON');
+    setCancelMemo("");
+    setCancelError(null);
+    setShowCancelModal(true);
+  };
+
+  // 상담 취소 확정
+  const confirmCancelConsultation = async () => {
+    if (!cancelReservationId) return;
+    try {
+      setIsCancelling(true);
+      setCancelError(null);
+      await ReservationService.cancelReservation(cancelReservationId, {
+        cancelReason,
+        cancelMemo: cancelMemo.trim() || undefined,
+      });
+      setShowCancelModal(false);
+      await loadConsultationHistory();
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : "취소 중 오류가 발생했습니다.");
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -212,6 +262,7 @@ const MyPage = () => {
       const profileData: UserProfileResponse = {
         userId: userProfileData.userId || "",
         name: userProfileData.name || "",
+        nickname: userProfileData.nickname || "",  // 닉네임 사용
         contact: userProfileData.contact || "",
         email: userProfileData.email || "",
         profileImage: userProfileData.profileImage || "default",
@@ -227,10 +278,10 @@ const MyPage = () => {
         email: profileData.email,
       });
 
-      // 프로필 폼 업데이트
+      // 프로필 폼 업데이트 (닉네임은 nickname 사용)
       setProfileForm((prev) => ({
         ...prev,
-        nickname: profileData.name,
+        nickname: profileData.nickname,
         selectedAvatar: profileData.profileImage || "fox",
       }));
     } catch (err) {
@@ -665,9 +716,13 @@ const MyPage = () => {
   // 백엔드에서 받은 프로필 이미지 표시
   const getProfileImage = () => {
     if (userProfile?.profileImage) {
-      const avatar = avatarOptions.find(
-        (avatar) => avatar.id === userProfile.profileImage
-      );
+      const img = userProfile.profileImage;
+      // URL 혹은 절대/상대 경로면 그대로 사용
+      if (/^https?:\/\//.test(img) || img.startsWith('/')) {
+        return img;
+      }
+      // 아닌 경우 기존 아바타 id 매핑 시도 (하위 호환)
+      const avatar = avatarOptions.find((avatar) => avatar.id === img);
       return avatar ? avatar.image : profileDefault;
     }
     return getSelectedProfileImage();
@@ -1006,6 +1061,60 @@ const MyPage = () => {
     }
   };
 
+  // 프로필 수정 핸들러 추가
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!profileForm.nickname.trim()) {
+      alert('닉네임을 입력해주세요.');
+      return;
+    }
+
+    try {
+      setIsUpdatingProfile(true);
+      setProfileUpdateError(null);
+
+      // 프로필 이미지 파일 처리
+      let profileImageFile: File | undefined;
+      
+      // 업로드된 파일이 있으면 사용, 없으면 기본 아바타 사용
+      if (imageUploadForm.selectedFile) {
+        profileImageFile = imageUploadForm.selectedFile;
+      }
+      
+      // UserService.updateProfile 호출
+      const result = await UserService.updateProfile(profileForm.nickname, profileImageFile);
+      
+      if (result.success) {
+        // 성공 시 모달 닫기 및 사용자 정보 새로고침
+        setShowProfileEditModal(false);
+        alert(result.message);
+        
+        // profileForm 업데이트하여 UI에 즉시 반영
+        setProfileForm(prev => ({
+          ...prev,
+          nickname: profileForm.nickname.trim()
+        }));
+        
+        // 사용자 정보 새로고침
+        await loadUserInfo();
+        
+        // 이미지 업로드 폼 초기화
+        setImageUploadForm({
+          fileName: "",
+          selectedFile: null,
+        });
+      } else {
+        setProfileUpdateError(result.message);
+      }
+    } catch (error) {
+      console.error('프로필 수정 오류:', error);
+      setProfileUpdateError('프로필 수정 중 오류가 발생했습니다.');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <NewNavbar
@@ -1055,18 +1164,16 @@ const MyPage = () => {
                       </button>
                       <button
                         onClick={() => {
-                          // 현재 로드된 사용자 정보로 모달 폼 초기화
-                          setEditInfoForm({
-                            name: editInfoForm.name,
-                            contact: editInfoForm.contact,
-                            email: editInfoForm.email,
+                          // 현재 사용자 정보로 profileForm 초기화
+                          setProfileForm({
+                            nickname: userProfile?.nickname || userInfo?.userName || "",
+                            selectedAvatar: "fox", // 기본값
                           });
-                          setShowEditInfoModal(true);
+                          setShowProfileEditModal(true);
                         }}
                         className="text-blue-600 hover:text-blue-700 font-medium"
-                        disabled={isLoading}
                       >
-                        정보 수정
+                        프로필 편집
                       </button>
                     </div>
                   </div>
@@ -1217,7 +1324,7 @@ const MyPage = () => {
                       />
                     </div>
                     <span className="text-gray-900 font-medium">
-                      {profileForm.nickname}
+                      {userProfile?.nickname || userInfo?.userName || profileForm.nickname}
                     </span>
                   </div>
                 </div>
@@ -1375,7 +1482,11 @@ const MyPage = () => {
                                 </button>
                               </td>
                               <td className="px-4 py-3">
-                                <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
+                                <button
+                                  onClick={() => handleCancelConsultation(item)}
+                                  className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors"
+                                  disabled={isCancelling}
+                                >
                                   {item.action}
                                 </button>
                               </td>
@@ -1473,11 +1584,15 @@ const MyPage = () => {
                                 {item.videoConsultation}
                               </button>
                             </td>
-                            <td className="px-4 py-3">
-                              <button className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors">
-                                {item.action}
-                              </button>
-                            </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => handleCancelConsultation(item)}
+                                  className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors"
+                                  disabled={isCancelling}
+                                >
+                                  {item.action}
+                                </button>
+                              </td>
                             {consultationTab === "상담 완료" && (
                               <td className="px-4 py-3">
                                 <button
@@ -2426,6 +2541,18 @@ const MyPage = () => {
         </div>
       )}
 
+      <CancelReservationModal
+        isOpen={showCancelModal}
+        isCancelling={isCancelling}
+        cancelReason={cancelReason}
+        cancelMemo={cancelMemo}
+        errorMessage={cancelError}
+        onChangeReason={(r) => setCancelReason(r)}
+        onChangeMemo={(m) => setCancelMemo(m)}
+        onConfirm={confirmCancelConsultation}
+        onClose={() => setShowCancelModal(false)}
+      />
+
       {/* 정보 수정 모달 */}
       {showEditInfoModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -2465,18 +2592,7 @@ const MyPage = () => {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  이메일 주소
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={editInfoForm.email}
-                  onChange={handleEditInfoChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
@@ -2508,10 +2624,7 @@ const MyPage = () => {
 
             <form
               className="space-y-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setShowProfileEditModal(false);
-              }}
+              onSubmit={handleProfileSubmit}
             >
               <div>
                 <label className="block text-left text-m font-bold text-gray-900 mb-4">
@@ -2549,6 +2662,29 @@ const MyPage = () => {
                     +
                   </button>
                 </div>
+                
+                {/* 파일 업로드 상태 표시 */}
+                {imageUploadForm.selectedFile && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-sm text-blue-700 font-medium">
+                          선택된 파일: {imageUploadForm.fileName}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleFileDelete}
+                        className="text-red-500 hover:text-red-700 text-sm font-medium"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-left text-m font-bold text-gray-900 mb-2">
@@ -2559,15 +2695,48 @@ const MyPage = () => {
                   name="nickname"
                   value={profileForm.nickname}
                   onChange={handleProfileChange}
+                  minLength={2}
+                  maxLength={10}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isUpdatingProfile}
+                  placeholder="2자 이상 10자 이하로 입력해주세요"
                 />
+                <p className="mt-1 text-sm text-gray-500">
+                  {profileForm.nickname.length}/10자
+                </p>
               </div>
+              
+              {/* 에러 메시지 표시 */}
+              {profileUpdateError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg
+                        className="h-5 w-5 text-red-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-red-800">{profileUpdateError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  disabled={isUpdatingProfile}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
-                  저장
+                  {isUpdatingProfile ? '저장 중...' : '저장'}
                 </button>
               </div>
             </form>
@@ -2687,12 +2856,25 @@ const MyPage = () => {
                   <li>• 업로드 파일 용량은 2MB 이하만 가능합니다.</li>
                 </ul>
               </div>
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end pt-4 space-x-3">
                 <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  type="button"
+                  onClick={() => setShowImageUploadModal(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
-                  등록하기
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (imageUploadForm.selectedFile) {
+                      setShowImageUploadModal(false);
+                    }
+                  }}
+                  disabled={!imageUploadForm.selectedFile}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                >
+                  확인
                 </button>
               </div>
             </form>

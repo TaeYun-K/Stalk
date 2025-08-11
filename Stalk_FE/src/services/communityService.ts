@@ -7,7 +7,8 @@ import {
   CommunityPostUpdateRequestDto,
   CommunityCommentDto,
   CommunityCommentCreateRequestDto,
-  CommunityCommentUpdateRequestDto
+  CommunityCommentUpdateRequestDto,
+  CursorPage,
 } from '@/types';
 
 class CommunityService {
@@ -403,10 +404,18 @@ class CommunityService {
         return { content: [] };
       }
 
-      // 본인이 작성한 글만 필터링
-      const myPosts = data.result.content.filter((post: any) => {
-        // authorName이 현재 사용자의 이름/닉네임과 일치하는지 확인
-        return post.authorName === userInfo.name || post.authorName === userInfo.nickname;
+      // 본인이 작성한 글만 필터링: ID 우선, 이름은 폴백 (이름은 트리밍해서 비교)
+      const candidateNames = [userInfo.userName, userInfo.name, userInfo.nickname]
+        .filter((v: unknown): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((s) => s.trim());
+
+      const myPosts = (data.result.content || []).filter((post: any) => {
+        const postAuthorId = post?.authorId ?? post?.userId;
+        if (typeof postAuthorId === 'number') {
+          return postAuthorId === userInfo.userId;
+        }
+        const authorName = typeof post?.authorName === 'string' ? post.authorName.trim() : '';
+        return candidateNames.includes(authorName);
       });
 
       return { content: myPosts };

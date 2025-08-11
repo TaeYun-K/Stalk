@@ -2,6 +2,7 @@
 export interface UserProfileResponse {
   userId: string;           // 로그인 ID
   name: string;             // 이름
+  nickname: string;         // 닉네임 (백엔드에서 추가됨)
   contact: string;          // 연락처
   email: string;            // 이메일
   profileImage: string;     // 프로필 이미지

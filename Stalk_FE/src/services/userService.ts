@@ -114,6 +114,51 @@ class UserService {
     });
   }
 
+  // 프로필 수정 (닉네임, 프로필 이미지)
+  static async updateProfile(nickname: string, profileImage?: File): Promise<{ success: boolean; message: string; data?: any }> {
+    try {
+      const token = AuthService.getAccessToken();
+      if (!token) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      // FormData 생성 (multipart/form-data)
+      const formData = new FormData();
+      formData.append('nickname', nickname);
+      
+      if (profileImage) {
+        formData.append('profileImage', profileImage);
+      }
+
+      const response = await fetch(`/api/users/me/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '프로필 수정에 실패했습니다.');
+      }
+
+      const result = await response.json();
+      
+      return {
+        success: true,
+        message: '프로필이 성공적으로 수정되었습니다.',
+        data: result.data
+      };
+    } catch (error) {
+      console.error('프로필 수정 오류:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '프로필 수정에 실패했습니다.'
+      };
+    }
+  }
+
   // 회원 탈퇴
   static async deleteAccount(_userId: string, _password: string): Promise<{ success: boolean; message: string }> {
     try {

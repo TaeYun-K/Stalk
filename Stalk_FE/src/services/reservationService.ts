@@ -69,6 +69,28 @@ class ReservationService {
       return aDate.getTime() - bDate.getTime();
     });
   }
+
+  // 예약 취소
+  async cancelReservation(
+    reservationId: number,
+    payload: { cancelReason: 'PERSONAL_REASON' | 'SCHEDULE_CHANGE' | 'HEALTH_ISSUE' | 'NO_LONGER_NEEDED' | 'OTHER'; cancelMemo?: string }
+  ): Promise<{ reservationId: number; canceledAt: string; message: string }> {
+    const response = await AuthService.authenticatedRequest(`${this.baseURL}/${reservationId}/cancel`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.result;
+  }
 }
 
 export default new ReservationService(); 
