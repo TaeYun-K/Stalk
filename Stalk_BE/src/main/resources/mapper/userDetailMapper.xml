@@ -13,7 +13,7 @@
     nickname,              <!-- 👈 새로 추가: 커뮤니티 닉네임 -->
     contact,
     email,
-    image   as profileImage,
+    image as profileImage,
     role
     FROM users
     WHERE id = #{userId}
@@ -86,12 +86,19 @@
       AND is_active = 1
   </update>
 
-  <!-- 프로필 업데이트 (닉네임, 이미지 경로) -->
+  <!-- 프로필 수정을 위한 UPDATE 쿼리 -->
   <update id="updateProfile" parameterType="com.Stalk.project.api.signup.entity.User">
     UPDATE users
-    SET nickname   = #{nickname},
-        image      = #{image},
-        updated_at = NOW()
+    <set>
+      <if test="nickname != null and nickname != ''">
+        nickname = #{nickname},
+      </if>
+      <if test="image != null and image != ''">
+        image = #{image},
+      </if>
+      updated_at = CURRENT_TIMESTAMP
+    </set>
     WHERE id = #{id}
   </update>
+
 </mapper>

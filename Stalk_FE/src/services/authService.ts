@@ -340,6 +340,7 @@ class AuthService {
         throw new Error("사용자 정보 조회 실패");
       }
       const data = await response.json();
+      console.log("getUserProfile data:", data);
       return data.result || data;
     } catch (error) {
       console.error("사용자 정보 조회 실패:", error);

@@ -9,12 +9,9 @@ import lombok.Getter;
 @Schema(description = "프로필 수정 응답 DTO")
 public class ProfileUpdateResponseDto {
 
-  @Schema(description = "사용자 ID")
-  private Long userId;
-
-  @Schema(description = "수정된 닉네임")
+  @Schema(description = "수정된 닉네임", example = "새로운닉네임")
   private String nickname;
 
-  @Schema(description = "수정된 프로필 이미지 경로")
+  @Schema(description = "수정된 프로필 이미지 URL", example = "/uploads/new_profile.jpg")
   private String imageUrl;
 }
