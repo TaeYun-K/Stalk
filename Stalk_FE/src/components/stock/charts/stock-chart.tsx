@@ -778,7 +778,15 @@ const StockChart: React.FC<StockChartProps> = ({
         
         setRawData(sortedData); // Store only real data for indicator calculations
         
-        const labels = finalData.map(item => parseToTs(item.date));
+        const points = finalData.map(item => {
+          x : parseToTs(item.date)
+          y : item.close
+        });
+
+        const volumePoints = finalData.map((item, i) => ({
+          x: parseToTs(item.date),
+          y: item.volume
+        }));
 
         const prices = finalData.map(item => item.close);
         const volumes = finalData.map(item => item.volume);
@@ -799,7 +807,7 @@ const StockChart: React.FC<StockChartProps> = ({
         // Simplified line chart configuration
         const mainDataset = {
           label: '종가',
-          data: prices,
+          data: points,
           borderColor: '#3b82f6',
           backgroundColor: 'transparent',
           borderWidth: 2,
@@ -813,17 +821,15 @@ const StockChart: React.FC<StockChartProps> = ({
         const datasets = [mainDataset];
         
         const newChartData = {
-          labels,
           datasets,
           actualDataLength, // Store for reference
         };
 
         // Create volume chart data
         const newVolumeData = {
-          labels,
           datasets: [{
             label: '거래량',
-            data: volumes,
+            data: volumePoints,
             backgroundColor: volumes.map((_, index) => {
               if (index === 0) return 'rgba(34, 197, 94, 0.6)';
               return prices[index] >= prices[index - 1] 
@@ -841,7 +847,10 @@ const StockChart: React.FC<StockChartProps> = ({
         };
 
 
-        setChartData(newChartData);
+        setChartData({
+          datasets: [mainDataset],
+          actualDataLength,
+        });
         setVolumeChartData(newVolumeData);
         
         console.log("StockChart - 차트 데이터 설정 완료", {
@@ -876,14 +885,31 @@ const StockChart: React.FC<StockChartProps> = ({
     if (!chart || !chart.data || !chart.data.datasets || chart.data.datasets.length === 0) {
       return;
     }
-
+    const fullXs: number[] = (chart.data.labels as number[]) ?? [];
+    const realXs: number[] = rawData.map(d => parseToTs(d.date));
     const prices = rawData.map(d => d.close);
     const highs = rawData.map(d => d.high || d.close);
     const lows = rawData.map(d => d.low || d.close);
     const volumes = rawData.map(d => d.volume);
+
+      // [{x,y}]로 만들고, 실데이터 뒤쪽은 y:null로 패딩하는 유틸
+    const toXY = (vals: Array<number | null | undefined>) => {
+      const pts: {x:number; y:number|null}[] = [];
+      // 실데이터 구간
+      const n = Math.min(vals.length, realXs.length);
+      for (let i = 0; i < n; i++) {
+        const v = vals[i];
+        pts.push({ x: realXs[i], y: (v == null || Number.isNaN(v)) ? null : v });
+      }
+      // 미래공간 패딩
+      for (let i = n; i < fullXs.length; i++) {
+        pts.push({ x: fullXs[i], y: null });
+      }
+      return pts;
+    };
     
     // SAFE APPROACH: Create a completely new dataset array instead of modifying existing
-    const newDatasets = [];
+    const newDatasets: any[] = [];
     
     // Always keep the main price line as the first dataset
     const mainDataset = chart.data.datasets[0];
@@ -904,6 +930,7 @@ const StockChart: React.FC<StockChartProps> = ({
           borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
+          parsing: false
         });
       }
 
@@ -919,18 +946,19 @@ const StockChart: React.FC<StockChartProps> = ({
         
         newDatasets.push({
           label: 'BB Upper',
-          data: bollingerResult.upperBand,
+          data: toXY(bollingerResult.upperBand),
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           borderDash: [2, 2],
           fill: false,
           pointRadius: 0,
+          parsing: false
         });
 
         newDatasets.push({
           label: 'BB Lower', 
-          data: bollingerResult.lowerBand,
+          data: toXY(bollingerResult.lowerBand),
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
           borderWidth: 1,
@@ -941,12 +969,13 @@ const StockChart: React.FC<StockChartProps> = ({
 
         newDatasets.push({
           label: 'BB Middle',
-          data: bollingerResult.middleBand,
+          data: toXY(bollingerResult.middleBand),
           borderColor: 'rgba(249, 115, 22, 0.6)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
       }
 
@@ -955,13 +984,14 @@ const StockChart: React.FC<StockChartProps> = ({
         const emaValues = calculateEMA(prices, indicatorSettings.ema12.period);
         newDatasets.push({
           label: 'EMA',
-          data: emaValues,
+          data: toXY(emaValues),
           borderColor: '#10b981',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           borderDash: [3, 3],
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
       }
 
@@ -972,7 +1002,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const vwapValues = calculateVWAP(highs, lows, prices, volumes);
         newDatasets.push({
           label: 'VWAP',
-          data: vwapValues,
+          data: toXY(vwapValues),
           borderColor: '#f59e0b',
           backgroundColor: 'transparent',
           borderWidth: 2,
@@ -988,56 +1018,61 @@ const StockChart: React.FC<StockChartProps> = ({
         
         newDatasets.push({
           label: 'Tenkan',
-          data: ichimokuResult.tenkanSen,
+          data: toXY(ichimokuResult.tenkanSen),
           borderColor: '#3b82f6',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         newDatasets.push({
           label: 'Kijun',
-          data: ichimokuResult.kijunSen,
+          data: toXY(ichimokuResult.kijunSen),
           borderColor: '#dc2626',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         // Senkou Span A
         newDatasets.push({
           label: 'Senkou A',
-          data: ichimokuResult.senkouSpanA,
+          data: toXY(ichimokuResult.senkouSpanA),
           borderColor: 'rgba(34, 197, 94, 0.5)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         // Senkou Span B
         newDatasets.push({
           label: 'Senkou B',
-          data: ichimokuResult.senkouSpanB,
+          data: toXY(ichimokuResult.senkouSpanB),
           borderColor: 'rgba(239, 68, 68, 0.5)',
           backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
 
         // Chikou Span
         newDatasets.push({
           label: 'Chikou',
-          data: ichimokuResult.chikouSpan,
+          data: toXY(ichimokuResult.chikouSpan),
           borderColor: '#a855f7',
           backgroundColor: 'transparent',
           borderWidth: 1,
           borderDash: [2, 2],
           fill: false,
           pointRadius: 0,
+          parsing: false,
         });
       }
 
