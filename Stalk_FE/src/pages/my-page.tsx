@@ -77,8 +77,6 @@ const MyPage = () => {
     }
   }, [searchParams]);
 
-  
-
   // API 관련 상태
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -500,30 +498,31 @@ const MyPage = () => {
 
         reservations.forEach(
           (reservation: {
-            reservationId?: number | string;
-            date?: string;
-            time?: string;
-            content?: string;
+            reservationId?: number;
+            consultationDate?: string;
+            consultationTime?: string;
+            requestMessage?: string;
+            status?: string;
             advisorName?: string;
-            advisorUserId?: string;
-            status?: "COMPLETED" | string;
+            advisorUserId?: number;
+            profileImageUrl?: string;
           }) => {
             const consultationItem: ConsultationItem = {
               id: reservation.reservationId?.toString() || "",
-              date: reservation.date || "",
-              time: reservation.time || "",
-              content: reservation.content || "상담 요청",
+              date: reservation.consultationDate || "",
+              time: reservation.consultationTime || "",
+              content: reservation.requestMessage || "상담 요청",
               expert:
                 reservation.advisorName ||
-                reservation.advisorUserId ||
+                reservation.advisorUserId?.toString() ||
                 "전문가",
               videoConsultation:
-                reservation.status === "COMPLETED" ? "상담 완료" : "상담 입장",
+                reservation.status === "APPROVED" ? "상담 완료" : "상담 입장",
               action:
-                reservation.status === "COMPLETED" ? "상세보기" : "취소 요청",
+                reservation.status === "APPROVED" ? "상세보기" : "취소 요청",
             };
 
-            if (reservation.status === "COMPLETED") {
+            if (reservation.status === "APPROVED") {
               completedConsultations.push(consultationItem);
             } else {
               scheduledConsultations.push(consultationItem);
