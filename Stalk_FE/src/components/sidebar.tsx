@@ -149,7 +149,7 @@ const Sidebar: React.FC = () => {
     
     try {
       setLoading(true);
-      const response = await CommunityService.getMyPosts('ALL', 1, 10);
+      const response = await CommunityService.getMyPosts('ALL', 1, 50);
       setKnowledgePosts(response.content);
     } catch (error) {
       console.error('투자 지식iN 로드 실패:', error);

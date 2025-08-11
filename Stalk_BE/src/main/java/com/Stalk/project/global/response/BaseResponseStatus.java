@@ -127,6 +127,10 @@ public enum BaseResponseStatus {
   NICKNAME_DUPLICATION(HttpStatus.CONFLICT, false, 2011, "이미 사용중인 닉네임입니다."),
   // 파일 업로드 실패 에러 코드 추가
   FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, false, 2012, "파일 업로드에 실패했습니다."),
+  /**
+   * 파일 저장소 관련 에러 코드 추가
+   */
+  FILE_STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, false, 2013, "파일 저장소 처리 중 오류가 발생했습니다."),
 
 
   // ===== 토큰/인증 관련 에러 (2100번대) =====

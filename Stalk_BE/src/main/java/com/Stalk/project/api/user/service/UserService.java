@@ -39,9 +39,7 @@ public class UserService {
   private final UserProfileMapper userProfileMapper;
   private final AuthService authService;
   private final PasswordEncoder passwordEncoder;
-
-  @Value("${file.upload-dir}")
-  private String uploadDir;
+  private final FileStorageService fileStorageService;
 
   public UserProfileResponseDto getUserProfile(Long userId) {
     // 기존 메서드 유지
@@ -202,47 +200,35 @@ public class UserService {
   @Transactional
   public ProfileUpdateResponseDto updateNicknameAndImage(Long userId,
       ProfileUpdateRequestDto requestDto) {
-    // 사용자 존재 여부 확인
     User user = userProfileMapper.findUserById(userId);
-    if (user == null) {
-      throw new BaseException(BaseResponseStatus.USER_NOT_FOUND);
-    }
 
-    // 닉네임 중복 확인 (자기 자신은 제외)
     String newNickname = requestDto.getNickname();
-    userProfileMapper.findByNickname(newNickname).ifPresent(foundUser -> {
-      if (!Objects.equals(foundUser.getId(), userId)) {
+    String oldImageUrl = user.getImage();
+    String newImageUrl = null;
+
+    if (StringUtils.hasText(newNickname) && !newNickname.equals(user.getNickname())) {
+      userProfileMapper.findByNickname(newNickname).ifPresent(u -> {
         throw new BaseException(BaseResponseStatus.NICKNAME_DUPLICATION);
-      }
-    });
-
-    // 프로필 이미지가 새로 업로드되었는지 확인
-    MultipartFile profileImageFile = requestDto.getProfileImage();
-    if (profileImageFile != null && !profileImageFile.isEmpty()) {
-
-      // 새 이미지 로컬에 업로드
-      try {
-        String originalFilename = profileImageFile.getOriginalFilename();
-        String extension = "";
-        if (originalFilename != null && originalFilename.contains(".")) {
-          extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-        }
-        String uniqueFilename = UUID.randomUUID().toString() + extension;
-
-        // 물리적 저장 경로: {uploadDir}/profile/{uniqueFilename}
-        Path physicalPath = Paths.get(uploadDir, "profile", uniqueFilename);
-        Files.createDirectories(physicalPath.getParent());
-        profileImageFile.transferTo(physicalPath.toFile());
-
-      } catch (IOException e) {
-        throw new BaseException(BaseResponseStatus.FILE_UPLOAD_FAILED, e);
-      }
+      });
+      user.setNickname(newNickname);
     }
 
-    // DB에 변경된 User 객체 정보 업데이트
+    // 프로필 이미지 파일이 있으면 저장 처리
+    // FileStorageService 내부에서 예외 발생 시 BaseException이 던져짐
+    newImageUrl = fileStorageService.storeFile(requestDto.getProfileImage());
+    if (newImageUrl != null) {
+      user.setImage(newImageUrl);
+    }
+
+    // 데이터베이스 업데이트
     userProfileMapper.updateProfile(user);
 
-    // 변경된 정보로 응답 DTO 생성 및 반환
-    return new ProfileUpdateResponseDto(user.getId(), user.getNickname(), user.getImage());
+    // DB 업데이트 성공 후, 기존 이미지가 있다면 파일 시스템에서 삭제
+    if (newImageUrl != null) {
+      fileStorageService.deleteFile(oldImageUrl);
+    }
+
+    // 응답 DTO 생성 및 반환
+    return new ProfileUpdateResponseDto(user.getNickname(), user.getImage());
   }
 }
