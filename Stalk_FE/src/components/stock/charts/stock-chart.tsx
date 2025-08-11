@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
-  CategoryScale,
   LinearScale,
+  TimeScale,
   PointElement,
   LineElement,
   Title,
@@ -35,7 +35,7 @@ import {
 import { on } from 'events';
 
 ChartJS.register(
-  CategoryScale,
+  TimeScale,
   LinearScale,
   PointElement,
   LineElement,
@@ -82,6 +82,67 @@ type ChartInfo = {
   ticker: string;
   period: string;
 };
+
+
+// 데이터 좌표로 변환하기 위한 type
+type DataPoint = { x: number; y: number }; // x: timestamp(ms), y: price
+
+// px to data 변환
+const pxToData = (chart: any, px: number, py: number): DataPoint => ({
+  x: chart.scales.x.getValueForPixel(px),
+  y: chart.scales.y.getValueForPixel(py),
+});
+
+// data to px 
+const dataToPx = (chart: any, x: number, y: number) => ({
+  x: chart.scales.x.getPixelForValue(x),
+  y: chart.scales.y.getPixelForValue(y),
+});
+
+// shape를 data -> px 로 변환
+const toPixelsShape = (shape: any, chart: any) => {
+  if (!shape || shape.coordType !== 'data' || !chart?.scales?.x) return shape;
+
+  const clone = { ...shape };
+  if (Array.isArray(clone.points)) {
+    const flat: number[] = [];
+    for (let i = 0; i < clone.points.length; i += 2) {
+      const px = dataToPx(chart, clone.points[i], clone.points[i + 1]);
+      flat.push(px.x, px.y);
+    }
+    clone.points = flat;
+  } else if (clone.p1 && clone.p2) {
+    const a = dataToPx(chart, clone.p1.x, clone.p1.y);
+    const b = dataToPx(chart, clone.p2.x, clone.p2.y);
+    clone.p1 = a;
+    clone.p2 = b;
+  }
+  clone.coordType = 'px';
+  return clone;
+};
+
+// shape를 px -> data 변환
+const toDataShape = (shape: any, chart: any) => {
+  if (!shape || !chart?.scales?.x) return shape;
+  const clone = { ...shape };
+  if (Array.isArray(clone.points)) {
+    const pts: number[] = [];
+    for (let i = 0; i < clone.points.length; i += 2) {
+      const d = pxToData(chart, clone.points[i], clone.points[i + 1]);
+      pts.push(d.x, d.y);
+    }
+    clone.points = pts;
+  } else if (clone.p1 && clone.p2) {
+    clone.p1 = pxToData(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = pxToData(chart, clone.p2.x, clone.p2.y);
+  }
+  clone.coordType = 'data';
+  return clone;
+};
+
+// 타입 가드
+const hasShape = (c: any): c is { type: 'add'|'update'; shape: any; version: number } =>
+  c?.type === 'add' || c?.type === 'update';
 
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 
@@ -150,11 +211,39 @@ const StockChart: React.FC<StockChartProps> = ({
     onChange: (change) => {
       console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
-      const payload = { ...change, chart: chartKey };
-      const type =
-        change.type === 'add' || change.type === 'update' ? `drawing:${change.type}`
-        : change.type === 'delete' ? 'drawing:delete'
-        : 'drawing:clear';
+
+      const chart = chartRef.current;
+      const serialize = (shape: any) => {
+        const clone = { ...shape };
+        if (Array.isArray(clone.points)) {
+          // [x1,y1,x2,y2,...] 형태라면:
+          const pts = [];
+          for (let i=0;i<clone.points.length;i+=2) {
+            const d = pxToData(chart, clone.points[i], clone.points[i+1]);
+            pts.push(d.x, d.y);
+          }
+          clone.points = pts;
+          clone.coordType = 'data';
+        } else if (clone.p1 && clone.p2) {
+          clone.p1 = pxToData(chart, clone.p1.x, clone.p1.y);
+          clone.p2 = pxToData(chart, clone.p2.x, clone.p2.y);
+          clone.coordType = 'data';
+        }
+        return clone;
+      };
+
+      let type: string;
+      let payload: any = { ...change, chart: { ticker: getCurrentTicker(), period } };
+
+        if (hasShape(change)) {
+          type = `drawing:${change.type}`; // add/update
+          payload.shape = serialize(change.shape); // ✅ 이때만 shape 접근
+        } else if (change.type === 'delete') {
+          type = 'drawing:delete';         // id, version만 있음
+        } else {
+          type = 'drawing:clear';          // clear
+        }
+
       session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
     }
   });
@@ -284,14 +373,20 @@ const StockChart: React.FC<StockChartProps> = ({
     const onAdd = (e: any) => {
       const msg = JSON.parse(e.data);
       if (!isForThisChart(msg)) return;
-      applyRemoteChange({ type: 'add', shape: msg.shape, version: msg.version });
+      const chart = chartRef.current;
+      if (!chart?.scales?.x) return; // 차트 준비 전이면 스킵하거나 큐에 저장
+      const shapePx = toPixelsShape(msg.shape, chart);
+      applyRemoteChange({ type: 'add', shape: shapePx, version: msg.version });
     };
 
     // 드로잉 갱신 수신 처리
     const onUpdate = (e: any) => {
       const msg = JSON.parse(e.data);
       if (!isForThisChart(msg)) return;
-      applyRemoteChange({ type: 'update', shape: msg.shape, version: msg.version });
+      const chart = chartRef.current;
+      if (!chart?.scales?.x) return;
+      const shapePx = toPixelsShape(msg.shape, chart);
+      applyRemoteChange({ type: 'update', shape: shapePx, version: msg.version });
     };
 
     // 드로잉 삭제 수신 처리
@@ -346,11 +441,14 @@ const StockChart: React.FC<StockChartProps> = ({
       if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
 
       // 스냅샷 생성 후 응답 전송
-      const shapes = getAllShapes();
+      const chart = chartRef.current;
+      const shapesPx = getAllShapes();
+      const shapesData = shapesPx.map((s: any) => toDataShape(s, chart));
+
       const response = {
         type: 'sync-response',
         chart: chartKey,
-        shapes,
+        shapes : shapesData,
         version: undefined // 훅에서 관리 중이면 필요 시 버전도 포함 가능
       };
       session.signal({ type: 'drawing:sync-response', data: JSON.stringify(response) }).catch(console.error);
@@ -360,8 +458,11 @@ const StockChart: React.FC<StockChartProps> = ({
     const onSyncRes = (e: any) => {
       const msg = JSON.parse(e.data);
       if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      const chart = chartRef.current;
+      if (!chart?.scales?.x) return;
+      const shapesPx = (msg.shapes || []).map((s: any) => toPixelsShape(s, chart));
       console.log('[SYNC] apply snapshot', msg.shapes?.length);
-      applySnapshot(msg.shapes, msg.version);
+      applySnapshot(shapesPx, msg.version);
     };
 
     // 리스너 등록
@@ -383,6 +484,23 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [session, isDrawingMode, chartKey.ticker, chartKey.period]);
 
+  // 차트 x축을 TimeScale로 전환하는 함수
+  const parseToTs = (raw: string) => {
+    // YYYYMMDD → Date
+    if (raw && raw.length === 8 && /^\d{8}$/.test(raw)) {
+      const y = +raw.slice(0,4), m = +raw.slice(4,6)-1, d = +raw.slice(6,8);
+      return new Date(y, m, d).getTime(); // ms timestamp
+    }
+    // HH:MM (intraday) 같은 케이스는 오늘 날짜와 합성하거나, 백엔드에서 full datetime을 내려주면 best
+    if (raw && raw.includes(':')) {
+      const [hh, mm] = raw.split(':').map(Number);
+      const now = new Date();
+      const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+      return dt.getTime();
+    }
+    // fallback
+    return Date.now();
+  };
 
   const fetchChartData = async (isUpdate = false) => {
     if (isLoading) {
@@ -522,21 +640,7 @@ const StockChart: React.FC<StockChartProps> = ({
         setRawData(sortedData); // Store raw data for indicator calculations
         
         
-        const labels = sortedData.map(item => {
-          const date = item.date;
-          // Check if it's time format (HH:MM) for intraday
-          if (date && date.includes(':')) {
-            return date; // Return time as-is for intraday
-          }
-          // For dates in YYYYMMDD format
-          if (date && date.length === 8) {
-            const month = date.substring(4, 6);
-            const day = date.substring(6, 8);
-            return `${month}/${day}`;
-          }
-          // Fallback
-          return date || '';
-        });
+        const labels = sortedData.map(item => parseToTs(item.date));
 
         const prices = sortedData.map(item => item.close);
         const volumes = sortedData.map(item => item.volume);
@@ -1104,9 +1208,18 @@ const StockChart: React.FC<StockChartProps> = ({
     },
     scales: {
       x: {
-        display: true,
-        title: {
-          display: false,
+        type : 'time',
+        time : {
+          unit: (periodDays <= 7) ? 'day'     // 필요시 'minute','hour','day' 분기
+              : (periodDays <= 30) ? 'day'
+              : 'day',
+          tooltipFormat: 'yyyy-MM-dd HH:mm',  // 표시 포맷
+          displayFormats: {
+            minute: 'HH:mm',
+            hour: 'MM/dd HH:mm',
+            day: 'MM/dd',
+            month: 'yyyy-MM'
+          }
         },
         ticks: {
           maxTicksLimit: tickSettings.maxTicksLimit,
