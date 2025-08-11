@@ -107,6 +107,12 @@ const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
   return { x: xCanvas, y: yCanvas };
 };
 
+// stage(px) -> canvas(chartArea px) -> data 좌표
+const stagePxToDataPoint = (chart: any, sx: number, sy: number) => {
+  const c = stageToCanvasPx(chart, sx, sy);         // stage -> canvas(px)
+  return pxToData(chart, c.x, c.y);                 // canvas(px) -> data
+};
+
 // 캔버스/오버레이 사이 좌표 변환 함수 
 const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
   const canvas: HTMLCanvasElement = chart.canvas;
@@ -120,6 +126,12 @@ const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
   const xStage = (xCanvas / scaleX) + (canvasRect.left - overlayRect.left);
   const yStage = (yCanvas / scaleY) + (canvasRect.top  - overlayRect.top);
   return { x: xStage, y: yStage };
+};
+
+// data 좌표 -> canvas(chartArea px) -> stage(px)
+const dataToStagePxPoint = (chart: any, dx: number, dy: number) => {
+  const c = dataToPx(chart, dx, dy);                // data -> canvas(px)
+  return canvasToStagePx(chart, c.x, c.y);          // canvas(px) -> stage(px)
 };
 
 // 데이터 좌표로 변환하기 위한 type
@@ -152,13 +164,13 @@ const toPixelsShape = (shape: any, chart: any) => {
   if (Array.isArray(clone.points)) {
     const flat: number[] = [];
     for (let i = 0; i < clone.points.length; i += 2) {
-      const px = dataToPx(chart, clone.points[i], clone.points[i + 1]);
+      const px = dataToStagePxPoint(chart, clone.points[i], clone.points[i + 1]);
       flat.push(px.x, px.y);
     }
     clone.points = flat;
   } else if (clone.p1 && clone.p2) {
-    const a = dataToPx(chart, clone.p1.x, clone.p1.y);
-    const b = dataToPx(chart, clone.p2.x, clone.p2.y);
+    const a = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
+    const b = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
     clone.p1 = a;
     clone.p2 = b;
   }
@@ -173,13 +185,13 @@ const toDataShape = (shape: any, chart: any) => {
   if (Array.isArray(clone.points)) {
     const pts: number[] = [];
     for (let i = 0; i < clone.points.length; i += 2) {
-      const d = pxToData(chart, clone.points[i], clone.points[i + 1]);
+      const d = stagePxToDataPoint(chart, clone.points[i], clone.points[i + 1]);
       pts.push(d.x, d.y);
     }
     clone.points = pts;
   } else if (clone.p1 && clone.p2) {
-    clone.p1 = pxToData(chart, clone.p1.x, clone.p1.y);
-    clone.p2 = pxToData(chart, clone.p2.x, clone.p2.y);
+    clone.p1 = stagePxToDataPoint(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = stagePxToDataPoint(chart, clone.p2.x, clone.p2.y);
   }
   clone.coordType = 'data';
   return clone;
@@ -378,25 +390,11 @@ const StockChart: React.FC<StockChartProps> = ({
     onChange: (change) => {
       console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
-
-      const chart = chartRef.current;
+      
       const serialize = (shape: any) => {
-        const clone = { ...shape };
-        if (Array.isArray(clone.points)) {
-          // [x1,y1,x2,y2,...] 형태라면:
-          const pts = [];
-          for (let i=0;i<clone.points.length;i+=2) {
-            const d = pxToData(chart, clone.points[i], clone.points[i+1]);
-            pts.push(d.x, d.y);
-          }
-          clone.points = pts;
-          clone.coordType = 'data';
-        } else if (clone.p1 && clone.p2) {
-          clone.p1 = pxToData(chart, clone.p1.x, clone.p1.y);
-          clone.p2 = pxToData(chart, clone.p2.x, clone.p2.y);
-          clone.coordType = 'data';
-        }
-        return clone;
+        const chart = chartRef.current;
+        if(!chart?.scales?.x) return shape;
+        return toDataShape(shape, chart);
       };
 
       let type: string;
