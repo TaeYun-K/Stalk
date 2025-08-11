@@ -88,6 +88,12 @@ type ChartInfo = {
   period: string;
 };
 
+const getDpr = (chart: any) => {
+  const canvas: HTMLCanvasElement = chart.canvas;
+  const rect = canvas.getBoundingClientRect();
+  return rect.width ? (canvas.width / rect.width) : (window.devicePixelRatio || 1);
+};
+
 // 캔버스/오버레이 사이 좌표 변환 함수
 const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
   const canvas: HTMLCanvasElement = chart.canvas;
@@ -95,18 +101,19 @@ const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
   const overlay = document.getElementById('drawing-canvas')!;
   const overlayRect = overlay.getBoundingClientRect();
 
-  const scaleX = canvas.width / canvasRect.width;
-  const scaleY = canvas.height / canvasRect.height;
+  const dpr = getDpr(chart);
 
-  // (오버레이 로컬 px → 페이지 px) → (캔버스 CSS px) → (캔버스 비트맵 px)
-  const xCanvasFullCss = (overlayRect.left + xStage) - canvasRect.left;
-  const yCanvasFullCss = (overlayRect.top  + yStage) - canvasRect.top;
-  const xCanvasFull = xCanvasFullCss * scaleX;
-  const yCanvasFull = yCanvasFullCss * scaleY;
+  // overlay 로컬(CSS px) → 캔버스(CSS px)
+  const xCanvasCss = (overlayRect.left + xStage) - canvasRect.left;
+  const yCanvasCss = (overlayRect.top  + yStage) - canvasRect.top;
 
-  // chartArea 원점 기준으로 변환
+  // CSS px → 비트맵 px
+  const xCanvasBmp = xCanvasCss * dpr;
+  const yCanvasBmp = yCanvasCss * dpr;
+
+  // chartArea 원점(비트맵 px) 기준으로 변환
   const { left, top } = chart.chartArea;
-  return { x: xCanvasFull - left, y: yCanvasFull - top };
+  return { x: xCanvasBmp - left * dpr, y: yCanvasBmp - top * dpr };
 };
 
 // stage(px) -> canvas(chartArea px) -> data 좌표
@@ -122,17 +129,20 @@ const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
   const overlay = document.getElementById('drawing-canvas')!;
   const overlayRect = overlay.getBoundingClientRect();
 
-  const scaleX = canvas.width / canvasRect.width;
-  const scaleY = canvas.height / canvasRect.height;
-
-  // 1) chartArea px -> 캔버스 전체 px
+  const dpr = getDpr(chart);
   const { left, top } = chart.chartArea;
-  const xCanvasFull = xCanvas + left;
-  const yCanvasFull = yCanvas + top;
 
-  // 2) 캔버스 전체 px -> DOM px -> 오버레이 좌표계(px)
-  const xStage = (xCanvasFull / scaleX) + (canvasRect.left - overlayRect.left);
-  const yStage = (yCanvasFull / scaleY) + (canvasRect.top  - overlayRect.top);
+  // chartArea px(비트맵) → 캔버스 전체 px(비트맵)
+  const xCanvasBmp = xCanvas + left * dpr;
+  const yCanvasBmp = yCanvas + top * dpr;
+
+  // 비트맵 px → CSS px
+  const xCanvasCss = xCanvasBmp / dpr;
+  const yCanvasCss = yCanvasBmp / dpr;
+
+  // CSS px → 오버레이 로컬(px)
+  const xStage = xCanvasCss + (canvasRect.left - overlayRect.left);
+  const yStage = yCanvasCss + (canvasRect.top  - overlayRect.top);
   return { x: xStage, y: yStage };
 };
 
@@ -142,26 +152,28 @@ const dataToStagePxPoint = (chart: any, dx: number, dy: number) => {
   return canvasToStagePx(chart, c.x, c.y);          // canvas(px) -> stage(px)
 };
 
-// 데이터 좌표로 변환하기 위한 type
-type DataPoint = { x: number; y: number }; // x: timestamp(ms), y: price
-
 // px to data 변환
 const pxToData = (chart: any, px: number, py: number) => {
+  const dpr = getDpr(chart);
   const { left, top } = chart.chartArea;
-  const xCanvas = px + left;
-  const yCanvas = py + top;
+
+  // chartArea px(비트맵) → 캔버스 전체 px(비트맵)
+  const xCanvasBmp = px + left * dpr;
+  const yCanvasBmp = py + top * dpr;
+
+  // Chart.js 스케일은 캔버스 px 기준 사용
   return {
-    x: chart.scales.x.getValueForPixel(xCanvas),
-    y: chart.scales.y.getValueForPixel(yCanvas),
+    x: chart.scales.x.getValueForPixel(xCanvasBmp),
+    y: chart.scales.y.getValueForPixel(yCanvasBmp),
   };
 };
-
 // data to px 
 const dataToPx = (chart: any, xVal: number, yVal: number) => {
-  const xCanvas = chart.scales.x.getPixelForValue(xVal);
-  const yCanvas = chart.scales.y.getPixelForValue(yVal);
-  const { left, top } = chart.chartArea; // chartArea를 (0,0)로 변환
-  return { x: xCanvas - left, y: yCanvas - top };
+  const dpr = getDpr(chart);
+  const { left, top } = chart.chartArea;
+  const xCanvasBmp = chart.scales.x.getPixelForValue(xVal);
+  const yCanvasBmp = chart.scales.y.getPixelForValue(yVal);
+  return { x: xCanvasBmp - left * dpr, y: yCanvasBmp - top * dpr };
 };
 
 // shape를 data -> px 로 변환
@@ -323,27 +335,30 @@ const StockChart: React.FC<StockChartProps> = ({
   
 
   // price 차트 렌더 직후와 리사이즈마다 호출
-  const syncOverlayToChartArea = () => {
-    const chart = chartRef.current;
-    const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
-    const container = chartContainerRef.current;
-    if (!chart || !ovl || !chart.chartArea || !container) return;
+const syncOverlayToChartArea = () => {
+  const chart = chartRef.current;
+  const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
+  const container = chartContainerRef.current;
+  if (!chart || !ovl || !chart.chartArea || !container) return;
 
-    const { left, top, width, height } = chart.chartArea;
+  const canvas: HTMLCanvasElement = chart.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
 
-    // 캔버스가 컨테이너 안에서 어디에 놓였는지 보정
-    const canvas: HTMLCanvasElement = chart.canvas;
-    const canvasRect = canvas.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
+  const dpr = getDpr(chart);
+  const leftCss   = chart.chartArea.left   / dpr;
+  const topCss    = chart.chartArea.top    / dpr;
+  const widthCss  = chart.chartArea.width  / dpr;
+  const heightCss = chart.chartArea.height / dpr;
 
-    const canvasOffsetX = canvasRect.left - containerRect.left;
-    const canvasOffsetY = canvasRect.top  - containerRect.top;
+  const canvasOffsetX = canvasRect.left - containerRect.left;
+  const canvasOffsetY = canvasRect.top  - containerRect.top;
 
-    ovl.style.left   = `${canvasOffsetX + left}px`;
-    ovl.style.top    = `${canvasOffsetY + top}px`;
-    ovl.style.width  = `${width}px`;
-    ovl.style.height = `${height}px`;
-  };
+  ovl.style.left   = `${canvasOffsetX + leftCss}px`;
+  ovl.style.top    = `${canvasOffsetY + topCss}px`;
+  ovl.style.width  = `${widthCss}px`;
+  ovl.style.height = `${heightCss}px`;
+};
 
   // chartArea 변동 감지 후
   const reprojectAllShapes = () => {
