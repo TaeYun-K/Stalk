@@ -44,10 +44,8 @@ const TechnicalIndicators: React.FC<TechnicalIndicatorsProps> = ({
       key: 'trend',
       label: '추세 지표',
       indicators: [
-        { key: 'ma20', label: 'MA(20)', description: '20일 이동평균', color: '#ef4444' },
-        { key: 'ma50', label: 'MA(50)', description: '50일 이동평균', color: '#f59e0b' },
-        { key: 'ema12', label: 'EMA(12)', description: '12일 지수이동평균', color: '#10b981' },
-        { key: 'ema26', label: 'EMA(26)', description: '26일 지수이동평균', color: '#06b6d4' },
+        { key: 'ma20', label: 'MA', description: '이동평균', color: '#ef4444' },
+        { key: 'ema12', label: 'EMA', description: '지수이동평균', color: '#10b981' },
       ]
     },
     {

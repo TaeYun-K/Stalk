@@ -85,8 +85,19 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || '주식 정보 로드 실패');
+        console.error(`API failed with status: ${response.status}`);
+        // Set default values when API fails
+        setStockData({
+          price: 0,
+          change: 0,
+          changeRate: 0,
+          high: 0,
+          low: 0,
+          open: 0,
+          prevClose: 0,
+          volume: '0'
+        });
+        return;
       }
 
       const responseData = await response.json();
@@ -110,20 +121,48 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
         const currentPrice = parseFloat(stockInfo.TDD_CLSPRC?.replace(/,/g, '') || stockInfo.closePrice?.replace(/,/g, '') || '0');
         const priceChange = parseFloat(stockInfo.CMPPREVDD_PRC?.replace(/,/g, '') || stockInfo.priceChange?.replace(/,/g, '') || '0');
         const changePct = parseFloat(stockInfo.FLUC_RT?.replace(/,/g, '') || stockInfo.changeRate?.replace(/,/g, '') || '0');
+        const openPrice = parseFloat(stockInfo.TDD_OPNPRC?.replace(/,/g, '') || stockInfo.openPrice?.replace(/,/g, '') || '0');
+        const highPrice = parseFloat(stockInfo.TDD_HGPRC?.replace(/,/g, '') || stockInfo.highPrice?.replace(/,/g, '') || '0');
+        const lowPrice = parseFloat(stockInfo.TDD_LWPRC?.replace(/,/g, '') || stockInfo.lowPrice?.replace(/,/g, '') || '0');
         
         setStockData({
           price: currentPrice,
           change: priceChange,
           changeRate: changePct,
-          high: currentPrice, // Using current price as fallback
-          low: currentPrice,
-          open: currentPrice,
+          high: highPrice || currentPrice, // Fallback to current price only if no high price
+          low: lowPrice || currentPrice,   // Fallback to current price only if no low price
+          open: openPrice || currentPrice, // Fallback to current price only if no open price
           prevClose: currentPrice - priceChange,
           volume: formatVolume(parseInt(stockInfo.ACC_TRDVOL?.replace(/,/g, '') || stockInfo.volume?.replace(/,/g, '') || '0'))
+        });
+        
+        // Debug logging
+        console.log(`📊 Stock data for ${ticker}:`, {
+          raw: stockInfo,
+          parsed: {
+            price: currentPrice,
+            open: openPrice,
+            high: highPrice,
+            low: lowPrice,
+            change: priceChange,
+            changeRate: changePct,
+            prevClose: currentPrice - priceChange
+          }
         });
       }
     } catch (error) {
       console.error('주식 상세 정보 로드 오류:', error);
+      // Set default values when error occurs
+      setStockData({
+        price: 0,
+        change: 0,
+        changeRate: 0,
+        high: 0,
+        low: 0,
+        open: 0,
+        prevClose: 0,
+        volume: '0'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +180,7 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
   };
 
   const isNegative = stockData.changeRate < 0;
+  // Korean market convention: Red for up, Blue for down
   const changeColor = isNegative ? 'text-blue-600' : 'text-red-600';
   const changeIcon = isNegative ? '▼' : stockData.changeRate > 0 ? '▲' : '';
 

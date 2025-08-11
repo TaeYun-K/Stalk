@@ -95,6 +95,7 @@ public class KrxApiService {
     @Cacheable(value = "kospiVolumeRanking", key = "#limit")
     public List<KrxRankingStock> getKospiVolumeRanking(int limit) {
         logger.info("Fetching KOSPI volume ranking, limit: {} (with caching)", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("STK", MARKET_DATA_BLD, "ACC_TRDVOL", limit);
     }
     
@@ -106,6 +107,7 @@ public class KrxApiService {
     @Cacheable(value = "kospiTradeValueRanking", key = "#limit")
     public List<KrxRankingStock> getKospiTradeValueRanking(int limit) {
         logger.info("Fetching KOSPI trade value ranking, limit: {} (with caching)", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("STK", MARKET_DATA_BLD, "ACC_TRDVAL", limit);
     }
     
@@ -117,6 +119,7 @@ public class KrxApiService {
     @Cacheable(value = "kospiPriceIncreaseRanking", key = "#limit")
     public List<KrxRankingStock> getKospiPriceIncreaseRanking(int limit) {
         logger.info("Fetching KOSPI price increase ranking, limit: {} (with caching)", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("STK", MARKET_DATA_BLD, "FLUC_RT", limit);
     }
     
@@ -127,7 +130,22 @@ public class KrxApiService {
      */
     public List<KrxRankingStock> getKospiPriceDecreaseRanking(int limit) {
         logger.info("Fetching KOSPI price decrease ranking, limit: {}", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("STK", MARKET_DATA_BLD, "FLUC_RT_DESC", limit);
+    }
+    
+    /**
+     * Fetch KOSPI market capitalization ranking (시가총액 순위)
+     * @param limit Number of stocks to return (default: 50)
+     * @return List of KrxRankingStock sorted by market capitalization
+     */
+    public List<KrxRankingStock> getKospiMarketCapRanking(int limit) {
+        logger.info("Fetching KOSPI market cap ranking, limit: {}", limit);
+        // Market cap doesn't have a specific BLD, so we use MARKET_DATA_BLD and sort by MKTCAP
+        // Fetch all available data and then limit after sorting
+        List<KrxRankingStock> allStocks = fetchRankingData("STK", MARKET_DATA_BLD, "MKTCAP", 500);
+        // Return only the requested limit
+        return allStocks.size() > limit ? allStocks.subList(0, limit) : allStocks;
     }
     
     /**
@@ -137,6 +155,7 @@ public class KrxApiService {
      */
     public List<KrxRankingStock> getKosdaqVolumeRanking(int limit) {
         logger.info("Fetching KOSDAQ volume ranking, limit: {}", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("KSQ", MARKET_DATA_BLD, "ACC_TRDVOL", limit);
     }
     
@@ -147,6 +166,7 @@ public class KrxApiService {
      */
     public List<KrxRankingStock> getKosdaqTradeValueRanking(int limit) {
         logger.info("Fetching KOSDAQ trade value ranking, limit: {}", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("KSQ", MARKET_DATA_BLD, "ACC_TRDVAL", limit);
     }
     
@@ -157,6 +177,7 @@ public class KrxApiService {
      */
     public List<KrxRankingStock> getKosdaqPriceIncreaseRanking(int limit) {
         logger.info("Fetching KOSDAQ price increase ranking, limit: {}", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("KSQ", MARKET_DATA_BLD, "FLUC_RT", limit);
     }
     
@@ -167,7 +188,22 @@ public class KrxApiService {
      */
     public List<KrxRankingStock> getKosdaqPriceDecreaseRanking(int limit) {
         logger.info("Fetching KOSDAQ price decrease ranking, limit: {}", limit);
+        // Use MARKET_DATA_BLD since ranking BLDs may have different field structures
         return fetchRankingData("KSQ", MARKET_DATA_BLD, "FLUC_RT_DESC", limit);
+    }
+    
+    /**
+     * Fetch KOSDAQ market capitalization ranking (시가총액 순위)
+     * @param limit Number of stocks to return (default: 50)
+     * @return List of KrxRankingStock sorted by market capitalization
+     */
+    public List<KrxRankingStock> getKosdaqMarketCapRanking(int limit) {
+        logger.info("Fetching KOSDAQ market cap ranking, limit: {}", limit);
+        // Market cap doesn't have a specific BLD, so we use MARKET_DATA_BLD and sort by MKTCAP
+        // Fetch all available data and then limit after sorting
+        List<KrxRankingStock> allStocks = fetchRankingData("KSQ", MARKET_DATA_BLD, "MKTCAP", 500);
+        // Return only the requested limit
+        return allStocks.size() > limit ? allStocks.subList(0, limit) : allStocks;
     }
     
     /**
@@ -567,6 +603,11 @@ public class KrxApiService {
         stockInfo.setMarketCap(stockData.path("MKTCAP").asText("0"));
         stockInfo.setListedShares(stockData.path("LIST_SHRS").asText("0"));
         
+        // Add missing OHLC price fields
+        stockInfo.setOpenPrice(stockData.path("TDD_OPNPRC").asText("0"));
+        stockInfo.setHighPrice(stockData.path("TDD_HGPRC").asText("0"));
+        stockInfo.setLowPrice(stockData.path("TDD_LWPRC").asText("0"));
+        
         return stockInfo;
     }
     
@@ -862,10 +903,11 @@ public class KrxApiService {
             double volumeRaw = parseDouble(stockData.path("ACC_TRDVOL").asText("0"));
             double tradeValueRaw = parseDouble(stockData.path("ACC_TRDVAL").asText("0"));
             
-            // If trade value is 0, calculate it from volume * price for proper sorting
+            // If trade value is 0 or missing, calculate it from volume * price
+            // This is common when using MARKET_DATA_BLD which might not include ACC_TRDVAL
             if (tradeValueRaw == 0.0 && volumeRaw > 0 && price > 0) {
                 tradeValueRaw = volumeRaw * price;
-                logger.debug("Calculated trade value for sorting: {} = {} * {}", name, tradeValueRaw, volumeRaw, price);
+                logger.debug("Calculated trade value: {} = {} * {} for {}", tradeValueRaw, volumeRaw, price, name);
             }
             
             double marketCapRaw = parseDouble(stockData.path("MKTCAP").asText("0"));
@@ -897,6 +939,10 @@ public class KrxApiService {
             case "FLUC_RT_DESC":
                 // Sort by change rate ascending (lowest negative changes first)
                 stocks.sort((a, b) -> Double.compare(a.changeRate, b.changeRate));
+                break;
+            case "MKTCAP":
+                // Sort by market capitalization descending (highest first)
+                stocks.sort((a, b) -> Double.compare(b.marketCapRaw, a.marketCapRaw));
                 break;
             default:
                 logger.warn("Unknown sort field: {}", sortField);

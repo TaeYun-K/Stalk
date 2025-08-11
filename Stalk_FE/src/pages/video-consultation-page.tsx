@@ -20,6 +20,7 @@ import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import ChatPanel from "@/components/consultation/Chat.panel";
 import StockChart from "@/components/stock/charts/stock-chart";
 import StockSearch from "@/components/stock/stock-search";
+import ChartErrorBoundary from "@/components/ChartErrorBoundary";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -956,7 +957,7 @@ const VideoConsultationPage: React.FC = () => {
 
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col">
+    <div className="h-screen w-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header navbar */}
       <div className="bg-gray-800 px-6 py-3 flex items-center justify-between border-b border-gray-700">
         <div className="flex items-center space-x-4 flex-1">
@@ -994,7 +995,7 @@ const VideoConsultationPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-w-0">
         {!showStockChart ? (
           <div className="flex-1 p-2">
             <div className="h-full grid grid-cols-2 gap-2">
@@ -1182,26 +1183,48 @@ const VideoConsultationPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex">
+          <div className="flex-1 flex min-w-0">
             {/* Main Chart Area - Takes most of the space */}
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1 p-4 min-h-0">
+            <div className="flex-1 flex flex-col min-w-0">
+              <div className="flex-1 p-4 min-h-0 min-w-0">
                 <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
-                  <div className="flex-1 overflow-hidden">
-                    <StockChart 
-                      selectedStock={selectedStock} 
-                      darkMode={true} 
-                      session={session}
-                      chartInfo={currentChart}
-                      onChartChange={handleChartChange}
-                      />
+                  <div className="flex-1 overflow-hidden relative">
+                    {selectedStock ? (
+                      <div 
+                        style={{ 
+                          position: 'relative', 
+                          height: '100%', 
+                          width: '100%',
+                          maxWidth: '100%',
+                          contain: 'layout style',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        <ChartErrorBoundary>
+                          <div style={{ width: '100%', height: '100%', minWidth: 0 }}>
+                            <StockChart 
+                              selectedStock={selectedStock} 
+                              darkMode={true} 
+                              session={session}
+                              chartInfo={currentChart}
+                              onChartChange={handleChartChange}
+                              key={selectedStock.ticker} // Force re-mount on stock change
+                              />
+                          </div>
+                        </ChartErrorBoundary>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-gray-400">주식을 선택해주세요</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Side Panel for Videos - Shows when participants are enabled */}
-            {showParticipants && (
+            {/* Side Panel for Videos - Shows when participants are enabled and chart is active */}
+            {showParticipants && showStockChart && (
               <div className="w-80 bg-gray-800 border-l border-gray-700 p-4 flex flex-col">
                 <h3 className="text-sm font-semibold text-gray-300 mb-4">참가자</h3>
                 <div className="flex-1 space-y-3 overflow-y-auto">
@@ -1334,7 +1357,7 @@ const VideoConsultationPage: React.FC = () => {
           </div>
         )}
 
-        {((!showStockChart && showParticipants) || showChat) && (
+        {((showParticipants && !showStockChart) || showChat) && (
           <div className="w-80 bg-gray-800 border-l border-gray-700">
             {showParticipants && !showStockChart && (
               <div className="p-4 border-b border-gray-700">
@@ -1446,10 +1469,11 @@ const VideoConsultationPage: React.FC = () => {
       </div>
 
       {/* Bottom navigation bar */}
-      <div className="bg-gray-800 border-t border-gray-700 px-6 py-3">
-        <div className="flex items-center justify-between">
+      <div className="bg-gray-800 border-t border-gray-700 px-6 py-3 relative z-50 flex-shrink-0">
+        <div className="flex items-center justify-between min-h-[60px] w-full max-w-full overflow-hidden">
           {/* Left side - Recording button */}
-          <button
+          <div className="flex-shrink-0 w-32">
+            <button
             onClick={isRecording ? handleStopRecording : handleStartRecording}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
               isRecording
@@ -1457,17 +1481,19 @@ const VideoConsultationPage: React.FC = () => {
                 : "bg-gray-700 hover:bg-gray-600 text-gray-300"
             }`}
           >
-            {isRecording && <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>}
-            <span>{isRecording ? "녹화 중지" : "녹화 시작"}</span>
-          </button>
+              {isRecording && <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>}
+              <span>{isRecording ? "녹화 중지" : "녹화 시작"}</span>
+            </button>
+          </div>
 
           {/* Center - Media Controls */}
-          <div className="flex items-center space-x-3">
+          <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
+            <div className="flex items-center space-x-2 relative z-10 flex-shrink-0">
             <button
               onClick={toggleAudio}
               onMouseEnter={() => setHoveredButton("audio")}
               onMouseLeave={() => setHoveredButton(null)}
-              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-auto ${
                 isAudioEnabled
                   ? "bg-gray-700 hover:bg-gray-600"
                   : "bg-red-500 hover:bg-red-600"
@@ -1526,8 +1552,9 @@ const VideoConsultationPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => {
-                console.log("Chat button clicked - showStockChart:", showStockChart, "showChat:", showChat);
+              onClick={(e) => {
+                console.log("🔥 Chat button CLICKED!", { showStockChart, showChat, event: e });
+                e.stopPropagation();
                 if (showChat) {
                   setShowChat(false);
                   setHasUnreadMessages(false);
@@ -1538,7 +1565,7 @@ const VideoConsultationPage: React.FC = () => {
               }}
               onMouseEnter={() => setHoveredButton("chat")}
               onMouseLeave={() => setHoveredButton(null)}
-              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-auto ${
                 showChat
                   ? "bg-blue-500 hover:bg-blue-600"
                   : "bg-gray-700 hover:bg-gray-600"
@@ -1556,8 +1583,9 @@ const VideoConsultationPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => {
-                console.log("Participants button clicked - showStockChart:", showStockChart, "showParticipants:", showParticipants);
+              onClick={(e) => {
+                console.log("🔥 Participants button CLICKED!", { showStockChart, showParticipants, event: e });
+                e.stopPropagation();
                 if (showParticipants) {
                   setShowParticipants(false);
                 } else {
@@ -1567,7 +1595,7 @@ const VideoConsultationPage: React.FC = () => {
               }}
               onMouseEnter={() => setHoveredButton("participants")}
               onMouseLeave={() => setHoveredButton(null)}
-              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-auto ${
                 showParticipants
                   ? "bg-blue-500 hover:bg-blue-600"
                   : "bg-gray-700 hover:bg-gray-600"
@@ -1583,12 +1611,7 @@ const VideoConsultationPage: React.FC = () => {
 
             <button
               onClick={() => {
-                const newShowStockChart = !showStockChart;
-                setShowStockChart(newShowStockChart);
-                if (newShowStockChart) {
-                  setShowChat(false);
-                  setShowParticipants(false);
-                }
+                setShowStockChart(!showStockChart);
               }}
               onMouseEnter={() => setHoveredButton("stock")}
               onMouseLeave={() => setHoveredButton(null)}
@@ -1614,15 +1637,18 @@ const VideoConsultationPage: React.FC = () => {
               )}
             </button>
 
+            </div>
           </div>
 
           {/* Right side - End Call button */}
-          <button
-            onClick={leaveSession}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
-          >
-            상담 종료
-          </button>
+          <div className="flex-shrink-0 w-32 flex justify-end min-w-0 overflow-hidden">
+            <button
+              onClick={leaveSession}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+            >
+              상담 종료
+            </button>
+          </div>
         </div>
       </div>
     </div>
