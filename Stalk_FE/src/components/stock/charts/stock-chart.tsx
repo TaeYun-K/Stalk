@@ -95,14 +95,19 @@ const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
 
   // 현재 오버레이는 chartContainerRef 전체를 덮고 있음
   const overlay = document.getElementById('drawing-canvas')!;
-  const overlayRect = overlay.getBoundingClientRect();
 
   // DOM px → 캔버스 내부 px (DPR 고려)
   const scaleX = canvas.width / canvasRect.width;
   const scaleY = canvas.height / canvasRect.height;
 
-  const xCanvas = (xStage - overlayRect.left - (canvasRect.left - overlayRect.left)) * scaleX;
-  const yCanvas = (yStage - overlayRect.top  - (canvasRect.top  - overlayRect.top )) * scaleY;
+  // 1) DOM px -> 캔버스 전체 px
+  const xCanvasFull = (xStage - canvasRect.left) * scaleX;
+  const yCanvasFull = (yStage - canvasRect.top)  * scaleY;
+
+  // 2) chartArea 보정: chartArea 기준 px로 변환
+  const { left, top } = chart.chartArea;
+  const xCanvas = xCanvasFull - left;
+  const yCanvas = yCanvasFull - top;
 
   return { x: xCanvas, y: yCanvas };
 };
@@ -123,8 +128,14 @@ const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
   const scaleX = canvas.width / canvasRect.width;
   const scaleY = canvas.height / canvasRect.height;
 
-  const xStage = (xCanvas / scaleX) + (canvasRect.left - overlayRect.left);
-  const yStage = (yCanvas / scaleY) + (canvasRect.top  - overlayRect.top);
+  // 1) chartArea px -> 캔버스 전체 px
+  const { left, top } = chart.chartArea;
+  const xCanvasFull = xCanvas + left;
+  const yCanvasFull = yCanvas + top;
+
+  // 2) 캔버스 전체 px -> DOM px -> 오버레이 좌표계(px)
+  const xStage = (xCanvasFull / scaleX) + (canvasRect.left - overlayRect.left);
+  const yStage = (yCanvasFull / scaleY) + (canvasRect.top  - overlayRect.top);
   return { x: xStage, y: yStage };
 };
 
@@ -161,19 +172,41 @@ const toPixelsShape = (shape: any, chart: any) => {
   if (!shape || shape.coordType !== 'data' || !chart?.scales?.x) return shape;
 
   const clone = { ...shape };
-  if (Array.isArray(clone.points)) {
+  if (clone.attry && Array.isArray(clone.points)) {
     const flat: number[] = [];
     for (let i = 0; i < clone.points.length; i += 2) {
-      const px = dataToStagePxPoint(chart, clone.points[i], clone.points[i + 1]);
-      flat.push(px.x, px.y);
+      const s = dataToStagePxPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
+      flat.push(s.x, s.y);
     }
-    clone.points = flat;
-  } else if (clone.p1 && clone.p2) {
-    const a = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
-    const b = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
-    clone.p1 = a;
-    clone.p2 = b;
+    clone.attrs = { ...clone.attrs, points: flat };
+  } 
+  
+  if (clone.p1 && clone.p2) {
+    clone.p1 = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
+    clone.p2 = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
   }
+
+  if (clone.type === 'rectangle' && clone.attrs) {
+    const a = clone.attrs;
+    const p1 = dataToStagePxPoint(chart, a.x, a.y);
+    const p2 = dataToStagePxPoint(chart, a.x + a.width, a.y + a.height);
+    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  }
+
+  if (clone.type === 'circle' && clone.attrs) {
+    const a = clone.attrs;
+    const c = dataToStagePxPoint(chart, a.x, a.y);
+    const r = dataToStagePxPoint(chart, a.x + (a.radiusX ?? a.radius), a.y);
+    const rx = Math.abs(r.x - c.x);
+    clone.attrs = { ...a, x: c.x, y: c.y, radius: rx };
+  }
+
+  if (clone.type === 'text' && clone.attrs) {
+    const a = clone.attrs;
+    const p = dataToStagePxPoint(chart, a.x, a.y);
+    clone.attrs = { ...a, x: p.x, y: p.y };
+  }
+
   clone.coordType = 'px';
   return clone;
 };
@@ -182,17 +215,42 @@ const toPixelsShape = (shape: any, chart: any) => {
 const toDataShape = (shape: any, chart: any) => {
   if (!shape || !chart?.scales?.x) return shape;
   const clone = { ...shape };
-  if (Array.isArray(clone.points)) {
+  if (clone.attrs && Array.isArray(clone.points)) {
     const pts: number[] = [];
     for (let i = 0; i < clone.points.length; i += 2) {
-      const d = stagePxToDataPoint(chart, clone.points[i], clone.points[i + 1]);
+      const d = stagePxToDataPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
       pts.push(d.x, d.y);
     }
-    clone.points = pts;
-  } else if (clone.p1 && clone.p2) {
+    clone.attrs = { ...clone.attrs, points: pts };
+  } 
+  if (clone.p1 && clone.p2) {
     clone.p1 = stagePxToDataPoint(chart, clone.p1.x, clone.p1.y);
     clone.p2 = stagePxToDataPoint(chart, clone.p2.x, clone.p2.y);
   }
+
+  // 3) 타입별 attrs 변환
+  if (clone.type === 'rectangle' && clone.attrs) {
+    const a = clone.attrs;
+    const p1 = stagePxToDataPoint(chart, a.x, a.y);
+    const p2 = stagePxToDataPoint(chart, a.x + a.width, a.y + a.height);
+    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  }
+
+  if (clone.type === 'circle' && clone.attrs) {
+    const a = clone.attrs;
+    const c = stagePxToDataPoint(chart, a.x, a.y);
+    const r = stagePxToDataPoint(chart, a.x + a.radius, a.y);
+    const rx = Math.abs(r.x - c.x);
+    // data 공간에선 radiusX/Y로 들고 싶다면 여기에 radiusX/Y 저장도 가능
+    clone.attrs = { ...a, x: c.x, y: c.y, radiusX: rx, radiusY: rx, radius: rx };
+  }
+
+  if (clone.type === 'text' && clone.attrs) {
+    const a = clone.attrs;
+    const p = stagePxToDataPoint(chart, a.x, a.y);
+    clone.attrs = { ...a, x: p.x, y: p.y };
+  }
+
   clone.coordType = 'data';
   return clone;
 };
@@ -413,6 +471,18 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   });
 
+  // 차트 그려진 직후 정렬 시킴
+  useEffect(() => {
+    if (!chartRef.current?.scales?.x) return;
+    // 차트가 안정되도록 한 틱 뒤 정렬
+    const t = setTimeout(() => {
+      syncOverlayToChartArea();
+      // 차트 레이아웃이 바뀌었으니 기존 도형 재투영
+      reprojectAllShapes();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [chartData, period, darkMode, enableFutureSpace, futureDays]);
+
   useEffect(() => {
     const onResize = () => { syncOverlayToChartArea(); reprojectAllShapes(); };
     window.addEventListener('resize', onResize);
@@ -515,6 +585,7 @@ const StockChart: React.FC<StockChartProps> = ({
         if (canvasContainer && chartContainerRef.current) {
           try {
             console.log('Konva 캔버스 초기화 시작');
+            syncOverlayToChartArea();
             const stage = initializeCanvas();
             if (stage && mounted) {
               konvaStage.current = stage;
