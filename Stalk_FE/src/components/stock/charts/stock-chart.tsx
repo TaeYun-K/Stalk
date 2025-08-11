@@ -3,6 +3,7 @@ import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
   LinearScale,
+  CategoryScale,
   TimeScale,
   PointElement,
   LineElement,
@@ -33,10 +34,11 @@ import {
   calculateHeikinAshi,
   calculateIchimoku
 } from '../utils/calculations';
-import { on } from 'events';
+import 'chartjs-adapter-date-fns';
 
 ChartJS.register(
   TimeScale,
+  CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
@@ -361,6 +363,15 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
+  // 언마운트/변경 시 destroy
+  useEffect(() => {
+    return () => {
+      try { volumeChartRef.current?.destroy?.(); } catch {}
+      try { rsiChartRef.current?.destroy?.(); } catch {}
+      try { macdChartRef.current?.destroy?.(); } catch {}
+    };
+  }, [activeIndicatorTab]);
+
   // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
@@ -533,6 +544,7 @@ const StockChart: React.FC<StockChartProps> = ({
       updateSeparateChartIndicators();
     }
   }, [rawData, indicatorSettings.rsi, indicatorSettings.macd, indicatorSettings.stochastic, indicatorSettings.volume]);
+
 
   // 동기화 요청/응답 처리
   useEffect(() => {
@@ -1780,7 +1792,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
               {chartData && !isLoading && !error && (
                 <>
-                  <Line data={chartData} options={chartOptions} ref={chartRef} />
+                  <Line key={`price-${getCurrentTicker()}-${period}-main`} data={chartData} options={chartOptions} ref={chartRef}/>
                   
                   {/* Future period visual indicator - subtle overlay only */}
                   {enableFutureSpace && futureDays > 0 && chartData.actualDataLength < chartData.labels.length && (
@@ -2128,13 +2140,13 @@ const StockChart: React.FC<StockChartProps> = ({
               <div style={{ minHeight: '200px', height: '25vh', maxHeight: '300px', padding: '20px' }}>
                 {/* Show chart based on active tab */}
                 {activeIndicatorTab === 'volume' && showVolume && volumeChartData ? (
-                  <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef} />
+                  <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef}/>
                 ) : activeIndicatorTab === 'rsi' && showRSI && rsiChartData && canShowRSI ? (
-                  <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef} />
+                  <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef}/>
                 ) : activeIndicatorTab === 'macd' && showMACD && macdChartData && canShowMACD ? (
-                  <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
+                  <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef}/>
                 ) : activeIndicatorTab === 'stochastic' && showStochastic && stochChartData && canShowStochastic ? (
-                  <Line data={stochChartData} options={stochasticChartOptions} />
+                  <Line data={stochChartData} options={stochasticChartOptions}/>
                 ) : (
                   <div className={`flex items-center justify-center h-full ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     <div className="text-center">
