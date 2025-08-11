@@ -14,6 +14,7 @@ import {
   LineController,
   BarController,
 } from 'chart.js';
+import type { Chart } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line, Bar } from 'react-chartjs-2';
 import Konva from 'konva';
@@ -86,7 +87,27 @@ type ChartType = 'line';
 type ChartInfo = {
   ticker: string;
   period: string;
+  scaleXMin?: number;
+  scaleXMax?: number;
+  scaleYMin?: number;
+  scaleYMax?: number;
 };
+
+type ChartStateSignalData = {
+  ticker: string;
+  period: string;
+  scaleXMin: number;
+  scaleXMax: number;
+  scaleYMin: number;
+  scaleYMax: number;
+};
+
+type OpenViduSignalEvent = {
+  data: string;
+  from: any; // The `from` property is often an `any` type in the library
+  type: string;
+};
+
 
 const getDpr = (chart: any) => {
   const canvas: HTMLCanvasElement = chart.canvas;
@@ -534,6 +555,48 @@ const StockChart: React.FC<StockChartProps> = ({
       session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
     }
   });
+
+  useEffect(() => {
+    if (!session || !chartRef.current) return;
+
+    const onChartStateChange = (e: OpenViduSignalEvent) => {
+      try {
+        const msg: ChartStateSignalData = JSON.parse(e.data);
+        const chart = chartRef.current;
+        
+        // 현재 차트의 티커 및 기간과 일치하는지 확인
+        if (msg.ticker !== getCurrentTicker() || msg.period !== period) {
+          return;
+        }
+        
+        if (chart && msg.scaleXMin != null && msg.scaleYMin != null) {
+          // 수신된 스케일 정보를 차트에 적용
+          chart.scales.x.min = msg.scaleXMin;
+          chart.scales.x.max = msg.scaleXMax;
+          chart.scales.y.min = msg.scaleYMin;
+          chart.scales.y.max = msg.scaleYMax;
+          
+          // 차트 업데이트
+          chart.update('none'); // 애니메이션 없이 즉시 업데이트
+          
+          // 차트 스케일이 변경되었으므로, 드로잉도 재투영
+          reprojectAllShapes();
+        }
+      } catch (error) {
+        console.error('Error applying remote chart state:', error);
+      }
+  };
+
+  // OpenVidu 시그널 리스너 등록
+  session.on('signal:chart:state-change', onChartStateChange);
+
+  // 컴포넌트 언마운트 시 리스너 정리
+  return () => {
+    session.off('signal:chart:state-change', onChartStateChange);
+  };
+  }, [session, period, chartRef.current]);
+
+  
 
   // 차트 그려진 직후 정렬 시킴
   useEffect(() => {
@@ -1594,14 +1657,46 @@ const StockChart: React.FC<StockChartProps> = ({
       zoom: {
         zoom: {
           wheel: {
-            enabled: false,
+            enabled: true,
           },
           pinch: {
-            enabled: false,
+            enabled: true,
+          },
+          onZoom: ({ chart }: { chart: Chart }) => {
+            const newChartInfo = {
+              ticker: getCurrentTicker(),
+              period,
+              scaleXMin: chart.scales.x.min,
+              scaleXMax: chart.scales.x.max,
+              scaleYMin: chart.scales.y.min,
+              scaleYMax: chart.scales.y.max,
+            };
+            // OpenVidu 시그널로 차트 상태 전송
+            session?.signal({
+              type: 'chart:state-change',
+              data: JSON.stringify(newChartInfo),
+            }).catch(console.error);
           },
         },
         pan: {
-          enabled: false,
+          enabled: true, // 패닝 활성화
+          mode: 'x',
+          // 패닝 이벤트 발생 시 실행될 함수
+          onPan: ({ chart }: {chart : Chart}) => {
+            const newChartInfo = {
+              ticker: getCurrentTicker(),
+              period,
+              scaleXMin: chart.scales.x.min,
+              scaleXMax: chart.scales.x.max,
+              scaleYMin: chart.scales.y.min,
+              scaleYMax: chart.scales.y.max,
+            };
+            // OpenVidu 시그널로 차트 상태 전송
+            session?.signal({
+              type: 'chart:state-change',
+              data: JSON.stringify(newChartInfo),
+            }).catch(console.error);
+          },
         },
       },
     },
