@@ -14,6 +14,7 @@ import {
   LineController,
   BarController,
 } from 'chart.js';
+import type { Chart } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line, Bar } from 'react-chartjs-2';
 import Konva from 'konva';
@@ -86,30 +87,44 @@ type ChartType = 'line';
 type ChartInfo = {
   ticker: string;
   period: string;
+  scaleXMin?: number;
+  scaleXMax?: number;
+  scaleYMin?: number;
+  scaleYMax?: number;
 };
+
+type ChartStateSignalData = {
+  ticker: string;
+  period: string;
+  scaleXMin: number;
+  scaleXMax: number;
+  scaleYMin: number;
+  scaleYMax: number;
+};
+
+type OpenViduSignalEvent = {
+  data: string | undefined;
+  from: any; // The `from` property is often an `any` type in the library
+  type: string;
+};
+
+const getDpr = (chart: any) =>
+  chart?.currentDevicePixelRatio ?? window.devicePixelRatio ?? 1;
 
 // 캔버스/오버레이 사이 좌표 변환 함수
 const stageToCanvasPx = (chart: any, xStage: number, yStage: number) => {
-  const canvas: HTMLCanvasElement = chart.canvas;
-  const canvasRect = canvas.getBoundingClientRect();
+  const dpr = getDpr(chart);
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const overlayRect = document.getElementById('drawing-canvas')!.getBoundingClientRect();
 
-  // 현재 오버레이는 chartContainerRef 전체를 덮고 있음
-  const overlay = document.getElementById('drawing-canvas')!;
+  const xCanvasCss = (overlayRect.left + xStage) - canvasRect.left; // CSS px
+  const yCanvasCss = (overlayRect.top  + yStage) - canvasRect.top;  // CSS px
 
-  // DOM px → 캔버스 내부 px (DPR 고려)
-  const scaleX = canvas.width / canvasRect.width;
-  const scaleY = canvas.height / canvasRect.height;
+  const { left, top } = chart.chartArea; // 캔버스 px
+  const xCanvas = xCanvasCss * dpr; // CSS -> 캔버스 px
+  const yCanvas = yCanvasCss * dpr;
 
-  // 1) DOM px -> 캔버스 전체 px
-  const xCanvasFull = (xStage - canvasRect.left) * scaleX;
-  const yCanvasFull = (yStage - canvasRect.top)  * scaleY;
-
-  // 2) chartArea 보정: chartArea 기준 px로 변환
-  const { left, top } = chart.chartArea;
-  const xCanvas = xCanvasFull - left;
-  const yCanvas = yCanvasFull - top;
-
-  return { x: xCanvas, y: yCanvas };
+  return { x: xCanvas - left, y: yCanvas - top }; // chartArea 원점 기준(캔버스 px)
 };
 
 // stage(px) -> canvas(chartArea px) -> data 좌표
@@ -120,22 +135,19 @@ const stagePxToDataPoint = (chart: any, sx: number, sy: number) => {
 
 // 캔버스/오버레이 사이 좌표 변환 함수 
 const canvasToStagePx = (chart: any, xCanvas: number, yCanvas: number) => {
-  const canvas: HTMLCanvasElement = chart.canvas;
-  const canvasRect = canvas.getBoundingClientRect();
-  const overlay = document.getElementById('drawing-canvas')!;
-  const overlayRect = overlay.getBoundingClientRect();
+  const dpr = getDpr(chart);
+  const { left, top } = chart.chartArea; // 캔버스 px
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const overlayRect = document.getElementById('drawing-canvas')!.getBoundingClientRect();
 
-  const scaleX = canvas.width / canvasRect.width;
-  const scaleY = canvas.height / canvasRect.height;
+  const xCanvasAbs = xCanvas + left; // 캔버스 px
+  const yCanvasAbs = yCanvas + top;  // 캔버스 px
 
-  // 1) chartArea px -> 캔버스 전체 px
-  const { left, top } = chart.chartArea;
-  const xCanvasFull = xCanvas + left;
-  const yCanvasFull = yCanvas + top;
+  const xCanvasCss = xCanvasAbs / dpr; // 캔버스 -> CSS px
+  const yCanvasCss = yCanvasAbs / dpr;
 
-  // 2) 캔버스 전체 px -> DOM px -> 오버레이 좌표계(px)
-  const xStage = (xCanvasFull / scaleX) + (canvasRect.left - overlayRect.left);
-  const yStage = (yCanvasFull / scaleY) + (canvasRect.top  - overlayRect.top);
+  const xStage = xCanvasCss + (canvasRect.left - overlayRect.left);
+  const yStage = yCanvasCss + (canvasRect.top  - overlayRect.top);
   return { x: xStage, y: yStage };
 };
 
@@ -145,14 +157,15 @@ const dataToStagePxPoint = (chart: any, dx: number, dy: number) => {
   return canvasToStagePx(chart, c.x, c.y);          // canvas(px) -> stage(px)
 };
 
-// 데이터 좌표로 변환하기 위한 type
-type DataPoint = { x: number; y: number }; // x: timestamp(ms), y: price
-
 // px to data 변환
 const pxToData = (chart: any, px: number, py: number) => {
   const { left, top } = chart.chartArea;
+
+  // chartArea px(논리적) → 캔버스 전체 px(논리적)
   const xCanvas = px + left;
   const yCanvas = py + top;
+
+  // Chart.js 스케일은 캔버스 px 기준 사용 (논리적)
   return {
     x: chart.scales.x.getValueForPixel(xCanvas),
     y: chart.scales.y.getValueForPixel(yCanvas),
@@ -161,10 +174,10 @@ const pxToData = (chart: any, px: number, py: number) => {
 
 // data to px 
 const dataToPx = (chart: any, xVal: number, yVal: number) => {
-  const xCanvas = chart.scales.x.getPixelForValue(xVal);
-  const yCanvas = chart.scales.y.getPixelForValue(yVal);
-  const { left, top } = chart.chartArea; // chartArea를 (0,0)로 변환
-  return { x: xCanvas - left, y: yCanvas - top };
+  const { left, top } = chart.chartArea;
+  const xCanvas = chart.scales.x.getPixelForValue(xVal); // 논리적 픽셀
+  const yCanvas = chart.scales.y.getPixelForValue(yVal); // 논리적 픽셀
+  return { x: xCanvas - left, y: yCanvas - top }; // DPR 없이 뺌
 };
 
 // shape를 data -> px 로 변환
@@ -172,15 +185,15 @@ const toPixelsShape = (shape: any, chart: any) => {
   if (!shape || shape.coordType !== 'data' || !chart?.scales?.x) return shape;
 
   const clone = { ...shape };
-  if (clone.attry && Array.isArray(clone.points)) {
+  if (clone.attrs && Array.isArray(clone.attrs.points)) {
     const flat: number[] = [];
-    for (let i = 0; i < clone.points.length; i += 2) {
+    for (let i = 0; i < clone.attrs.points.length; i += 2) {
       const s = dataToStagePxPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
       flat.push(s.x, s.y);
     }
     clone.attrs = { ...clone.attrs, points: flat };
-  } 
-  
+  }
+
   if (clone.p1 && clone.p2) {
     clone.p1 = dataToStagePxPoint(chart, clone.p1.x, clone.p1.y);
     clone.p2 = dataToStagePxPoint(chart, clone.p2.x, clone.p2.y);
@@ -211,48 +224,56 @@ const toPixelsShape = (shape: any, chart: any) => {
   return clone;
 };
 
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
 // shape를 px -> data 변환
-const toDataShape = (shape: any, chart: any) => {
-  if (!shape || !chart?.scales?.x) return shape;
-  const clone = { ...shape };
-  if (clone.attrs && Array.isArray(clone.points)) {
-    const pts: number[] = [];
-    for (let i = 0; i < clone.points.length; i += 2) {
+function toDataShape(shape: any, chart: any) {
+  if (!chart?.scales?.x || !chart?.scales?.y) return shape;
+
+  const xMin = chart.scales.x.min;
+  const xMax = chart.scales.x.max;
+  const yMin = chart.scales.y.min;
+  const yMax = chart.scales.y.max;
+
+  const clone = JSON.parse(JSON.stringify(shape));
+  clone.attrs = clone.attrs ?? {};
+
+  if (Array.isArray(clone.attrs.points)) {
+    const out: number[] = [];
+    for (let i = 0; i < clone.attrs.points.length; i += 2) {
       const d = stagePxToDataPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
-      pts.push(d.x, d.y);
+      out.push(clamp(d.x, xMin, xMax), clamp(d.y, yMin, yMax));
     }
-    clone.attrs = { ...clone.attrs, points: pts };
-  } 
-  if (clone.p1 && clone.p2) {
-    clone.p1 = stagePxToDataPoint(chart, clone.p1.x, clone.p1.y);
-    clone.p2 = stagePxToDataPoint(chart, clone.p2.x, clone.p2.y);
+    clone.attrs.points = out;
+    clone.coordType = 'data';
+    return clone;
   }
 
-  // 3) 타입별 attrs 변환
-  if (clone.type === 'rectangle' && clone.attrs) {
-    const a = clone.attrs;
-    const p1 = stagePxToDataPoint(chart, a.x, a.y);
-    const p2 = stagePxToDataPoint(chart, a.x + a.width, a.y + a.height);
-    clone.attrs = { ...a, x: p1.x, y: p1.y, width: p2.x - p1.x, height: p2.y - p1.y };
+  if (typeof clone.attrs.x === 'number' && typeof clone.attrs.y === 'number') {
+    const d = stagePxToDataPoint(chart, clone.attrs.x, clone.attrs.y);
+    clone.attrs.x = clamp(d.x, xMin, xMax);
+    clone.attrs.y = clamp(d.y, yMin, yMax);
+    clone.coordType = 'data';
   }
-
-  if (clone.type === 'circle' && clone.attrs) {
-    const a = clone.attrs;
-    const c = stagePxToDataPoint(chart, a.x, a.y);
-    const r = stagePxToDataPoint(chart, a.x + a.radius, a.y);
-    const rx = Math.abs(r.x - c.x);
-    // data 공간에선 radiusX/Y로 들고 싶다면 여기에 radiusX/Y 저장도 가능
-    clone.attrs = { ...a, x: c.x, y: c.y, radiusX: rx, radiusY: rx, radius: rx };
-  }
-
-  if (clone.type === 'text' && clone.attrs) {
-    const a = clone.attrs;
-    const p = stagePxToDataPoint(chart, a.x, a.y);
-    clone.attrs = { ...a, x: p.x, y: p.y };
-  }
-
-  clone.coordType = 'data';
   return clone;
+}
+
+const normalizeToDomain = (shape: any, chart: any) => {
+  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  const xMin = chart.scales.x.min, xMax = chart.scales.x.max;
+  const yMin = chart.scales.y.min, yMax = chart.scales.y.max;
+
+  const s = JSON.parse(JSON.stringify(shape));
+  if (s?.attrs?.points) {
+    for (let i = 0; i < s.attrs.points.length; i += 2) {
+      s.attrs.points[i]   = clamp(s.attrs.points[i],   xMin, xMax);
+      s.attrs.points[i+1] = clamp(s.attrs.points[i+1], yMin, yMax);
+    }
+  } else if (typeof s?.attrs?.x === 'number' && typeof s?.attrs?.y === 'number') {
+    s.attrs.x = clamp(s.attrs.x, xMin, xMax);
+    s.attrs.y = clamp(s.attrs.y, yMin, yMax);
+  }
+  return s;
 };
 
 // 타입 가드
@@ -332,29 +353,42 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const totalLen = chartRef.current?.data?.datasets?.[0]?.data?.length ?? 0;
 
-  
+  // scale 변경 감지해 시그널 전송
+  const sendChartState = () => {
+    const chart = chartRef.current;
+    if (!session || !chart?.scales?.x) return;
+
+    const data: ChartStateSignalData = {
+      ticker: getCurrentTicker(),
+      period,
+      scaleXMin: chart.scales.x.min,
+      scaleXMax: chart.scales.x.max,
+      scaleYMin: chart.scales.y.min,
+      scaleYMax: chart.scales.y.max,
+    };
+
+    session.signal({
+      type: 'chart:state-change',
+      data: JSON.stringify(data)
+    }).catch(console.error);
+
+    console.log('[SYNC_DEBUG] Sent chart state:', data);
+  };
 
   // price 차트 렌더 직후와 리사이즈마다 호출
   const syncOverlayToChartArea = () => {
     const chart = chartRef.current;
     const ovl = document.getElementById('drawing-canvas') as HTMLDivElement | null;
-    const container = chartContainerRef.current;
-    if (!chart || !ovl || !chart.chartArea || !container) return;
+    if (!chart || !ovl || !chart.chartArea) return;
 
-    const { left, top, width, height } = chart.chartArea;
+    const dpr = getDpr(chart);
+    const { left, top, width, height } = chart.chartArea; // 캔버스 px
 
-    // 캔버스가 컨테이너 안에서 어디에 놓였는지 보정
-    const canvas: HTMLCanvasElement = chart.canvas;
-    const canvasRect = canvas.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-
-    const canvasOffsetX = canvasRect.left - containerRect.left;
-    const canvasOffsetY = canvasRect.top  - containerRect.top;
-
-    ovl.style.left   = `${canvasOffsetX + left}px`;
-    ovl.style.top    = `${canvasOffsetY + top}px`;
-    ovl.style.width  = `${width}px`;
-    ovl.style.height = `${height}px`;
+    // CSS px로 환산해서 스타일 지정
+    ovl.style.left = `${left   / dpr}px`;
+    ovl.style.top  = `${top    / dpr}px`;
+    ovl.style.width  = `${width  / dpr}px`;
+    ovl.style.height = `${height / dpr}px`;
   };
 
   // chartArea 변동 감지 후
@@ -448,19 +482,58 @@ const StockChart: React.FC<StockChartProps> = ({
     onChange: (change) => {
       console.log('[DRAW→PARENT] change', change); 
       if (!session) return;
+
+      const chart = chartRef.current;
+      if (!chart?.scales?.x || !chart?.scales?.y || !chart?.chartArea) {
+        console.warn('Chart not ready for coordinate conversion');
+        return;
+      }
       
       const serialize = (shape: any) => {
-        const chart = chartRef.current;
-        if(!chart?.scales?.x) return shape;
-        return toDataShape(shape, chart);
+        try {
+          const dataShape = toDataShape(shape, chart);
+      
+          // 변환된 좌표가 유효한지 검증
+          if (dataShape.attrs?.points) {
+            for (let i = 0; i < dataShape.attrs.points.length; i += 2) {
+              const x = dataShape.attrs.points[i];
+              const y = dataShape.attrs.points[i + 1];
+              if (!isFinite(x) || !isFinite(y)) {
+                console.error('Invalid coordinates after conversion:', { x, y });
+                return shape; // 변환 실패 시 원본 반환
+              }
+            }
+          }
+          
+          return dataShape;
+        } catch (error) {
+          console.error('Error in coordinate conversion:', error);
+          return shape; // 에러 시 원본 반환
+        }
       };
 
       let type: string;
-      let payload: any = { ...change, chart: { ticker: getCurrentTicker(), period } };
+      let payload: any = { 
+        ...change, chart: { ticker: getCurrentTicker(), period ,
+        chartInfo: {
+          chartAreaWidth: chart.chartArea.width,
+          chartAreaHeight: chart.chartArea.height,
+          scaleXMin: chart.scales.x.min,
+          scaleXMax: chart.scales.x.max,
+          scaleYMin: chart.scales.y.min,
+          scaleYMax: chart.scales.y.max,
+          canvasWidth: chart.canvas.width,
+          canvasHeight: chart.canvas.height
+        }
+        } };
 
         if (hasShape(change)) {
           type = `drawing:${change.type}`; // add/update
           payload.shape = serialize(change.shape); // ✅ 이때만 shape 접근
+
+          console.log('[COORD_DEBUG] Original shape:', change.shape);
+          console.log('[COORD_DEBUG] Converted shape:', payload.shape);
+
         } else if (change.type === 'delete') {
           type = 'drawing:delete';         // id, version만 있음
         } else {
@@ -470,6 +543,51 @@ const StockChart: React.FC<StockChartProps> = ({
       session.signal({ type, data: JSON.stringify(payload) }).catch(console.error);
     }
   });
+
+  useEffect(() => {
+    if (!session || !chartRef.current) return;
+
+    const onChartStateChange = (e: OpenViduSignalEvent) => {
+      try {
+        if (!e.data) return;
+        const msg: ChartStateSignalData = JSON.parse(e.data);
+        if (msg.ticker !== getCurrentTicker() || msg.period !== period) return;
+
+        const chart = chartRef.current;
+        if (chart && msg.scaleXMin != null) {
+          chart.scales.x.min = msg.scaleXMin;
+          chart.scales.x.max = msg.scaleXMax;
+          chart.scales.y.min = msg.scaleYMin;
+          chart.scales.y.max = msg.scaleYMax;
+          chart.update('none');
+          reprojectAllShapes();
+          console.log('[SYNC_DEBUG] Applied remote scale:', { msgScaleXMax: msg.scaleXMax, localScaleXMax: chart.scales.x.max });
+        }
+      } catch (error) {
+        console.error('Error applying remote chart state:', error);
+      }
+    };
+
+    // OpenVidu 시그널 리스너 등록
+    session.on('signal:chart:state-change', onChartStateChange);
+
+    // 컴포넌트 언마운트 시 리스너 정리
+    return () => {
+      session.off('signal:chart:state-change', onChartStateChange);
+    };
+  }, [session, period, chartRef.current]);
+
+  
+  //futureDays/chartData 변경 useEffect 수정
+  useEffect(() => {
+    if (!chartRef.current?.scales?.x) return;
+    const t = setTimeout(() => {
+      syncOverlayToChartArea();
+      reprojectAllShapes();
+      sendChartState(); // 추가: scale 동기화 전송
+    }, 0);
+    return () => clearTimeout(t);
+  }, [chartData, period, darkMode, enableFutureSpace, futureDays]);
 
   // 차트 그려진 직후 정렬 시킴
   useEffect(() => {
@@ -513,14 +631,6 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [propChartType, propDrawingMode, propPeriod, chartInfo?.ticker, chartInfo?.period]);
 
-  // 언마운트/변경 시 destroy
-  useEffect(() => {
-    return () => {
-      try { volumeChartRef.current?.destroy?.(); } catch {}
-      try { rsiChartRef.current?.destroy?.(); } catch {}
-      try { macdChartRef.current?.destroy?.(); } catch {}
-    };
-  }, [activeIndicatorTab]);
 
   // ticker 변경시 fetch
   useEffect(() => {
@@ -629,12 +739,52 @@ const StockChart: React.FC<StockChartProps> = ({
     // add/update 수신 → 도형 반영
     // 드로잉 추가 수신 처리
     const onAdd = (e: any) => {
-      const msg = JSON.parse(e.data);
-      if (!isForThisChart(msg)) return;
-      const chart = chartRef.current;
-      if (!chart?.scales?.x) return; // 차트 준비 전이면 스킵하거나 큐에 저장
-      const shapePx = toPixelsShape(msg.shape, chart);
-      applyRemoteChange({ type: 'add', shape: shapePx, version: msg.version });
+      try {
+        const msg = JSON.parse(e.data);
+        if (!isForThisChart(msg)) return;
+        
+        const chart = chartRef.current;
+        
+        // 송신자의 차트 정보와 비교 (옵션)
+        if (msg.chart?.chartInfo) {
+          const myInfo = {
+            chartAreaWidth: chart.chartArea.width,
+            chartAreaHeight: chart.chartArea.height,
+            scaleXMin: chart.scales.x.min,
+            scaleXMax: chart.scales.x.max,
+            scaleYMin: chart.scales.y.min,
+            scaleYMax: chart.scales.y.max
+          };
+          
+          console.log('[SYNC_DEBUG] Their chart info:', msg.chart.chartInfo);
+          console.log('[SYNC_DEBUG] My chart info:', myInfo);
+          
+          // 스케일 차이 경고
+          const xRangeDiff = Math.abs(
+            (myInfo.scaleXMax - myInfo.scaleXMin) - 
+            (msg.chart.chartInfo.scaleXMax - msg.chart.chartInfo.scaleXMin)
+          );
+          const yRangeDiff = Math.abs(
+            (myInfo.scaleYMax - myInfo.scaleYMin) - 
+            (msg.chart.chartInfo.scaleYMax - msg.chart.chartInfo.scaleYMin)
+          );
+          
+          if (xRangeDiff > 1000 || yRangeDiff > 100) { // 임계값 조정 필요
+            console.warn('Significant scale difference detected');
+          }
+        }
+        
+        const shapePx = toPixelsShape(msg.shape, chart);
+        
+        // 변환 결과 로깅 (디버깅용)
+        console.log('[RECV_DEBUG] Received shape:', msg.shape);
+        console.log('[RECV_DEBUG] Converted to px:', shapePx);
+        
+        applyRemoteChange({ type: 'add', shape: shapePx, version: msg.version });
+        
+      } catch (error) {
+        console.error('Error processing add signal:', error);
+      }
     };
 
     // 드로잉 갱신 수신 처리
@@ -643,7 +793,7 @@ const StockChart: React.FC<StockChartProps> = ({
       if (!isForThisChart(msg)) return;
       const chart = chartRef.current;
       if (!chart?.scales?.x) return;
-      const shapePx = toPixelsShape(msg.shape, chart);
+      const shapePx = toPixelsShape(normalizeToDomain(msg.shape, chart), chart);
       applyRemoteChange({ type: 'update', shape: shapePx, version: msg.version });
     };
 
@@ -755,7 +905,7 @@ const StockChart: React.FC<StockChartProps> = ({
     // YYYYMMDD → Date
     if (raw && raw.length === 8 && /^\d{8}$/.test(raw)) {
       const y = +raw.slice(0,4), m = +raw.slice(4,6)-1, d = +raw.slice(6,8);
-      return new Date(y, m, d).getTime(); // ms timestamp
+      return Date.UTC(y, m, d);; // ms timestamp
     }
     // HH:MM (intraday) 같은 케이스는 오늘 날짜와 합성하거나, 백엔드에서 full datetime을 내려주면 best
     if (raw && raw.includes(':')) {
@@ -1498,14 +1648,25 @@ const StockChart: React.FC<StockChartProps> = ({
       zoom: {
         zoom: {
           wheel: {
-            enabled: false,
+            enabled: true,
           },
           pinch: {
-            enabled: false,
+            enabled: true,
+          },
+          mode : 'x',
+          onZoomComplete: ({ chart }) => {
+            sendChartState();
+            reprojectAllShapes();
           },
         },
         pan: {
-          enabled: false,
+          enabled: true, // 패닝 활성화
+          mode: 'x',
+          // 패닝 이벤트 발생 시 실행될 함수
+          onPanComplete: ({ chart }) => {
+            sendChartState();
+            reprojectAllShapes();
+          },
         },
       },
     },

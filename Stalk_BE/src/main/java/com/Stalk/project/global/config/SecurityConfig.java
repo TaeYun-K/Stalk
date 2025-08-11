@@ -136,6 +136,10 @@ public class SecurityConfig {
 
          */
         .authorizeHttpRequests(authz -> authz
+            // GET 요청에 대해 /uploads/** 경로를 인증 없이 허용
+            // 이렇게 해야 브라우저가 이미지 파일을 가져올 수 있음
+            .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+
             // Swagger UI 와 API docs 허용
             .requestMatchers(
                 "/v3/api-docs/**",
@@ -204,8 +208,8 @@ public class SecurityConfig {
     CorsConfiguration config = new CorsConfiguration();
     // 모든 출처(Origin)의 요청을 허용 (개발 환경에서는 편리하지만, 프로덕션 환경에서는 특정 도메인만 명시하는 것이 더 안전)
     config.setAllowedOriginPatterns(List.of("*"));
-    // GET, POST, PUT, DELETE, OPTIONS HTTP 메소드를 허용
-    config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+    // GET, POST, PUT, PATCH, DELETE, OPTIONS HTTP 메소드를 허용
+    config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     // 모든 종류의 HTTP 헤더를 허용
     config.setAllowedHeaders(List.of("*"));
     // 자격 증명(쿠키, Authorization 헤더 등)을 포함한 요청을 허용
