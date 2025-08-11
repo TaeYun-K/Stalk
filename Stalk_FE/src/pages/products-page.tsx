@@ -30,6 +30,7 @@ interface RankingStock {
   changeRate: number;
   marketCap: string;
   volume: string;
+  tradeValue?: string;
   logo?: string;
 }
 
@@ -42,7 +43,7 @@ interface MarketIndex {
 
 type ViewMode = "detail" | "ranking";
 type TimeRange = "1w" | "1m" | "3m" | "6m" | "1y";
-type RankingType = "volume" | "gainers" | "losers";
+type RankingType = "volume" | "gainers" | "losers" | "marketCap" | "tradeValue";
 type MarketType = "전체" | "kospi" | "kosdaq";
 
 const ProductsPage = () => {
@@ -125,6 +126,7 @@ const ProductsPage = () => {
       changeRate: stock.changeRate || 0,
       marketCap: stock.marketCap || "0",
       volume: stock.volume || "0",
+      tradeValue: stock.tradeValue || "0",
     })) || [];
 
   // Debug logging
@@ -204,8 +206,13 @@ const ProductsPage = () => {
           response = await axios.get(smartUrl, { headers: baseHeaders });
           successfulMarket = smartGuess;
           console.log(`✅ Smart guess SUCCESS: ${selectedTicker} found in ${smartGuess} market`);
-        } catch (smartGuessError) {
-          console.log(`❌ Smart guess failed: ${smartGuess}, trying ${otherMarket}...`);
+        } catch (smartGuessError: any) {
+          // Only log error if it's not a 404 (expected for wrong market)
+          if (smartGuessError.response?.status !== 404) {
+            console.error(`⚠️ Unexpected error for ${smartGuess}:`, smartGuessError.message);
+          } else {
+            console.log(`📍 ${selectedTicker} not in ${smartGuess}, trying ${otherMarket}...`);
+          }
           
           // Strategy 2: Try the other market
           try {
@@ -213,8 +220,12 @@ const ProductsPage = () => {
             response = await axios.get(fallbackUrl, { headers: baseHeaders });
             successfulMarket = otherMarket;
             console.log(`✅ Fallback SUCCESS: ${selectedTicker} found in ${otherMarket} market`);
-          } catch (fallbackError) {
-            console.log(`❌ Both markets failed, trying parallel approach...`);
+          } catch (fallbackError: any) {
+            if (fallbackError.response?.status === 404) {
+              console.warn(`⚠️ Stock ${selectedTicker} not found in either market`);
+            } else {
+              console.error(`❌ Unexpected error:`, fallbackError.message);
+            }
             throw new Error('Both individual attempts failed');
           }
         }
@@ -251,7 +262,18 @@ const ProductsPage = () => {
             volume: formatVolume(stockData.volume || stockData.ACC_TRDVOL || "0"),
             tradeValue: stockData.tradeValue || stockData.ACC_TRDVAL,
             marketCap: stockData.marketCap || stockData.MKTCAP,
+            // Add OHLC prices
+            openPrice: (stockData.openPrice || stockData.TDD_OPNPRC || "0").toString().replace(/,/g, ''),
+            highPrice: (stockData.highPrice || stockData.TDD_HGPRC || "0").toString().replace(/,/g, ''),
+            lowPrice: (stockData.lowPrice || stockData.TDD_LWPRC || "0").toString().replace(/,/g, ''),
+            prevClosePrice: stockData.prevClosePrice || ((stockData.closePrice || stockData.TDD_CLSPRC || "0").toString().replace(/,/g, '') - (stockData.priceChange || stockData.CMPPREVDD_PRC || "0").toString().replace(/,/g, '')).toString()
           };
+          
+          // Debug logging for IT Chem
+          if (selectedTicker === '309710') {
+            console.log(`🔍 IT Chem API response:`, stockData);
+            console.log(`📊 Mapped data:`, mappedData);
+          }
 
   
 
@@ -350,7 +372,12 @@ const ProductsPage = () => {
             closePrice: price.toString(),
             priceChange: change.toString(),
             changeRate: changeRate.toFixed(2),
-            volume: formatVolume(stockData.volume || "0")
+            volume: formatVolume(stockData.volume || "0"),
+            // Add OHLC prices
+            openPrice: (stockData.openPrice || stockData.TDD_OPNPRC || "0").toString().replace(/,/g, ''),
+            highPrice: (stockData.highPrice || stockData.TDD_HGPRC || "0").toString().replace(/,/g, ''),
+            lowPrice: (stockData.lowPrice || stockData.TDD_LWPRC || "0").toString().replace(/,/g, ''),
+            prevClosePrice: (price - change).toString()
           };
 
 
@@ -386,7 +413,12 @@ const ProductsPage = () => {
               closePrice: (data.closePrice || data.TDD_CLSPRC || "0").toString(),
               priceChange: (data.priceChange || data.CMPPREVDD_PRC || "0").toString(),
               changeRate: (data.changeRate || data.FLUC_RT || "0").toString(),
-              volume: formatVolume(data.volume || data.ACC_TRDVOL || "0")
+              volume: formatVolume(data.volume || data.ACC_TRDVOL || "0"),
+              // Add OHLC prices
+              openPrice: (data.openPrice || data.TDD_OPNPRC || "0").toString().replace(/,/g, ''),
+              highPrice: (data.highPrice || data.TDD_HGPRC || "0").toString().replace(/,/g, ''),
+              lowPrice: (data.lowPrice || data.TDD_LWPRC || "0").toString().replace(/,/g, ''),
+              prevClosePrice: ((parseFloat((data.closePrice || data.TDD_CLSPRC || "0").toString().replace(/,/g, ''))) - (parseFloat((data.priceChange || data.CMPPREVDD_PRC || "0").toString().replace(/,/g, '')))).toString()
             });
             return; // Success!
           }
@@ -591,7 +623,7 @@ const ProductsPage = () => {
                   </div>
                 )}
 
-                {/* Enhanced Chart with Candlestick */}
+                {/* Stock Chart */}
                 <StockChart
                   selectedStock={{
                     ticker: selectedTicker || "",
@@ -600,6 +632,7 @@ const ProductsPage = () => {
                   period={periodToDays[timeRange]}
                   chartType="line"
                   darkMode={false}
+                  drawingMode={drawingMode}
                 />
 
               </div>
