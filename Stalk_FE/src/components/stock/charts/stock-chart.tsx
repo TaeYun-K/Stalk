@@ -220,40 +220,57 @@ const toPixelsShape = (shape: any, chart: any) => {
   return clone;
 };
 
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
 // shape를 px -> data 변환
 function toDataShape(shape: any, chart: any) {
-  // 방어: chart 스케일 없으면 변환 못 함
-  if (!chart || !chart.scales || !chart.scales.x || !chart.scales.y) return shape;
+  if (!chart?.scales?.x || !chart?.scales?.y) return shape;
 
-  const clone = JSON.parse(JSON.stringify(shape)); // deep copy
+  const xMin = chart.scales.x.min;
+  const xMax = chart.scales.x.max;
+  const yMin = chart.scales.y.min;
+  const yMax = chart.scales.y.max;
+
+  const clone = JSON.parse(JSON.stringify(shape));
   clone.attrs = clone.attrs ?? {};
 
-  const pts = clone.attrs.points;
-
-  // 1) 선/폴리라인 계열: points 배열이 있을 때만 변환
-  if (Array.isArray(pts)) {
+  if (Array.isArray(clone.attrs.points)) {
     const out: number[] = [];
-    for (let i = 0; i < pts.length; i += 2) {
-      const d = stagePxToDataPoint(chart, pts[i], pts[i + 1]);
-      out.push(d.x, d.y);
+    for (let i = 0; i < clone.attrs.points.length; i += 2) {
+      const d = stagePxToDataPoint(chart, clone.attrs.points[i], clone.attrs.points[i + 1]);
+      out.push(clamp(d.x, xMin, xMax), clamp(d.y, yMin, yMax));
     }
     clone.attrs.points = out;
     clone.coordType = 'data';
     return clone;
   }
 
-  // 2) 점/레이블 등 (x,y) 사용하는 타입을 위한 옵션 처리
   if (typeof clone.attrs.x === 'number' && typeof clone.attrs.y === 'number') {
     const d = stagePxToDataPoint(chart, clone.attrs.x, clone.attrs.y);
-    clone.attrs.x = d.x;
-    clone.attrs.y = d.y;
+    clone.attrs.x = clamp(d.x, xMin, xMax);
+    clone.attrs.y = clamp(d.y, yMin, yMax);
     clone.coordType = 'data';
-    return clone;
   }
-
-  // 3) 변환할 좌표가 없으면 원본 반환(예외 방지)
   return clone;
 }
+
+const normalizeToDomain = (shape: any, chart: any) => {
+  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  const xMin = chart.scales.x.min, xMax = chart.scales.x.max;
+  const yMin = chart.scales.y.min, yMax = chart.scales.y.max;
+
+  const s = JSON.parse(JSON.stringify(shape));
+  if (s?.attrs?.points) {
+    for (let i = 0; i < s.attrs.points.length; i += 2) {
+      s.attrs.points[i]   = clamp(s.attrs.points[i],   xMin, xMax);
+      s.attrs.points[i+1] = clamp(s.attrs.points[i+1], yMin, yMax);
+    }
+  } else if (typeof s?.attrs?.x === 'number' && typeof s?.attrs?.y === 'number') {
+    s.attrs.x = clamp(s.attrs.x, xMin, xMax);
+    s.attrs.y = clamp(s.attrs.y, yMin, yMax);
+  }
+  return s;
+};
 
 // 타입 가드
 const hasShape = (c: any): c is { type: 'add'|'update'; shape: any; version: number } =>
@@ -722,7 +739,7 @@ const StockChart: React.FC<StockChartProps> = ({
       if (!isForThisChart(msg)) return;
       const chart = chartRef.current;
       if (!chart?.scales?.x) return;
-      const shapePx = toPixelsShape(msg.shape, chart);
+      const shapePx = toPixelsShape(normalizeToDomain(msg.shape, chart), chart);
       applyRemoteChange({ type: 'update', shape: shapePx, version: msg.version });
     };
 
