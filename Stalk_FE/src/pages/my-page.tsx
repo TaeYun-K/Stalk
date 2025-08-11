@@ -713,7 +713,6 @@ const MyPage = () => {
     return selectedAvatar ? selectedAvatar.image : profileDefault;
   };
 
-
   // 백엔드에서 받은 프로필 이미지 표시
   const getProfileImage = () => {
     // 1. 유저 프로필 정보나 이미지 경로가 없으면 기본 이미지 반환
