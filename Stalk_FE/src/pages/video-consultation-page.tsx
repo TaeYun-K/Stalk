@@ -18,7 +18,7 @@ import participantsIcon from "@/assets/images/icons/consultation/participants.sv
 import screenShareIcon from "@/assets/images/icons/consultation/screen-share.svg";
 import stalkLogoWhite from "@/assets/Stalk_logo_white.svg";
 import ChatPanel from "@/components/consultation/Chat.panel";
-import StockChart from "@/components/stock/charts/stock-chart";
+import { StockChart } from "@/components/stock";
 import StockSearch from "@/components/stock/stock-search";
 import ChartErrorBoundary from "@/components/ChartErrorBoundary";
 
