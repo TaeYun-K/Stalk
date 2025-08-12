@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Session } from 'openvidu-browser';
 import {
   Chart as ChartJS,
+  Chart,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -23,18 +24,17 @@ import ChartControls from '../chart-controls/chart-controls';
 import TechnicalIndicators from '../chart-controls/technical-indicators';
 import EnhancedTechnicalIndicators from '../chart-controls/enhanced-technical-indicators';
 import { useDrawingCanvas } from '../hooks/use-drawing-canvas';
-import { 
-  calculateMA, 
-  calculateEMA, 
-  calculateRSI, 
-  calculateMACD, 
+import {
+  calculateMA,
+  calculateEMA,
+  calculateRSI,
+  calculateMACD,
   calculateBollingerBands,
   calculateStochastic,
   calculateVWAP,
   calculateHeikinAshi,
   calculateIchimoku
 } from '../utils/calculations';
-import { ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -118,7 +118,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [futureDays, setFutureDays] = useState<number>(initialFutureDays);
   const [scrollIndicatorVisible, setScrollIndicatorVisible] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Detect sidebar state from body margin
   const [sidebarOffset, setSidebarOffset] = useState(0);
   const [activeIndicatorTab, setActiveIndicatorTab] = useState<'volume' | 'rsi' | 'macd' | 'stochastic'>('volume');
@@ -150,12 +150,11 @@ const StockChart: React.FC<StockChartProps> = ({
     },
   };
   const [localRSIPeriod, setLocalRSIPeriod] = useState<string>('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [indicatorHeight, setIndicatorHeight] = useState(180); // Dynamic height
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStartY, setResizeStartY] = useState(0);
   const [initialHeight, setInitialHeight] = useState(180);
-  
+
   // Enhanced Technical indicators states with configurable periods
   const [indicatorSettings, setIndicatorSettings] = useState({
     ma20: { enabled: false, period: 20 },
@@ -170,7 +169,7 @@ const StockChart: React.FC<StockChartProps> = ({
     ichimoku: { enabled: false },
     volume: { enabled: true }
   });
-  
+
   // Keep backward compatibility
   const showVolume = indicatorSettings.volume.enabled;
   const showMA20 = indicatorSettings.ma20.enabled;
@@ -189,6 +188,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const volumeChartRef = useRef<any>(null);
   const rsiChartRef = useRef<any>(null);
   const macdChartRef = useRef<any>(null);
+  const stochasticChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
 
   const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
@@ -198,19 +198,19 @@ const StockChart: React.FC<StockChartProps> = ({
   const generateFutureDates = (lastDate: string, days: number): string[] => {
     const dates: string[] = [];
     if (!lastDate || lastDate.length < 8) return dates;
-    
+
     // Parse YYYYMMDD format
     const year = parseInt(lastDate.substring(0, 4));
     const month = parseInt(lastDate.substring(4, 6)) - 1; // JS months are 0-indexed
     const day = parseInt(lastDate.substring(6, 8));
     const startDate = new Date(year, month, day);
-    
+
     let addedDays = 0;
     let currentDate = new Date(startDate);
-    
+
     while (addedDays < days) {
       currentDate.setDate(currentDate.getDate() + 1);
-      
+
       // Skip weekends for stock market
       if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
         const dateStr = currentDate.getFullYear().toString() +
@@ -220,7 +220,7 @@ const StockChart: React.FC<StockChartProps> = ({
         addedDays++;
       }
     }
-    
+
     return dates;
   };
 
@@ -236,7 +236,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const handleResizeMove = (e: MouseEvent) => {
     if (!isResizing) return;
-    
+
     const deltaY = resizeStartY - e.clientY;
     const newHeight = Math.max(100, Math.min(400, initialHeight + deltaY));
     setIndicatorHeight(newHeight);
@@ -256,7 +256,9 @@ const StockChart: React.FC<StockChartProps> = ({
       };
     }
   }, [isResizing, resizeStartY, initialHeight]);
-  
+
+
+
   const {
     initializeCanvas,
     enableDrawing,
@@ -272,7 +274,7 @@ const StockChart: React.FC<StockChartProps> = ({
   } = useDrawingCanvas(chartContainerRef, {
 
     onChange: (change) => {
- 
+
       if (!session) return;
       const payload = { ...change, chart: chartKey };
       const type =
@@ -283,7 +285,7 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   });
 
-  
+
   // 외부 chartInfo 들어오면 내부 period 동기화
   useEffect(() => {
     if(!chartInfo) return;
@@ -319,7 +321,7 @@ const StockChart: React.FC<StockChartProps> = ({
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
   }, [chartInfo?.ticker, selectedStock?.ticker, period]);
-  
+
   // Reprocess chart data when futureDays changes
   useEffect(() => {
     if (rawData && rawData.length > 0 && enableFutureSpace) {
@@ -328,14 +330,14 @@ const StockChart: React.FC<StockChartProps> = ({
       // Also update indicator charts with new future space
       updateSeparateChartIndicators();
     }
-  }, [futureDays]); 
-  
+  }, [futureDays]);
+
   // Detect sidebar state and calculate proper offset
   useEffect(() => {
     const checkSidebarState = () => {
       const bodyMargin = window.getComputedStyle(document.body).marginRight;
       const marginValue = parseInt(bodyMargin) || 0;
-      
+
       // The sidebar is 80px wide (w-20), but sets different body margins
       // When collapsed: body margin is 64px, sidebar width is 80px -> 16px overlap
       // We need to account for the full sidebar width plus some padding
@@ -346,20 +348,20 @@ const StockChart: React.FC<StockChartProps> = ({
       }
       setSidebarOffset(offset);
     };
-    
+
     // Check initially
     checkSidebarState();
-    
+
     // Listen for changes
     const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, { 
-      attributes: true, 
-      attributeFilter: ['style'] 
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['style']
     });
-    
+
     // Also check on window resize
     window.addEventListener('resize', checkSidebarState);
-    
+
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', checkSidebarState);
@@ -381,26 +383,26 @@ const StockChart: React.FC<StockChartProps> = ({
 
     const handleNativeWheel = (e: WheelEvent) => {
       if (isDrawingMode) return;
-      
+
       // Prevent default scrolling
       e.preventDefault();
       e.stopPropagation();
-      
+
       // Handle future space expansion
       const delta = e.deltaY;
       const scrollSensitivity = 3;
       const deltaFutureDays = delta > 0 ? scrollSensitivity : -scrollSensitivity;
-      
+
       setFutureDays(prev => {
         const newValue = Math.max(0, Math.min(180, prev + deltaFutureDays));
-        
+
         // Show indicator
         if (scrollTimeoutRef.current) {
           clearTimeout(scrollTimeoutRef.current);
         }
         setScrollIndicatorVisible(true);
         scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
-        
+
         return newValue;
       });
     };
@@ -442,7 +444,7 @@ const StockChart: React.FC<StockChartProps> = ({
       // Setup with delay for DOM stability
       timeoutId = setTimeout(() => {
         if (!mounted) return;
-        
+
         const canvasContainer = document.getElementById('drawing-canvas');
         if (canvasContainer && chartContainerRef.current) {
           try {
@@ -612,19 +614,19 @@ const StockChart: React.FC<StockChartProps> = ({
       // More comprehensive market type detection - same logic as in use-stock-data.ts
       const ticker = getCurrentTicker();
       let marketType: string;
-      
+
       if (ticker.startsWith('9') || ticker.startsWith('3')) {
         marketType = 'KOSDAQ';
       } else if (ticker.startsWith('00')) {
-        marketType = 'KOSPI'; 
+        marketType = 'KOSPI';
       } else {
         // For ambiguous cases like 194480 (Dev Sisters), default to KOSDAQ for 1xxxxx range
         marketType = ticker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
       }
-      
+
       // Ensure period is a number
       const periodNum = parseInt(period);
-      
+
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}&period=${periodNum}&t=${Date.now()}`,
         {
@@ -658,13 +660,13 @@ const StockChart: React.FC<StockChartProps> = ({
         stockInfo = responseData;
       }
 
-      
+
       if (stockInfo) {
         // With backend fix, we should always receive an array when period is specified
         let data: ChartDataPoint[];
         if (Array.isArray(stockInfo)) {
           // Historical data from backend
-          
+
           try {
             data = stockInfo.map(item => ({
               date: item.tradeDate || item.TRD_DD || new Date().toISOString().slice(0, 10).replace(/-/g, ''),
@@ -690,7 +692,7 @@ const StockChart: React.FC<StockChartProps> = ({
           const lowPrice = stockInfo.lowPrice || stockInfo.TDD_LWPRC || closePrice;
           const priceChange = stockInfo.priceChange || stockInfo.CMPPREVDD_PRC || '0';
           const changeRate = stockInfo.changeRate || stockInfo.FLUC_RT || '0';
-          
+
           // Single data point for current price
           data = [{
             date: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
@@ -702,10 +704,10 @@ const StockChart: React.FC<StockChartProps> = ({
             change: parseFloat(priceChange.toString().replace(/,/g, '')),
             changeRate: parseFloat(changeRate.toString().replace(/,/g, ''))
           }];
-          
+
           console.error('Backend returned single object instead of array for period:', period);
         }
-        
+
         if (!data || data.length === 0) {
           console.error("StockChart - 데이터 포인트가 없음");
           console.error("Data:", data);
@@ -713,7 +715,7 @@ const StockChart: React.FC<StockChartProps> = ({
           setError("차트 데이터가 없습니다.");
           return;
         }
-        
+
         // Log data status
         if (data.length === 1) {
           console.warn("Only received 1 data point. Check if backend is returning historical data properly.");
@@ -721,23 +723,23 @@ const StockChart: React.FC<StockChartProps> = ({
         }
 
         // Filter out any invalid data points and sort
-        const validData = data.filter(item => 
-          item.close > 0 && 
-          item.date && 
+        const validData = data.filter(item =>
+          item.close > 0 &&
+          item.date &&
           !isNaN(item.close)
         );
-        
-        
+
+
         const sortedData = [...validData].sort((a, b) => a.date.localeCompare(b.date));
-        
+
         // Add future dates if enabled
         let finalData = sortedData;
         let actualDataLength = sortedData.length;
-        
+
         if (enableFutureSpace && sortedData.length > 0) {
           const lastDate = sortedData[sortedData.length - 1].date;
           const futureDateStrings = generateFutureDates(lastDate, futureDays);
-          
+
           // Create placeholder data points for future dates
           const futureDataPoints: ChartDataPoint[] = futureDateStrings.map(date => ({
             date,
@@ -749,12 +751,12 @@ const StockChart: React.FC<StockChartProps> = ({
             change: 0,
             changeRate: 0
           }));
-          
+
           finalData = [...sortedData, ...futureDataPoints];
         }
-        
+
         setRawData(sortedData); // Store only real data for indicator calculations
-        
+
         const labels = finalData.map(item => {
           const date = item.date;
           // Check if it's time format (HH:MM) for intraday
@@ -790,10 +792,10 @@ const StockChart: React.FC<StockChartProps> = ({
           tension: 0.1,
           spanGaps: false, // Don't connect NaN values
         };
-        
+
         // Just use the main dataset without the current time indicator
         const datasets = [mainDataset];
-        
+
         const newChartData = {
           labels,
           datasets,
@@ -805,7 +807,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const validVolumes = volumes.filter(v => v && !isNaN(v));
         const sortedVolumes = [...validVolumes].sort((a, b) => a - b);
         const medianVolume = sortedVolumes.length > 0 ? sortedVolumes[Math.floor(sortedVolumes.length / 2)] : 0;
-        
+
         const newVolumeData = {
           labels,
           datasets: [
@@ -814,7 +816,7 @@ const StockChart: React.FC<StockChartProps> = ({
               data: volumes,
               backgroundColor: volumes.map((_, index) => {
                 if (index === 0) return 'rgba(34, 197, 94, 0.6)';
-                return prices[index] >= prices[index - 1] 
+                return prices[index] >= prices[index - 1]
                   ? 'rgba(34, 197, 94, 0.6)'  // Green for up
                   : 'rgba(239, 68, 68, 0.6)'; // Red for down
               }),
@@ -847,7 +849,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
         setChartData(newChartData);
         setVolumeChartData(newVolumeData);
-        
+
       } else {
         console.error("StockChart - 데이터가 없음:", responseData);
         setError('차트 데이터를 불러오는데 실패했습니다.');
@@ -879,10 +881,10 @@ const StockChart: React.FC<StockChartProps> = ({
     const highs = rawData.map(d => d.high || d.close);
     const lows = rawData.map(d => d.low || d.close);
     const volumes = rawData.map(d => d.volume);
-    
+
     // SAFE APPROACH: Create a completely new dataset array instead of modifying existing
     const newDatasets = [];
-    
+
     // Always keep the main price line as the first dataset
     const mainDataset = chart.data.datasets[0];
     if (mainDataset) {
@@ -910,11 +912,11 @@ const StockChart: React.FC<StockChartProps> = ({
       // Bollinger Bands with configurable period and stdDev
       if (showBollingerBands && prices.length >= indicatorSettings.bollinger.period) {
         const bollingerResult = calculateBollingerBands(
-          prices, 
-          indicatorSettings.bollinger.period, 
+          prices,
+          indicatorSettings.bollinger.period,
           indicatorSettings.bollinger.stdDev || 2
         );
-        
+
         newDatasets.push({
           label: 'BB Upper',
           data: bollingerResult.upperBand,
@@ -927,7 +929,7 @@ const StockChart: React.FC<StockChartProps> = ({
         });
 
         newDatasets.push({
-          label: 'BB Lower', 
+          label: 'BB Lower',
           data: bollingerResult.lowerBand,
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
@@ -983,7 +985,7 @@ const StockChart: React.FC<StockChartProps> = ({
       // Ichimoku (needs more data points)
       if (showIchimoku && prices.length >= 52) {
         const ichimokuResult = calculateIchimoku(highs, lows, prices);
-        
+
         newDatasets.push({
           label: 'Tenkan',
           data: ichimokuResult.tenkanSen,
@@ -1042,7 +1044,7 @@ const StockChart: React.FC<StockChartProps> = ({
       // Update chart with new datasets
       chart.data.datasets = newDatasets;
       chart.update('none'); // Use 'none' to avoid animation issues
-      
+
     } catch (error) {
       console.error('Error updating indicators:', error);
       // If there's an error, just keep the main dataset
@@ -1060,7 +1062,7 @@ const StockChart: React.FC<StockChartProps> = ({
     const prices = rawData.map(d => d.close);
     const highs = rawData.map(d => d.high || d.close);
     const lows = rawData.map(d => d.low || d.close);
-    
+
     // Generate labels including future dates for alignment with main chart
     let labels = rawData.map(item => {
       if (typeof item.date === 'string' && item.date.length === 8) {
@@ -1068,7 +1070,7 @@ const StockChart: React.FC<StockChartProps> = ({
       }
       return item.date;
     });
-    
+
     // Add future date labels if enabled (same as main chart)
     if (enableFutureSpace && futureDays > 0 && rawData.length > 0) {
       const lastDate = rawData[rawData.length - 1].date;
@@ -1086,13 +1088,13 @@ const StockChart: React.FC<StockChartProps> = ({
     if (showRSI && prices.length >= indicatorSettings.rsi.period) {
       try {
         let rsiValues = calculateRSI(prices, indicatorSettings.rsi.period);
-        
+
         // Pad with NaN for future dates
         if (enableFutureSpace && futureDays > 0) {
           const futurePadding = new Array(labels.length - rsiValues.length).fill(NaN);
           rsiValues = [...rsiValues, ...futurePadding];
         }
-        
+
         const newRsiData = {
           labels,
           datasets: [
@@ -1157,23 +1159,23 @@ const StockChart: React.FC<StockChartProps> = ({
       setRsiChartData(null);
     }
 
-    // MACD Chart  
+    // MACD Chart
     if (showMACD && prices.length >= 26) {
       try {
         const macdResult = calculateMACD(prices);
-        
+
         // Pad with NaN for future dates
         let macdLine = macdResult.macdLine;
         let signalLine = macdResult.signalLine;
         let histogram = macdResult.histogram;
-        
+
         if (enableFutureSpace && futureDays > 0) {
           const futurePadding = new Array(labels.length - macdLine.length).fill(NaN);
           macdLine = [...macdLine, ...futurePadding];
           signalLine = [...signalLine, ...futurePadding];
           histogram = [...histogram, ...futurePadding];
         }
-        
+
         const newMacdData = {
           labels,
           datasets: [
@@ -1207,10 +1209,10 @@ const StockChart: React.FC<StockChartProps> = ({
               label: 'Histogram',
               data: histogram,
               type: 'bar' as const,
-              backgroundColor: histogram.map((val: number | null) => 
+              backgroundColor: histogram.map((val: number | null) =>
                 val && val > 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
               ),
-              borderColor: histogram.map((val: number | null) => 
+              borderColor: histogram.map((val: number | null) =>
                 val && val > 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'
               ),
               borderWidth: 1,
@@ -1277,17 +1279,17 @@ const StockChart: React.FC<StockChartProps> = ({
     if (showStochastic && prices.length >= 14) {
       try {
         const stochResult = calculateStochastic(highs, lows, prices, 14, 3, 3);
-        
+
         // Pad with NaN for future dates
         let kValues = stochResult.k;
         let dValues = stochResult.d;
-        
+
         if (enableFutureSpace && futureDays > 0) {
           const futurePadding = new Array(labels.length - kValues.length).fill(NaN);
           kValues = [...kValues, ...futurePadding];
           dValues = [...dValues, ...futurePadding];
         }
-        
+
         const newStochData = {
           labels,
           datasets: [
@@ -1454,7 +1456,7 @@ const StockChart: React.FC<StockChartProps> = ({
       return { maxTicksLimit: 15, maxRotation: 45 };
     }
   };
-  
+
   const tickSettings = getTickSettings();
 
   // Synchronized chart options with shared interaction
@@ -1473,25 +1475,85 @@ const StockChart: React.FC<StockChartProps> = ({
       duration: 500,
       easing: 'easeInOutQuart' as const,
     },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     onHover: (event: any, activeElements: any, chart: any) => {
-      // Sync crosshair across charts
-      if (volumeChartRef.current && activeElements.length > 0) {
-        const index = activeElements[0].index;
-        volumeChartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
-        volumeChartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-        volumeChartRef.current.update('none');
+      // Sync crosshair across charts with improved positioning
+      let index = -1;
+
+      if (activeElements.length > 0) {
+        index = activeElements[0].index;
+      } else if (event && chart) {
+        // Fallback: calculate index from mouse position
+        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
+        index = Math.round(dataX);
+        index = Math.max(0, Math.min(index, chart.data.labels.length - 1));
       }
-      if (rsiChartRef.current && activeElements.length > 0) {
-        const index = activeElements[0].index;
-        rsiChartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
-        rsiChartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-        rsiChartRef.current.update('none');
-      }
-      if (macdChartRef.current && activeElements.length > 0) {
-        const index = activeElements[0].index;
-        macdChartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
-        macdChartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-        macdChartRef.current.update('none');
+
+      if (index >= 0) {
+
+        // Sync with volume chart - find main dataset (not reference)
+        if (volumeChartRef.current) {
+          const volumeElements = [];
+          const volumeTooltipElements = [];
+          for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
+            if (!volumeChartRef.current.data.datasets[i].label.includes('Reference')) {
+              volumeElements.push({ datasetIndex: i, index });
+              volumeTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          volumeChartRef.current.setActiveElements(volumeElements);
+          volumeChartRef.current.tooltip.setActiveElements(volumeTooltipElements);
+          volumeChartRef.current.update('none');
+        }
+
+        // Sync with RSI chart - find main dataset (not reference)
+        if (rsiChartRef.current) {
+          const rsiElements = [];
+          const rsiTooltipElements = [];
+          for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
+            if (!rsiChartRef.current.data.datasets[i].label.includes('Reference')) {
+              rsiElements.push({ datasetIndex: i, index });
+              rsiTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          rsiChartRef.current.setActiveElements(rsiElements);
+          rsiChartRef.current.tooltip.setActiveElements(rsiTooltipElements);
+          rsiChartRef.current.update('none');
+        }
+
+        // Sync with MACD chart - find main dataset (not reference)
+        if (macdChartRef.current) {
+          const macdElements = [];
+          const macdTooltipElements = [];
+          for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
+            if (!macdChartRef.current.data.datasets[i].label.includes('Reference')) {
+              macdElements.push({ datasetIndex: i, index });
+              macdTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          macdChartRef.current.setActiveElements(macdElements);
+          macdChartRef.current.tooltip.setActiveElements(macdTooltipElements);
+          macdChartRef.current.update('none');
+        }
+
+        // Sync with Stochastic chart - find main dataset (not reference)
+        if (stochasticChartRef.current) {
+          const stochElements = [];
+          const stochTooltipElements = [];
+          for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
+            if (!stochasticChartRef.current.data.datasets[i].label.includes('Reference')) {
+              stochElements.push({ datasetIndex: i, index });
+              stochTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          stochasticChartRef.current.setActiveElements(stochElements);
+          stochasticChartRef.current.tooltip.setActiveElements(stochTooltipElements);
+          stochasticChartRef.current.update('none');
+        }
       }
     },
     plugins: {
@@ -1537,11 +1599,11 @@ const StockChart: React.FC<StockChartProps> = ({
           label: function(context: any) {
             const index = context.dataIndex;
             if (chartData && index >= chartData.actualDataLength && context.dataset.label === '종가') {
-              return 'No data - Draw predictions here';
+              return null; // Hide tooltip for future dates
             }
             const label = context.dataset.label || '';
             const value = context.parsed.y;
-            
+
             if (label.includes('종가') || label.includes('MA') || label.includes('EMA')) {
               return `${label}: ${value?.toLocaleString()}원`;
             } else if (label.includes('거래량')) {
@@ -1665,13 +1727,92 @@ const StockChart: React.FC<StockChartProps> = ({
     animation: {
       duration: 0,
     },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     onHover: (event: any, activeElements: any, chart: any) => {
-      // Sync with main chart
-      if (chartRef.current && activeElements.length > 0) {
-        const index = activeElements[0].index;
-        chartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
-        chartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-        chartRef.current.update('none');
+      // Sync with all charts when hovering over indicator charts with improved positioning
+      let index = -1;
+
+      if (activeElements.length > 0) {
+        index = activeElements[0].index;
+      } else if (event && chart) {
+        // Fallback: calculate index from mouse position
+        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
+        index = Math.round(dataX);
+        index = Math.max(0, Math.min(index, chart.data.labels.length - 1));
+      }
+
+      if (index >= 0) {
+
+        // Sync with main chart
+        if (chartRef.current) {
+          chartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
+          chartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
+          chartRef.current.update('none');
+        }
+
+        // Sync with volume chart - find main dataset (not reference)
+        if (volumeChartRef.current) {
+          const volumeElements = [];
+          const volumeTooltipElements = [];
+          for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
+            if (!volumeChartRef.current.data.datasets[i].label.includes('Reference')) {
+              volumeElements.push({ datasetIndex: i, index });
+              volumeTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          volumeChartRef.current.setActiveElements(volumeElements);
+          volumeChartRef.current.tooltip.setActiveElements(volumeTooltipElements);
+          volumeChartRef.current.update('none');
+        }
+
+        // Sync with RSI chart - find main dataset (not reference)
+        if (rsiChartRef.current) {
+          const rsiElements = [];
+          const rsiTooltipElements = [];
+          for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
+            if (!rsiChartRef.current.data.datasets[i].label.includes('Reference')) {
+              rsiElements.push({ datasetIndex: i, index });
+              rsiTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          rsiChartRef.current.setActiveElements(rsiElements);
+          rsiChartRef.current.tooltip.setActiveElements(rsiTooltipElements);
+          rsiChartRef.current.update('none');
+        }
+
+        // Sync with MACD chart - find main dataset (not reference)
+        if (macdChartRef.current) {
+          const macdElements = [];
+          const macdTooltipElements = [];
+          for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
+            if (!macdChartRef.current.data.datasets[i].label.includes('Reference')) {
+              macdElements.push({ datasetIndex: i, index });
+              macdTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          macdChartRef.current.setActiveElements(macdElements);
+          macdChartRef.current.tooltip.setActiveElements(macdTooltipElements);
+          macdChartRef.current.update('none');
+        }
+
+        // Sync with Stochastic chart - find main dataset (not reference)
+        if (stochasticChartRef.current) {
+          const stochElements = [];
+          const stochTooltipElements = [];
+          for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
+            if (!stochasticChartRef.current.data.datasets[i].label.includes('Reference')) {
+              stochElements.push({ datasetIndex: i, index });
+              stochTooltipElements.push({ datasetIndex: i, index });
+            }
+          }
+          stochasticChartRef.current.setActiveElements(stochElements);
+          stochasticChartRef.current.tooltip.setActiveElements(stochTooltipElements);
+          stochasticChartRef.current.update('none');
+        }
       }
     },
     plugins: {
@@ -1682,7 +1823,56 @@ const StockChart: React.FC<StockChartProps> = ({
         display: false,
       },
       tooltip: {
-        enabled: false, // Use main chart tooltip only
+        enabled: true,
+        mode: 'index' as const,
+        intersect: false,
+        backgroundColor: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        titleColor: darkMode ? '#f3f4f6' : '#111827',
+        bodyColor: darkMode ? '#d1d5db' : '#4b5563',
+        borderColor: darkMode ? '#4b5563' : '#d1d5db',
+        borderWidth: 1,
+        cornerRadius: 8,
+        displayColors: true,
+        callbacks: {
+          title: function(context: any) {
+            if (context[0]) {
+              return context[0].label || '';
+            }
+            return '';
+          },
+          label: function(context: any) {
+            const value = context.parsed.y;
+            const datasetLabel = context.dataset.label || '';
+
+            // Skip reference lines
+            if (datasetLabel.includes('Reference')) {
+              return null;
+            }
+
+            // Format based on indicator type
+            if (datasetLabel.includes('Volume') || datasetLabel.includes('거래량')) {
+              if (value >= 100000000) {
+                return `${datasetLabel}: ${(value / 100000000).toFixed(1)}억`;
+              } else if (value >= 10000000) {
+                return `${datasetLabel}: ${(value / 10000000).toFixed(1)}천만`;
+              } else if (value >= 10000) {
+                return `${datasetLabel}: ${(value / 10000).toFixed(1)}만`;
+              } else {
+                return `${datasetLabel}: ${value.toLocaleString()}`;
+              }
+            } else if (datasetLabel.includes('RSI') || datasetLabel.includes('Stochastic')) {
+              return `${datasetLabel}: ${value.toFixed(2)}`;
+            } else if (datasetLabel.includes('MACD')) {
+              return `${datasetLabel}: ${value.toFixed(4)}`;
+            } else {
+              return `${datasetLabel}: ${value.toFixed(2)}`;
+            }
+          },
+          filter: function(tooltipItem: any) {
+            // Hide reference lines from tooltips
+            return !tooltipItem.dataset.label.includes('Reference');
+          }
+        }
       },
       crosshair: {
         line: {
@@ -1835,29 +2025,26 @@ const StockChart: React.FC<StockChartProps> = ({
   }
 
   return (
+    <>
     <div className={`h-full w-full flex ${darkMode ? 'bg-gray-950' : 'bg-gray-50'} relative`}>
-      {/* Collapsible Left Sidebar - Reduced width */}
-      <div 
-        className={`${
-          sidebarCollapsed ? 'w-12' : 'w-52'
-        } flex-shrink-0 ${darkMode ? 'bg-gray-900 border-r border-gray-800' : 'bg-white border-r border-gray-200'} flex flex-col h-full relative z-20 transition-all duration-300`}
+      {/* Enhanced Glassmorphism Left Sidebar */}
+      <div
+        className={`w-52 flex-shrink-0 ${
+          darkMode 
+            ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40' 
+            : 'bg-gradient-to-b from-white/90 via-gray-50/90 to-white/90 backdrop-blur-2xl border-r border-gray-200/40'
+        } flex flex-col h-full relative z-20 overflow-hidden`}
       >
-        {/* Collapse Toggle Button */}
-        <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-12 ${
-            darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300'
-          } rounded-r-md flex items-center justify-center transition-colors z-30`}
-        >
-          {sidebarCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
-        </button>
+        {/* Subtle pattern overlay for depth */}
+        <div className="absolute inset-0 opacity-5 pointer-events-none"
+          style={{
+            backgroundImage: `radial-gradient(${darkMode ? 'white' : 'black'} 1px, transparent 1px)`,
+            backgroundSize: '20px 20px'
+          }}
+        />
 
-        {/* Sidebar Content */}
-        <div className={`flex-1 overflow-y-auto ${sidebarCollapsed ? 'invisible' : 'visible'}`}>
+        {/* Sidebar Content with padding */}
+        <div className="flex-1 overflow-y-auto relative">
           <EnhancedTechnicalIndicators
             indicators={indicatorSettings}
             onIndicatorChange={handleEnhancedIndicatorChange}
@@ -1881,29 +2068,29 @@ const StockChart: React.FC<StockChartProps> = ({
       <div className="flex-1 flex flex-col min-w-0">
         {/* Glassmorphism Header with Improved Layout */}
         <div className={`relative ${
-          darkMode 
-            ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-b border-gray-700/50' 
+          darkMode
+            ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-b border-gray-700/50'
             : 'bg-gradient-to-r from-white/95 to-gray-50/95 backdrop-blur-xl border-b border-gray-200/50'
         } shadow-lg`}>
           <div className="px-6 py-3">
-            <div className="flex items-center justify-between gap-8">
-              {/* Left Section: Stock Info */}
+            {/* First Row: Stock Info */}
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     {selectedStock?.name || ticker}
                   </h2>
                   <span className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
-                    darkMode 
-                      ? 'bg-gray-700/50 text-gray-300 backdrop-blur-sm' 
+                    darkMode
+                      ? 'bg-gray-700/50 text-gray-300 backdrop-blur-sm'
                       : 'bg-gray-100/80 text-gray-700 backdrop-blur-sm'
                   }`}>
                     {ticker}
                   </span>
                   {rawData && rawData.length > 0 && (
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      darkMode 
-                        ? 'bg-blue-500/20 text-blue-300 backdrop-blur-sm' 
+                      darkMode
+                        ? 'bg-blue-500/20 text-blue-300 backdrop-blur-sm'
                         : 'bg-blue-100/80 text-blue-700 backdrop-blur-sm'
                     }`}>
                       {rawData.length} 데이터
@@ -1911,13 +2098,15 @@ const StockChart: React.FC<StockChartProps> = ({
                   )}
                 </div>
               </div>
-              
-              {/* Center Section: Controls Container */}
-              <div className="flex items-center gap-6">
+            </div>
+
+            {/* Second Row: Controls */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
                 {/* Period Controls with Glassmorphism */}
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${
-                  darkMode 
-                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30' 
+                  darkMode
+                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30'
                     : 'bg-white/60 backdrop-blur-md border border-gray-200/30'
                 } shadow-sm`}>
                   <ChartControls
@@ -1928,29 +2117,27 @@ const StockChart: React.FC<StockChartProps> = ({
                     darkMode={darkMode}
                   />
                 </div>
-                
+
                 {/* Indicator Pills with Glassmorphism */}
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${
-                  darkMode 
-                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30' 
+                  darkMode
+                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30'
                     : 'bg-white/60 backdrop-blur-md border border-gray-200/30'
                 } shadow-sm`}>
                     <span className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       지표:
                     </span>
-                    
+
                     {/* Indicator Pills with Improved Design */}
                     <div className="relative flex items-center gap-1">
                       <button
                         onClick={() => handleExclusiveIndicatorChange('volume')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all transform hover:scale-105 ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all transform hover:scale-105 ${
                           showVolume
-                            ? darkMode
-                              ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
-                              : 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30 border border-blue-400/30'
                             : darkMode
-                              ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
-                              : 'bg-white/70 text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm'
+                              ? 'bg-gray-800/50 backdrop-blur-sm text-gray-300 hover:bg-gray-700/70 hover:text-white border border-gray-700/30'
+                              : 'bg-white/50 backdrop-blur-sm text-gray-700 hover:bg-white/80 hover:text-gray-900 shadow-sm border border-gray-200/30'
                         }`}
                       >
                         거래량
@@ -1958,13 +2145,31 @@ const StockChart: React.FC<StockChartProps> = ({
                       <button
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setTooltipPosition({ x: rect.right + 8, y: rect.top - 8 });
+                          const tooltipWidth = 320;
+                          const tooltipHeight = 120;
+
+                          // Calculate position with boundary detection
+                          let x = rect.right + 8;
+                          let y = rect.top - 8;
+
+                          // Adjust if tooltip would go off screen
+                          if (x + tooltipWidth > window.innerWidth) {
+                            x = rect.left - tooltipWidth - 8;
+                          }
+
+                          if (y + tooltipHeight > window.innerHeight) {
+                            y = window.innerHeight - tooltipHeight - 8;
+                          } else if (y < 0) {
+                            y = 8;
+                          }
+
+                          setTooltipPosition({ x, y });
                           setHoveredIndicatorHelp('volume');
                         }}
                         onMouseLeave={() => setHoveredIndicatorHelp(null)}
                         className={`w-4 h-4 rounded-full border flex items-center justify-center text-xs transition-colors ${
-                          darkMode 
-                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400' 
+                          darkMode
+                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
                             : 'border-gray-400 text-gray-500 hover:border-blue-500 hover:text-blue-500'
                         }`}
                       >
@@ -1983,7 +2188,7 @@ const StockChart: React.FC<StockChartProps> = ({
                               ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                               : 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                             : darkMode
-                              ? canShowRSI 
+                              ? canShowRSI
                                 ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
                                 : 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
                               : canShowRSI
@@ -1997,13 +2202,31 @@ const StockChart: React.FC<StockChartProps> = ({
                       <button
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setTooltipPosition({ x: rect.right + 8, y: rect.top - 8 });
+                          const tooltipWidth = 320;
+                          const tooltipHeight = 120;
+
+                          // Calculate position with boundary detection
+                          let x = rect.right + 8;
+                          let y = rect.top - 8;
+
+                          // Adjust if tooltip would go off screen
+                          if (x + tooltipWidth > window.innerWidth) {
+                            x = rect.left - tooltipWidth - 8;
+                          }
+
+                          if (y + tooltipHeight > window.innerHeight) {
+                            y = window.innerHeight - tooltipHeight - 8;
+                          } else if (y < 0) {
+                            y = 8;
+                          }
+
+                          setTooltipPosition({ x, y });
                           setHoveredIndicatorHelp('rsi');
                         }}
                         onMouseLeave={() => setHoveredIndicatorHelp(null)}
                         className={`w-4 h-4 rounded-full border flex items-center justify-center text-xs transition-colors ${
-                          darkMode 
-                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400' 
+                          darkMode
+                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
                             : 'border-gray-400 text-gray-500 hover:border-blue-500 hover:text-blue-500'
                         }`}
                       >
@@ -2036,13 +2259,31 @@ const StockChart: React.FC<StockChartProps> = ({
                       <button
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setTooltipPosition({ x: rect.right + 8, y: rect.top - 8 });
+                          const tooltipWidth = 320;
+                          const tooltipHeight = 120;
+
+                          // Calculate position with boundary detection
+                          let x = rect.right + 8;
+                          let y = rect.top - 8;
+
+                          // Adjust if tooltip would go off screen
+                          if (x + tooltipWidth > window.innerWidth) {
+                            x = rect.left - tooltipWidth - 8;
+                          }
+
+                          if (y + tooltipHeight > window.innerHeight) {
+                            y = window.innerHeight - tooltipHeight - 8;
+                          } else if (y < 0) {
+                            y = 8;
+                          }
+
+                          setTooltipPosition({ x, y });
                           setHoveredIndicatorHelp('macd');
                         }}
                         onMouseLeave={() => setHoveredIndicatorHelp(null)}
                         className={`w-4 h-4 rounded-full border flex items-center justify-center text-xs transition-colors ${
-                          darkMode 
-                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400' 
+                          darkMode
+                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
                             : 'border-gray-400 text-gray-500 hover:border-blue-500 hover:text-blue-500'
                         }`}
                       >
@@ -2075,13 +2316,31 @@ const StockChart: React.FC<StockChartProps> = ({
                       <button
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setTooltipPosition({ x: rect.right + 8, y: rect.top - 8 });
+                          const tooltipWidth = 320;
+                          const tooltipHeight = 120;
+
+                          // Calculate position with boundary detection
+                          let x = rect.right + 8;
+                          let y = rect.top - 8;
+
+                          // Adjust if tooltip would go off screen
+                          if (x + tooltipWidth > window.innerWidth) {
+                            x = rect.left - tooltipWidth - 8;
+                          }
+
+                          if (y + tooltipHeight > window.innerHeight) {
+                            y = window.innerHeight - tooltipHeight - 8;
+                          } else if (y < 0) {
+                            y = 8;
+                          }
+
+                          setTooltipPosition({ x, y });
                           setHoveredIndicatorHelp('stochastic');
                         }}
                         onMouseLeave={() => setHoveredIndicatorHelp(null)}
                         className={`w-4 h-4 rounded-full border flex items-center justify-center text-xs transition-colors ${
-                          darkMode 
-                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400' 
+                          darkMode
+                            ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
                             : 'border-gray-400 text-gray-500 hover:border-blue-500 hover:text-blue-500'
                         }`}
                       >
@@ -2090,57 +2349,36 @@ const StockChart: React.FC<StockChartProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Drawing Mode Button - Aligned with other controls */}
+                <div className={`flex items-center px-3 py-1.5 rounded-xl ${
+                  darkMode
+                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30'
+                    : 'bg-white/60 backdrop-blur-md border border-gray-200/30'
+                } shadow-sm`}>
+                  <button
+                    onClick={toggleDrawingMode}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all transform hover:scale-105 ${
+                      isDrawingMode
+                        ? darkMode
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                          : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                        : darkMode
+                          ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    {isDrawingMode ? '✏️ 그리기 중' : '✏️ 그리기'}
+                  </button>
+                </div>
               </div>
-              
-              {/* Right Section: Drawing Mode Button */}
-              <button
-                onClick={toggleDrawingMode}
-                className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-all transform hover:scale-105 mt-1 ${
-                  isDrawingMode 
-                    ? darkMode
-                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30'
-                      : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30'
-                    : darkMode
-                      ? 'bg-gray-800/40 text-gray-300 hover:bg-gray-700/50 hover:text-white backdrop-blur-md border border-gray-700/30'
-                      : 'bg-white/60 text-gray-700 hover:bg-white hover:text-gray-900 backdrop-blur-md border border-gray-200/30 shadow-sm'
-                }`}
-              >
-                {isDrawingMode ? '✏️ 그리기 중' : '✏️ 그리기'}
-              </button>
             </div>
 
-            {/* Indicator Help Tooltip */}
-            {hoveredIndicatorHelp && createPortal(
-              <div 
-                className={`fixed p-3 rounded-lg shadow-xl border w-80 z-[2147483647] ${
-                  darkMode 
-                    ? 'bg-gray-800 border-gray-600 text-gray-200' 
-                    : 'bg-white border-gray-300 text-gray-700'
-                }`}
-                style={{ 
-                  left: `${tooltipPosition.x}px`,
-                  top: `${tooltipPosition.y}px`,
-                  pointerEvents: 'none'
-                }}
-              >
-                <div className="text-sm font-medium mb-2 text-blue-500">
-                  {indicatorTabExplanations[hoveredIndicatorHelp as keyof typeof indicatorTabExplanations].title}
-                </div>
-                <div className="text-xs mb-2">
-                  {indicatorTabExplanations[hoveredIndicatorHelp as keyof typeof indicatorTabExplanations].description}
-                </div>
-                <div className="text-xs opacity-75">
-                  <strong>사용법:</strong> {indicatorTabExplanations[hoveredIndicatorHelp as keyof typeof indicatorTabExplanations].usage}
-                </div>
-              </div>,
-              document.body
-            )}
-            
             {isDrawingMode && (
               <div className={`mt-3 px-3 pb-2`}>
                 <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
-                  darkMode 
-                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30' 
+                  darkMode
+                    ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30'
                     : 'bg-white/60 backdrop-blur-md border border-gray-200/30'
                 } shadow-sm`}>
                   <DrawingToolbar
@@ -2157,17 +2395,16 @@ const StockChart: React.FC<StockChartProps> = ({
           </div>
 
         {/* FULLY INTEGRATED Chart Container - Seamless design */}
-        <div className={`flex-1 ${darkMode ? 'bg-gray-950' : 'bg-gray-50'} p-3`} style={{ marginRight: `${sidebarOffset}px` }}>
-          <div className={`h-full ${darkMode ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-xl border ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col overflow-hidden`}>
-            
+        <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} shadow-xl border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col overflow-hidden`}>
+
             {/* Main Price Chart Section - Dynamic height based on indicator */}
             <div className="flex-1 relative" style={{ minHeight: '300px' }}>
-              <div 
-                className="h-full relative" 
-                style={{ 
+              <div
+                className="h-full relative"
+                style={{
                   padding: '20px 20px 10px 20px',
                   cursor: isDrawingMode ? 'default' : 'default'
-                }} 
+                }}
                 ref={chartContainerRef}>
                 {isLoading && (
                   <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10 rounded-xl">
@@ -2185,8 +2422,8 @@ const StockChart: React.FC<StockChartProps> = ({
                       <button
                         onClick={() => fetchChartData()}
                         className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          darkMode 
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                          darkMode
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
                             : 'bg-blue-600 hover:bg-blue-700 text-white'
                         } shadow-lg hover:shadow-xl transform hover:scale-105`}
                       >
@@ -2199,15 +2436,15 @@ const StockChart: React.FC<StockChartProps> = ({
                 {chartData && !isLoading && !error && (
                   <>
                     <Line data={chartData} options={chartOptions} ref={chartRef} />
-                    
+
                     {/* Future period visual indicator - subtle overlay only */}
                     {enableFutureSpace && futureDays > 0 && chartData.actualDataLength < chartData.labels.length && (
-                      <div 
+                      <div
                         className="absolute top-0 bottom-0 pointer-events-none"
                         style={{
                           left: `${(chartData.actualDataLength / chartData.labels.length) * 100}%`,
                           right: 0,
-                          background: darkMode 
+                          background: darkMode
                             ? 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.02) 50%, rgba(59, 130, 246, 0.04) 100%)'
                             : 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.01) 50%, rgba(59, 130, 246, 0.02) 100%)',
                           borderLeft: `1px dashed ${darkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.3)'}`
@@ -2215,30 +2452,29 @@ const StockChart: React.FC<StockChartProps> = ({
                       />
                     )}
 
-                    {/* Scroll Indicator for Future Space */}
-                    {scrollIndicatorVisible && enableFutureSpace && (
-                      <div 
-                        className="absolute top-4 right-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg z-20 transition-opacity duration-300"
-                        style={{ opacity: scrollIndicatorVisible ? 1 : 0 }}
+                    {/* Relocated Future Space Indicator - Top left corner, more subtle */}
+                    {enableFutureSpace && futureDays > 0 && (
+                      <div
+                        className="absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/10 backdrop-blur-sm transition-all duration-500"
+                        style={{ opacity: scrollIndicatorVisible ? 0.7 : 0.4 }}
                       >
-                        미래 공간: {futureDays}일
-                        <div className="text-xs text-gray-300 mt-0.5">
-                          스크롤하여 조정
-                        </div>
+                        <span className="text-[10px] text-black/60 font-medium">
+                          미래 {futureDays}일
+                        </span>
                       </div>
                     )}
-                    
+
                   </>
                 )}
-                
+
                 {/* Always render the canvas container to avoid DOM manipulation issues */}
-                <div 
-                  id="drawing-canvas" 
+                <div
+                  id="drawing-canvas"
                   className={`absolute inset-0 ${isDrawingMode ? 'pointer-events-auto' : 'pointer-events-none'}`}
-                  style={{ 
+                  style={{
                     display: isDrawingMode ? 'block' : 'none',
-                    opacity: isCanvasReady ? 1 : 0, 
-                    transition: 'opacity 0.3s' 
+                    opacity: isCanvasReady ? 1 : 0,
+                    transition: 'opacity 0.3s'
                   }}
                 />
               </div>
@@ -2249,9 +2485,9 @@ const StockChart: React.FC<StockChartProps> = ({
               <div className="relative">
                 {/* Subtle Divider */}
                 <div className={`h-px ${darkMode ? 'bg-gray-800' : 'bg-gray-200'} opacity-50`} />
-                
+
                 {/* Resize Handle */}
-                <div 
+                <div
                   onMouseDown={handleResizeStart}
                   className={`absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-4 flex items-center justify-center cursor-ns-resize group z-10`}
                 >
@@ -2259,7 +2495,7 @@ const StockChart: React.FC<StockChartProps> = ({
                 </div>
 
                 {/* Seamless Indicator Area - At the very bottom */}
-                <div 
+                <div
                   className={`${darkMode ? 'bg-gradient-to-b from-gray-900 to-gray-950' : 'bg-gradient-to-b from-white to-gray-50'}`}
                   style={{ height: `${indicatorHeight}px`, transition: 'height 0.2s' }}
                 >
@@ -2271,7 +2507,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     ) : activeIndicatorTab === 'macd' && showMACD && macdChartData && canShowMACD ? (
                       <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
                     ) : activeIndicatorTab === 'stochastic' && showStochastic && stochChartData && canShowStochastic ? (
-                      <Line data={stochChartData} options={stochasticChartOptions} />
+                      <Line data={stochChartData} options={stochasticChartOptions} ref={stochasticChartRef} />
                     ) : (
                       <div className={`flex items-center justify-center h-full ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                         <p className="text-xs">선택된 지표가 없습니다</p>
@@ -2284,7 +2520,34 @@ const StockChart: React.FC<StockChartProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    
+    {/* Indicator Help Tooltip - Moved outside main container */}
+    {hoveredIndicatorHelp && createPortal(
+      <div
+        className={`fixed p-3 rounded-lg shadow-xl border w-80 z-[2147483647] ${
+          darkMode
+            ? 'bg-gray-800 border-gray-600 text-gray-200'
+            : 'bg-white border-gray-300 text-gray-700'
+        }`}
+        style={{
+          left: `${tooltipPosition.x}px`,
+          top: `${tooltipPosition.y}px`,
+          pointerEvents: 'none'
+        }}
+      >
+        <div className="text-sm font-medium mb-2 text-blue-500">
+          {indicatorTabExplanations[hoveredIndicatorHelp as keyof typeof indicatorTabExplanations].title}
+        </div>
+        <div className="text-xs mb-2">
+          {indicatorTabExplanations[hoveredIndicatorHelp as keyof typeof indicatorTabExplanations].description}
+        </div>
+        <div className="text-xs opacity-75">
+          <strong>사용법:</strong> {indicatorTabExplanations[hoveredIndicatorHelp as keyof typeof indicatorTabExplanations].usage}
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 };
 

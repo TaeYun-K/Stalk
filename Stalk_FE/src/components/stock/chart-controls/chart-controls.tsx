@@ -27,21 +27,21 @@ const ChartControls: React.FC<ChartControlsProps> = ({
 
   return (
     <div className="inline-flex items-center gap-1.5">
-      <span className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+      <span className={`text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
         기간:
       </span>
       {periods.map(p => (
         <button
           key={p.value}
           onClick={() => onPeriodChange(p.value)}
-          className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all transform hover:scale-105 ${
+          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all transform hover:scale-105 ${
             period === p.value
               ? darkMode
-                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
-                : 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30 border border-blue-400/30'
+                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30 border border-blue-400/30'
               : darkMode 
-                ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white' 
-                : 'bg-white/70 text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm'
+                ? 'bg-gray-800/50 backdrop-blur-sm text-gray-300 hover:bg-gray-700/70 hover:text-white border border-gray-700/30' 
+                : 'bg-white/50 backdrop-blur-sm text-gray-700 hover:bg-white/80 hover:text-gray-900 shadow-sm border border-gray-200/30'
           }`}
         >
           {p.label}
