@@ -298,17 +298,20 @@ const StockChart: React.FC<StockChartProps> = ({
   // ✅ 최초 진입 시 내가 ticker 모르면 최신 차트 요청
   useEffect(() => {
     if (!session) return;
-
     const noLocalChart =
       !sharedChart?.ticker && !chartInfo?.ticker && !selectedStock?.ticker;
 
     if (noLocalChart) {
-      session.signal({
-        type: 'chart:sync_request',
-        data: JSON.stringify({ ts: Date.now() }),
-      }).catch(console.error);
+      // 바로 보내도 되지만, 확실히 하기 위해 한 틱 뒤에 보냄
+      const id = setTimeout(() => {
+        session.signal({
+          type: 'chart:sync_request',
+          data: JSON.stringify({ ts: Date.now() }),
+        }).catch(console.error);
+      }, 0);
+      return () => clearTimeout(id);
     }
-  }, [session]);
+  }, [session, sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker]);
 
   // ✅ chart:sync_request 들어오면 현재 차트 info 응답
   useEffect(() => {
