@@ -59,6 +59,9 @@ cmake-build-*/
 /out/
 .idea/
 
+# VS Code / Cursor generated binaries
+/bin/
+
 # mpeltonen/sbt-idea plugin
 .idea_modules/
 

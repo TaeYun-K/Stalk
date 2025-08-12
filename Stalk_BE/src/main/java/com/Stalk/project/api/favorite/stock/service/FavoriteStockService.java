@@ -53,24 +53,52 @@ public class FavoriteStockService {
      * @param ticker 종목 티커
      * @return 최신 정보가 포함된 DTO
      */
+    // FavoriteStockService.java
+
     private Mono<FavoriteStockResponseDto> fetchStockData(String ticker) {
-        // KOSPI, KOSDAQ 시장 구분 로직 (stock-chart.tsx 참고)
-        String market = ticker.startsWith("9") || ticker.startsWith("3") ? "KOSDAQ" : "KOSPI";
+        String guess = (ticker.startsWith("9") || ticker.startsWith("3")) ? "KOSDAQ" : "KOSPI";
+        String other = guess.equals("KOSPI") ? "KOSDAQ" : "KOSPI";
+
+        return callOnceFlexible(ticker, guess)
+            .onErrorResume(e -> callOnceFlexible(ticker, other))
+            .onErrorReturn(createFallbackDto(ticker));
+    }
+
+    private Mono<FavoriteStockResponseDto> callOnceFlexible(String ticker, String market) {
         String url = String.format("%s/api/krx/stock/%s?market=%s", stockApiUrl, ticker, market);
-        
         return webClient.get()
-                .uri(url)
-                .retrieve()
-                .bodyToMono(ExternalStockDataDto.class) // 응답을 DTO로 변환
-                .map(data -> FavoriteStockResponseDto.builder() // 최종 응답 DTO로 매핑
-                        .ticker(ticker)
-                        .name(data.getName())
-                        .price(data.getPrice())
-                        .change(data.getChange())
-                        .changeRate(data.getChangeRate())
-                        .build())
-                .doOnError(error -> log.error("Failed to fetch stock data for ticker {}: {}", ticker, error.getMessage()))
-                .onErrorReturn(createFallbackDto(ticker)); // 에러 발생 시 기본값 반환
+            .uri(url)
+            .retrieve()
+            .bodyToMono(com.fasterxml.jackson.databind.JsonNode.class)
+            .map(node -> {
+                // 래퍼 처리: { success, data: {...} } 형태면 data로 이동
+                com.fasterxml.jackson.databind.JsonNode data = node.has("data") ? node.get("data") : node;
+
+                String name = pick(data, "name", "ISU_ABBRV");
+                String price = pick(data, "price", "closePrice", "TDD_CLSPRC");
+                String change = pick(data, "change", "priceChange", "CMPPREVDD_PRC");
+                String changeRate = pick(data, "changeRate", "FLUC_RT");
+
+                return FavoriteStockResponseDto.builder()
+                    .ticker(ticker)
+                    .name(emptyTo(name, "정보 조회 실패"))
+                    .price(emptyTo(price, "0"))
+                    .change(emptyTo(change, "0"))
+                    .changeRate(emptyTo(changeRate, "0"))
+                    .build();
+            });
+    }
+
+    private String pick(com.fasterxml.jackson.databind.JsonNode node, String... keys) {
+        for (String k : keys) {
+            com.fasterxml.jackson.databind.JsonNode v = node.get(k);
+            if (v != null && !v.isNull() && !v.asText().isBlank()) return v.asText();
+        }
+        return null;
+    }
+
+    private String emptyTo(String v, String fallback) {
+        return (v == null || v.isBlank() || "-".equals(v)) ? fallback : v;
     }
 
     // API 호출 실패 시 반환할 기본 DTO 객체 생성
