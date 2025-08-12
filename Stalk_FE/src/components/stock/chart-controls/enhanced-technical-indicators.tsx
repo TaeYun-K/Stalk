@@ -422,8 +422,12 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
             true,
             { label: '표준편차', field: 'stdDev', value: indicators.bollinger.stdDev || 2 }
           )}
+          {renderIndicatorControl('rsi', 'RSI', indicators.rsi, indicatorExplanations.rsi)}
+          {renderIndicatorControl('macd', 'MACD', indicators.macd, indicatorExplanations.macd, false)}
+          {renderIndicatorControl('stochastic', '스토캐스틱', indicators.stochastic, indicatorExplanations.stochastic, false)}
           {renderIndicatorControl('vwap', 'VWAP', indicators.vwap, indicatorExplanations.vwap, false)}
           {renderIndicatorControl('ichimoku', '일목균형표', indicators.ichimoku, indicatorExplanations.ichimoku, false)}
+          {renderIndicatorControl('volume', '거래량', indicators.volume, indicatorExplanations.volume, false)}
         </div>
 
         {/* Enhanced Tip with glassmorphism */}

@@ -6,6 +6,7 @@ import {
 } from "openvidu-browser";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
 
@@ -21,6 +22,7 @@ import ChatPanel from "@/components/consultation/Chat.panel";
 import { StockChart } from "@/components/stock";
 import StockSearch from "@/components/stock/stock-search";
 import ChartErrorBoundary from "@/components/ChartErrorBoundary";
+import ChartControls from "@/components/stock/chart-controls/chart-controls";
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -65,6 +67,33 @@ const DEFAULT_VIDEO_CONFIG = {
 
 const TIMER_INTERVAL_MS = 1000;
 
+// Indicator explanations for tooltips
+const indicatorExplanations = {
+  volume: {
+    title: '거래량',
+    description: '특정 기간 동안의 주식 거래량을 표시합니다.',
+    usage: '거래량이 많으면 강한 추세를 의미합니다.',
+  },
+  rsi: {
+    title: 'RSI (상대강도지수)',
+    description: '가격의 상승압력과 하락압력 간의 상대적 강도를 나타냅니다.',
+    usage: '70 이상: 과매수 구간, 30 이하: 과매도 구간',
+    params: '기간(일): 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
+  },
+  macd: {
+    title: 'MACD',
+    description: '두 이동평균선의 차이를 이용한 추세 추종 모멘텀 지표입니다.',
+    usage: 'MACD선이 시그널선을 상향 돌파시 매수 신호, 하향 돌파시 매도 신호',
+    params: '단기(12), 장기(26), 시그널(9)이 기본값 (최소 26개 데이터 포인트 필요)'
+  },
+  stochastic: {
+    title: '스토캐스틱',
+    description: '일정 기간 중 현재 가격의 상대적 위치를 나타내는 모멘텀 지표입니다.',
+    usage: '80 이상: 과매수, 20 이하: 과매도. %K와 %D선의 교차로 매매 신호 포착',
+    params: '%K 기간, %D 기간 (smoothing) - 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
+  }
+};
+
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
 
@@ -85,6 +114,13 @@ const VideoConsultationPage: React.FC = () => {
 
   // 차트 관련 상태
   const [currentChart, setCurrentChart] = useState<ChartInfo | null>(null);
+  const [chartPeriod, setChartPeriod] = useState<number>(30); // Increased default to 30 days for better indicator support
+  const [chartIndicators, setChartIndicators] = useState<any>({});
+  const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
+  const [activeIndicator, setActiveIndicator] = useState<string>('volume');
+  const [dataPointCount, setDataPointCount] = useState<number>(0);
+  const [hoveredIndicator, setHoveredIndicator] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{x: number, y: number}>({x: 0, y: 0});
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
@@ -570,6 +606,29 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
+  const handlePeriodChange = (period: number) => {
+    console.log('handlePeriodChange called with period:', period);
+    setChartPeriod(period);
+    // You can also signal this change if needed
+    if (session) {
+      session.signal({
+        type: 'chart:period',
+        data: JSON.stringify({ period })
+      }).catch(err => console.error('Period change signaling failed', err));
+    }
+  };
+
+  const handleIndicatorChange = (indicators: any) => {
+    setChartIndicators(indicators);
+    // You can also signal this change if needed
+    if (session) {
+      session.signal({
+        type: 'chart:indicators',
+        data: JSON.stringify(indicators)
+      }).catch(err => console.error('Indicator change signaling failed', err));
+    }
+  };
+
   // 차트 선택 시 signaling
   useEffect(() => {
     if (!session) return;
@@ -958,19 +1017,311 @@ const VideoConsultationPage: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-gray-900 text-white flex flex-col overflow-hidden">
-      {/* Header navbar */}
-      <div className="bg-gray-800 px-6 py-3 flex items-center justify-between border-b border-gray-700">
+      {/* Unified Header navbar - expands when chart mode is active */}
+      <div className={`${showStockChart ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl' : 'bg-gray-800'} px-6 py-3 flex items-center justify-between border-b border-gray-700 transition-all duration-300`}>
         <div className="flex items-center space-x-4 flex-1">
           <img src={stalkLogoWhite} alt="Stalk Logo" className="h-6" />
           
-          {/* Thin search bar in header for chart mode */}
+          {/* Chart Mode Controls */}
           {showStockChart && (
-            <div className="flex-1 max-w-md [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0">
-              <StockSearch
-                onStockSelect={setSelectedStock}
-                darkMode={true}
-              />
-            </div>
+            <>
+              {/* Stock Info */}
+              {selectedStock && (
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-semibold">{selectedStock.name}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700/50 text-gray-300">
+                    {selectedStock.ticker}
+                  </span>
+                </div>
+              )}
+              
+              {/* Period Controls */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-800/40 backdrop-blur-md border border-gray-700/30">
+                <ChartControls
+                  period={chartPeriod.toString()}
+                  chartType={'line'}
+                  onPeriodChange={(period) => handlePeriodChange(parseInt(period))}
+                  onChartTypeChange={() => {}}
+                  darkMode={true}
+                />
+              </div>
+              
+              {/* Indicator Controls - Complete set */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">지표:</span>
+                
+                {/* Volume Indicator */}
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => {
+                      setActiveIndicator('volume');
+                      if (session) {
+                        session.signal({
+                          type: 'chart:indicator',
+                          data: JSON.stringify({ indicator: 'volume' })
+                        }).catch(console.error);
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      activeIndicator === 'volume' 
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                        : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                  >
+                    거래량
+                  </button>
+                  <div 
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 280;
+                      const tooltipHeight = 100;
+                      
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+                      
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+                      
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+                      
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('volume');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+                {/* RSI Indicator */}
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => {
+                      if (dataPointCount >= 14) {
+                        setActiveIndicator('rsi');
+                        if (session) {
+                          session.signal({
+                            type: 'chart:indicator',
+                            data: JSON.stringify({ indicator: 'rsi' })
+                          }).catch(console.error);
+                        }
+                      }
+                    }}
+                    disabled={dataPointCount < 14}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      dataPointCount < 14 
+                        ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
+                        : activeIndicator === 'rsi' 
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                          : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                    title={dataPointCount < 14 ? `RSI requires 14+ data points (current: ${dataPointCount})` : ''}
+                  >
+                    RSI
+                  </button>
+                  <div 
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 320;
+                      const tooltipHeight = 140;
+                      
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+                      
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+                      
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+                      
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('rsi');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+                {/* MACD Indicator */}
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => {
+                      if (dataPointCount >= 26) {
+                        setActiveIndicator('macd');
+                        if (session) {
+                          session.signal({
+                            type: 'chart:indicator',
+                            data: JSON.stringify({ indicator: 'macd' })
+                          }).catch(console.error);
+                        }
+                      }
+                    }}
+                    disabled={dataPointCount < 26}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      dataPointCount < 26 
+                        ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
+                        : activeIndicator === 'macd' 
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                          : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                    title={dataPointCount < 26 ? `MACD requires 26+ data points (current: ${dataPointCount})` : ''}
+                  >
+                    MACD
+                  </button>
+                  <div 
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 320;
+                      const tooltipHeight = 140;
+                      
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+                      
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+                      
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+                      
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('macd');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+                {/* Stochastic Indicator */}
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => {
+                      if (dataPointCount >= 14) {
+                        setActiveIndicator('stochastic');
+                        if (session) {
+                          session.signal({
+                            type: 'chart:indicator',
+                            data: JSON.stringify({ indicator: 'stochastic' })
+                          }).catch(console.error);
+                        }
+                      }
+                    }}
+                    disabled={dataPointCount < 14}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      dataPointCount < 14 
+                        ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
+                        : activeIndicator === 'stochastic' 
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                          : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                    title={dataPointCount < 14 ? `Stochastic requires 14+ data points (current: ${dataPointCount})` : ''}
+                  >
+                    스토캐스틱
+                  </button>
+                  <div 
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 320;
+                      const tooltipHeight = 140;
+                      
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+                      
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+                      
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+                      
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('stochastic');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Drawing Mode Button */}
+              <div className="flex items-center">
+                <button 
+                  onClick={() => {
+                    const newDrawingMode = !isDrawingMode;
+                    console.log('Consultation: Toggling drawing mode from', isDrawingMode, 'to', newDrawingMode);
+                    setIsDrawingMode(newDrawingMode);
+                    if (session) {
+                      session.signal({
+                        type: 'chart:drawingMode',
+                        data: JSON.stringify({ enabled: newDrawingMode })
+                      }).catch(console.error);
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    isDrawingMode 
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30' 
+                      : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                  }`}
+                >
+                  {isDrawingMode ? '✏️ 그리기 중' : '✏️ 그리기'}
+                </button>
+              </div>
+              
+              {/* Stock Search - moved to right side */}
+              <div className="ml-auto max-w-xs [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0">
+                <StockSearch
+                  onStockSelect={setSelectedStock}
+                  darkMode={true}
+                />
+              </div>
+            </>
           )}
 
           {/* Compact status indicators */}
@@ -1186,28 +1537,33 @@ const VideoConsultationPage: React.FC = () => {
           <div className="flex-1 flex min-w-0">
             {/* Main Chart Area - Takes most of the space */}
             <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex-1 p-4 min-h-0 min-w-0">
-                <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
-                  <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 p-4 min-w-0 overflow-hidden">
+                <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
+                  <div className="flex-1 relative overflow-y-auto chart-scrollbar">
                     {selectedStock ? (
                       <div 
                         style={{ 
                           position: 'relative', 
-                          height: '100%', 
+                          minHeight: '600px',
                           width: '100%',
-                          maxWidth: '100%',
-                          contain: 'layout style',
-                          overflow: 'hidden'
+                          maxWidth: '100%'
                         }}
                       >
                         <ChartErrorBoundary>
-                          <div style={{ width: '100%', height: '100%', minWidth: 0 }}>
+                          <div style={{ width: '100%', minHeight: '600px', minWidth: 0 }}>
                             <StockChart 
                               selectedStock={selectedStock} 
                               darkMode={true} 
                               session={session}
                               chartInfo={currentChart}
                               onChartChange={handleChartChange}
+                              isConsultationMode={true}
+                              onPeriodChange={handlePeriodChange}
+                              onIndicatorChange={handleIndicatorChange}
+                              drawingMode={isDrawingMode}
+                              period={chartPeriod}
+                              activeIndicator={activeIndicator as 'volume' | 'rsi' | 'macd' | 'stochastic'}
+                              onDataPointsUpdate={setDataPointCount}
                               key={selectedStock.ticker} // Force re-mount on stock change
                               />
                           </div>
@@ -1651,6 +2007,34 @@ const VideoConsultationPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Indicator Tooltips */}
+      {hoveredIndicator && createPortal(
+        <div
+          className="fixed p-3 rounded-lg shadow-xl text-xs w-80 z-[2147483647] bg-gray-800 border border-gray-700"
+          style={{
+            left: `${tooltipPosition.x}px`,
+            top: `${tooltipPosition.y}px`,
+            pointerEvents: 'none'
+          }}
+        >
+          <h4 className="font-semibold mb-1 text-blue-400">
+            {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.title}
+          </h4>
+          <p className="mb-2 text-gray-300">
+            {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.description}
+          </p>
+          <p className="mb-1 text-gray-400">
+            <strong>사용법:</strong> {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.usage}
+          </p>
+          {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params && (
+            <p className="text-gray-400">
+              <strong>설정:</strong> {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params}
+            </p>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

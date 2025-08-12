@@ -78,6 +78,11 @@ interface StockChartProps {
   drawingMode?: boolean;
   enableFutureSpace?: boolean;
   futureSpaceDays?: number;
+  isConsultationMode?: boolean;
+  onPeriodChange?: (period: number) => void;
+  onIndicatorChange?: (indicators: any) => void;
+  activeIndicator?: 'volume' | 'rsi' | 'macd' | 'stochastic';
+  onDataPointsUpdate?: (count: number) => void;
 }
 
 type ChartType = 'line';
@@ -100,7 +105,12 @@ const StockChart: React.FC<StockChartProps> = ({
   drawingMode: propDrawingMode = false,
   session,
   enableFutureSpace = true,
-  futureSpaceDays: initialFutureDays = 0
+  futureSpaceDays: initialFutureDays = 0,
+  isConsultationMode = false,
+  onPeriodChange: externalPeriodChange,
+  onIndicatorChange: externalIndicatorChange,
+  activeIndicator,
+  onDataPointsUpdate
 }) => {
 
   const [chartData, setChartData] = useState<any>(null);
@@ -621,19 +631,26 @@ const StockChart: React.FC<StockChartProps> = ({
 
     // Listen for future space updates from other participants
     const onFutureSpaceUpdate = (e: any) => {
-      const msg = JSON.parse(e.data);
-      // Check if update is for current chart
-      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
-      
-      // Update local future days
-      if (typeof msg.futureDays === 'number') {
-        setFutureDays(msg.futureDays);
-        // Show indicator briefly when receiving update
-        setScrollIndicatorVisible(true);
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
+      try {
+        const msg = JSON.parse(e.data);
+        // Check if update is for current chart
+        if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+        
+        // Update local future days with a small delay to ensure chart is ready
+        if (typeof msg.futureDays === 'number') {
+          // Small delay to ensure charts are fully initialized
+          setTimeout(() => {
+            setFutureDays(msg.futureDays);
+            // Show indicator briefly when receiving update
+            setScrollIndicatorVisible(true);
+            if (scrollTimeoutRef.current) {
+              clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
+          }, 100);
         }
-        scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
+      } catch (error) {
+        console.warn('Error processing future space update:', error);
       }
     };
 
@@ -646,6 +663,37 @@ const StockChart: React.FC<StockChartProps> = ({
     };
   }, [session, chartKey.ticker, chartKey.period]);
 
+  // Sync external activeIndicator with internal state
+  useEffect(() => {
+    if (activeIndicator && isConsultationMode) {
+      console.log('Chart: Syncing indicator from consultation room:', activeIndicator);
+      // Directly set the indicator settings instead of calling handleExclusiveIndicatorChange
+      setIndicatorSettings(prev => ({
+        ...prev,
+        volume: { ...prev.volume, enabled: activeIndicator === 'volume' },
+        rsi: { ...prev.rsi, enabled: activeIndicator === 'rsi' },
+        macd: { ...prev.macd, enabled: activeIndicator === 'macd' },
+        stochastic: { ...prev.stochastic, enabled: activeIndicator === 'stochastic' }
+      }));
+      setActiveIndicatorTab(activeIndicator);
+    }
+  }, [activeIndicator, isConsultationMode]);
+
+  // Sync external drawingMode with internal state
+  useEffect(() => {
+    if (isConsultationMode) {
+      console.log('Chart: Syncing drawing mode from consultation room:', propDrawingMode);
+      setIsDrawingMode(propDrawingMode);
+    }
+  }, [propDrawingMode, isConsultationMode]);
+
+  // Sync external period with internal state
+  useEffect(() => {
+    if (isConsultationMode && propPeriod) {
+      console.log('Chart: Syncing period from consultation room:', propPeriod);
+      setPeriod(propPeriod.toString());
+    }
+  }, [propPeriod, isConsultationMode]);
 
   const fetchChartData = async (isUpdate = false) => {
     if (isLoading) {
@@ -803,6 +851,11 @@ const StockChart: React.FC<StockChartProps> = ({
         }
 
         setRawData(sortedData); // Store only real data for indicator calculations
+        
+        // Notify parent component about data point count
+        if (onDataPointsUpdate) {
+          onDataPointsUpdate(sortedData.length);
+        }
 
         const labels = finalData.map(item => {
           const date = item.date;
@@ -1418,6 +1471,9 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);
+    
+    // Call external handler if provided (for consultation mode)
+    externalPeriodChange?.(parseInt(newPeriod));
 
     const ticker = getCurrentTicker();
     if(ticker) {
@@ -1441,14 +1497,30 @@ const StockChart: React.FC<StockChartProps> = ({
 
   // New handler for enhanced indicator settings
   const handleEnhancedIndicatorChange = (indicator: string, config: any) => {
-    setIndicatorSettings(prev => ({
-      ...prev,
+    const newSettings = {
+      ...indicatorSettings,
       [indicator]: config
-    }));
+    };
+    setIndicatorSettings(newSettings);
+    
+    // Call external handler if provided (for consultation mode)
+    externalIndicatorChange?.(newSettings);
   };
 
   // Exclusive indicator selection - only one indicator can be active at a time
   const handleExclusiveIndicatorChange = (selectedIndicator: 'volume' | 'rsi' | 'macd' | 'stochastic') => {
+    // Check if the indicator can be shown based on data availability
+    if (selectedIndicator === 'rsi' && !canShowRSI) {
+      console.warn(`RSI requires at least 14 data points. Current: ${rawData?.length || 0}`);
+      // Still set it to allow UI feedback, but it won't render
+    }
+    if (selectedIndicator === 'macd' && !canShowMACD) {
+      console.warn(`MACD requires at least 26 data points. Current: ${rawData?.length || 0}`);
+    }
+    if (selectedIndicator === 'stochastic' && !canShowStochastic) {
+      console.warn(`Stochastic requires at least 14 data points. Current: ${rawData?.length || 0}`);
+    }
+    
     setIndicatorSettings(prev => ({
       ...prev,
       volume: { ...prev.volume, enabled: selectedIndicator === 'volume' },
@@ -1527,80 +1599,116 @@ const StockChart: React.FC<StockChartProps> = ({
       intersect: false,
     },
     onHover: (event: any, activeElements: any, chart: any) => {
-      // Sync crosshair across charts with improved positioning
-      let index = -1;
+      try {
+        // Enhanced safety checks to prevent sync errors
+        if (!chart?.scales?.x || !chart?.data?.labels || !chart?.data?.datasets) return;
+        
+        let index = -1;
 
-      if (activeElements.length > 0) {
-        index = activeElements[0].index;
-      } else if (event && chart) {
-        // Fallback: calculate index from mouse position
-        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
-        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
-        index = Math.round(dataX);
-        index = Math.max(0, Math.min(index, chart.data.labels.length - 1));
-      }
-
-      if (index >= 0) {
-
-        // Sync with volume chart - find main dataset (not reference)
-        if (volumeChartRef.current) {
-          const volumeElements = [];
-          const volumeTooltipElements = [];
-          for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
-            if (!volumeChartRef.current.data.datasets[i].label.includes('Reference')) {
-              volumeElements.push({ datasetIndex: i, index });
-              volumeTooltipElements.push({ datasetIndex: i, index });
-            }
-          }
-          volumeChartRef.current.setActiveElements(volumeElements);
-          volumeChartRef.current.tooltip.setActiveElements(volumeTooltipElements);
-          volumeChartRef.current.update('none');
+        // Get index from active elements (most reliable)
+        if (activeElements && activeElements.length > 0 && activeElements[0] !== undefined) {
+          index = activeElements[0].index;
         }
 
-        // Sync with RSI chart - find main dataset (not reference)
-        if (rsiChartRef.current) {
-          const rsiElements = [];
-          const rsiTooltipElements = [];
-          for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
-            if (!rsiChartRef.current.data.datasets[i].label.includes('Reference')) {
-              rsiElements.push({ datasetIndex: i, index });
-              rsiTooltipElements.push({ datasetIndex: i, index });
+        if (index >= 0 && index < chart.data.labels.length) {
+          // Sync with volume chart - comprehensive safety checks
+          if (volumeChartRef.current?.data?.datasets && Array.isArray(volumeChartRef.current.data.datasets)) {
+            try {
+              const volumeElements = [];
+              const volumeTooltipElements = [];
+              for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
+                const dataset = volumeChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  volumeElements.push({ datasetIndex: i, index });
+                  volumeTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (volumeElements.length > 0 && volumeChartRef.current.setActiveElements) {
+                volumeChartRef.current.setActiveElements(volumeElements);
+                if (volumeChartRef.current.tooltip?.setActiveElements) {
+                  volumeChartRef.current.tooltip.setActiveElements(volumeTooltipElements);
+                }
+                volumeChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('Volume chart sync error:', syncError);
             }
           }
-          rsiChartRef.current.setActiveElements(rsiElements);
-          rsiChartRef.current.tooltip.setActiveElements(rsiTooltipElements);
-          rsiChartRef.current.update('none');
-        }
 
-        // Sync with MACD chart - find main dataset (not reference)
-        if (macdChartRef.current) {
-          const macdElements = [];
-          const macdTooltipElements = [];
-          for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
-            if (!macdChartRef.current.data.datasets[i].label.includes('Reference')) {
-              macdElements.push({ datasetIndex: i, index });
-              macdTooltipElements.push({ datasetIndex: i, index });
+          // Sync with RSI chart - comprehensive safety checks
+          if (rsiChartRef.current?.data?.datasets && Array.isArray(rsiChartRef.current.data.datasets)) {
+            try {
+              const rsiElements = [];
+              const rsiTooltipElements = [];
+              for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
+                const dataset = rsiChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  rsiElements.push({ datasetIndex: i, index });
+                  rsiTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (rsiElements.length > 0 && rsiChartRef.current.setActiveElements) {
+                rsiChartRef.current.setActiveElements(rsiElements);
+                if (rsiChartRef.current.tooltip?.setActiveElements) {
+                  rsiChartRef.current.tooltip.setActiveElements(rsiTooltipElements);
+                }
+                rsiChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('RSI chart sync error:', syncError);
             }
           }
-          macdChartRef.current.setActiveElements(macdElements);
-          macdChartRef.current.tooltip.setActiveElements(macdTooltipElements);
-          macdChartRef.current.update('none');
-        }
 
-        // Sync with Stochastic chart - find main dataset (not reference)
-        if (stochasticChartRef.current) {
-          const stochElements = [];
-          const stochTooltipElements = [];
-          for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
-            if (!stochasticChartRef.current.data.datasets[i].label.includes('Reference')) {
-              stochElements.push({ datasetIndex: i, index });
-              stochTooltipElements.push({ datasetIndex: i, index });
+          // Sync with MACD chart - comprehensive safety checks
+          if (macdChartRef.current?.data?.datasets && Array.isArray(macdChartRef.current.data.datasets)) {
+            try {
+              const macdElements = [];
+              const macdTooltipElements = [];
+              for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
+                const dataset = macdChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  macdElements.push({ datasetIndex: i, index });
+                  macdTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (macdElements.length > 0 && macdChartRef.current.setActiveElements) {
+                macdChartRef.current.setActiveElements(macdElements);
+                if (macdChartRef.current.tooltip?.setActiveElements) {
+                  macdChartRef.current.tooltip.setActiveElements(macdTooltipElements);
+                }
+                macdChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('MACD chart sync error:', syncError);
             }
           }
-          stochasticChartRef.current.setActiveElements(stochElements);
-          stochasticChartRef.current.tooltip.setActiveElements(stochTooltipElements);
-          stochasticChartRef.current.update('none');
+
+          // Sync with Stochastic chart - comprehensive safety checks
+          if (stochasticChartRef.current?.data?.datasets && Array.isArray(stochasticChartRef.current.data.datasets)) {
+            try {
+              const stochElements = [];
+              const stochTooltipElements = [];
+              for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
+                const dataset = stochasticChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  stochElements.push({ datasetIndex: i, index });
+                  stochTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (stochElements.length > 0 && stochasticChartRef.current.setActiveElements) {
+                stochasticChartRef.current.setActiveElements(stochElements);
+                if (stochasticChartRef.current.tooltip?.setActiveElements) {
+                  stochasticChartRef.current.tooltip.setActiveElements(stochTooltipElements);
+                }
+                stochasticChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('Stochastic chart sync error:', syncError);
+            }
+          }
         }
+      } catch (error) {
+        console.error('Chart hover error:', error);
       }
     },
     plugins: {
@@ -1649,7 +1757,7 @@ const StockChart: React.FC<StockChartProps> = ({
               return null; // Hide tooltip for future dates
             }
             const label = context.dataset.label || '';
-            const value = context.parsed.y;
+            const value = context.parsed?.y;
 
             if (label.includes('종가') || label.includes('MA') || label.includes('EMA')) {
               return `${label}: ${value?.toLocaleString()}원`;
@@ -1752,11 +1860,6 @@ const StockChart: React.FC<StockChartProps> = ({
         },
       },
     },
-    interaction: {
-      mode: 'index' as const,
-      axis: 'x' as const,
-      intersect: false,
-    },
   };
 
   // TradingView-style indicator chart options
@@ -1779,87 +1882,129 @@ const StockChart: React.FC<StockChartProps> = ({
       intersect: false,
     },
     onHover: (event: any, activeElements: any, chart: any) => {
-      // Sync with all charts when hovering over indicator charts with improved positioning
-      let index = -1;
+      try {
+        // Enhanced safety checks to prevent sync errors
+        if (!chart?.scales?.x || !chart?.data?.labels || !chart?.data?.datasets) return;
+        
+        let index = -1;
 
-      if (activeElements.length > 0) {
-        index = activeElements[0].index;
-      } else if (event && chart) {
-        // Fallback: calculate index from mouse position
-        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
-        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
-        index = Math.round(dataX);
-        index = Math.max(0, Math.min(index, chart.data.labels.length - 1));
-      }
-
-      if (index >= 0) {
-
-        // Sync with main chart
-        if (chartRef.current) {
-          chartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
-          chartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-          chartRef.current.update('none');
+        // Get index from active elements (most reliable)
+        if (activeElements && activeElements.length > 0 && activeElements[0] !== undefined) {
+          index = activeElements[0].index;
         }
 
-        // Sync with volume chart - find main dataset (not reference)
-        if (volumeChartRef.current) {
-          const volumeElements = [];
-          const volumeTooltipElements = [];
-          for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
-            if (!volumeChartRef.current.data.datasets[i].label.includes('Reference')) {
-              volumeElements.push({ datasetIndex: i, index });
-              volumeTooltipElements.push({ datasetIndex: i, index });
+        if (index >= 0 && index < chart.data.labels.length) {
+          // Sync with main chart - comprehensive safety checks
+          if (chartRef.current?.data?.datasets && chartRef.current.setActiveElements) {
+            try {
+              chartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
+              if (chartRef.current.tooltip?.setActiveElements) {
+                chartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
+              }
+              chartRef.current.update('none');
+            } catch (syncError) {
+              console.warn('Main chart sync error:', syncError);
             }
           }
-          volumeChartRef.current.setActiveElements(volumeElements);
-          volumeChartRef.current.tooltip.setActiveElements(volumeTooltipElements);
-          volumeChartRef.current.update('none');
-        }
 
-        // Sync with RSI chart - find main dataset (not reference)
-        if (rsiChartRef.current) {
-          const rsiElements = [];
-          const rsiTooltipElements = [];
-          for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
-            if (!rsiChartRef.current.data.datasets[i].label.includes('Reference')) {
-              rsiElements.push({ datasetIndex: i, index });
-              rsiTooltipElements.push({ datasetIndex: i, index });
+          // Sync with volume chart - comprehensive safety checks
+          if (volumeChartRef.current?.data?.datasets && Array.isArray(volumeChartRef.current.data.datasets)) {
+            try {
+              const volumeElements = [];
+              const volumeTooltipElements = [];
+              for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
+                const dataset = volumeChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  volumeElements.push({ datasetIndex: i, index });
+                  volumeTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (volumeElements.length > 0 && volumeChartRef.current.setActiveElements) {
+                volumeChartRef.current.setActiveElements(volumeElements);
+                if (volumeChartRef.current.tooltip?.setActiveElements) {
+                  volumeChartRef.current.tooltip.setActiveElements(volumeTooltipElements);
+                }
+                volumeChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('Volume chart sync error:', syncError);
             }
           }
-          rsiChartRef.current.setActiveElements(rsiElements);
-          rsiChartRef.current.tooltip.setActiveElements(rsiTooltipElements);
-          rsiChartRef.current.update('none');
-        }
 
-        // Sync with MACD chart - find main dataset (not reference)
-        if (macdChartRef.current) {
-          const macdElements = [];
-          const macdTooltipElements = [];
-          for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
-            if (!macdChartRef.current.data.datasets[i].label.includes('Reference')) {
-              macdElements.push({ datasetIndex: i, index });
-              macdTooltipElements.push({ datasetIndex: i, index });
+          // Sync with RSI chart - comprehensive safety checks
+          if (rsiChartRef.current?.data?.datasets && Array.isArray(rsiChartRef.current.data.datasets)) {
+            try {
+              const rsiElements = [];
+              const rsiTooltipElements = [];
+              for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
+                const dataset = rsiChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  rsiElements.push({ datasetIndex: i, index });
+                  rsiTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (rsiElements.length > 0 && rsiChartRef.current.setActiveElements) {
+                rsiChartRef.current.setActiveElements(rsiElements);
+                if (rsiChartRef.current.tooltip?.setActiveElements) {
+                  rsiChartRef.current.tooltip.setActiveElements(rsiTooltipElements);
+                }
+                rsiChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('RSI chart sync error:', syncError);
             }
           }
-          macdChartRef.current.setActiveElements(macdElements);
-          macdChartRef.current.tooltip.setActiveElements(macdTooltipElements);
-          macdChartRef.current.update('none');
-        }
 
-        // Sync with Stochastic chart - find main dataset (not reference)
-        if (stochasticChartRef.current) {
-          const stochElements = [];
-          const stochTooltipElements = [];
-          for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
-            if (!stochasticChartRef.current.data.datasets[i].label.includes('Reference')) {
-              stochElements.push({ datasetIndex: i, index });
-              stochTooltipElements.push({ datasetIndex: i, index });
+          // Sync with MACD chart - comprehensive safety checks
+          if (macdChartRef.current?.data?.datasets && Array.isArray(macdChartRef.current.data.datasets)) {
+            try {
+              const macdElements = [];
+              const macdTooltipElements = [];
+              for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
+                const dataset = macdChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  macdElements.push({ datasetIndex: i, index });
+                  macdTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (macdElements.length > 0 && macdChartRef.current.setActiveElements) {
+                macdChartRef.current.setActiveElements(macdElements);
+                if (macdChartRef.current.tooltip?.setActiveElements) {
+                  macdChartRef.current.tooltip.setActiveElements(macdTooltipElements);
+                }
+                macdChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('MACD chart sync error:', syncError);
             }
           }
-          stochasticChartRef.current.setActiveElements(stochElements);
-          stochasticChartRef.current.tooltip.setActiveElements(stochTooltipElements);
-          stochasticChartRef.current.update('none');
+
+          // Sync with Stochastic chart - comprehensive safety checks
+          if (stochasticChartRef.current?.data?.datasets && Array.isArray(stochasticChartRef.current.data.datasets)) {
+            try {
+              const stochElements = [];
+              const stochTooltipElements = [];
+              for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
+                const dataset = stochasticChartRef.current.data.datasets[i];
+                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                  stochElements.push({ datasetIndex: i, index });
+                  stochTooltipElements.push({ datasetIndex: i, index });
+                }
+              }
+              if (stochElements.length > 0 && stochasticChartRef.current.setActiveElements) {
+                stochasticChartRef.current.setActiveElements(stochElements);
+                if (stochasticChartRef.current.tooltip?.setActiveElements) {
+                  stochasticChartRef.current.tooltip.setActiveElements(stochTooltipElements);
+                }
+                stochasticChartRef.current.update('none');
+              }
+            } catch (syncError) {
+              console.warn('Stochastic chart sync error:', syncError);
+            }
+          }
         }
+      } catch (error) {
+        console.error('Indicator hover sync error:', error);
       }
     },
     plugins: {
@@ -2073,13 +2218,21 @@ const StockChart: React.FC<StockChartProps> = ({
 
   return (
     <>
-    <div className={`h-full w-full flex ${darkMode ? 'bg-gray-950' : 'bg-gray-50'} relative`}>
+    <div className={`h-full w-full flex ${
+      isConsultationMode && darkMode 
+        ? 'bg-gray-900' 
+        : darkMode 
+          ? 'bg-gray-950' 
+          : 'bg-gray-50'
+    } relative`}>
       {/* Enhanced Glassmorphism Left Sidebar */}
       <div
         className={`w-52 flex-shrink-0 ${
-          darkMode 
-            ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40' 
-            : 'bg-gradient-to-b from-white/90 via-gray-50/90 to-white/90 backdrop-blur-2xl border-r border-gray-200/40'
+          isConsultationMode && darkMode
+            ? 'bg-gray-800/95 backdrop-blur-xl border-r border-gray-600/30'
+            : darkMode 
+              ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40' 
+              : 'bg-gradient-to-b from-white/90 via-gray-50/90 to-white/90 backdrop-blur-2xl border-r border-gray-200/40'
         } flex flex-col h-full relative z-20 overflow-hidden`}
       >
         {/* Subtle pattern overlay for depth */}
@@ -2112,44 +2265,45 @@ const StockChart: React.FC<StockChartProps> = ({
       </div>
 
       {/* Main Chart Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Glassmorphism Header with Improved Layout */}
-        <div className={`relative ${
-          darkMode
-            ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-b border-gray-700/50'
-            : 'bg-gradient-to-r from-white/95 to-gray-50/95 backdrop-blur-xl border-b border-gray-200/50'
-        } shadow-lg`}>
-          <div className="px-6 py-3">
-            {/* First Row: Stock Info */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {selectedStock?.name || ticker}
-                  </h2>
-                  <span className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
-                    darkMode
-                      ? 'bg-gray-700/50 text-gray-300 backdrop-blur-sm'
-                      : 'bg-gray-100/80 text-gray-700 backdrop-blur-sm'
-                  }`}>
-                    {ticker}
-                  </span>
-                  {rawData && rawData.length > 0 && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {/* Glassmorphism Header with Improved Layout - Only show when NOT in consultation mode */}
+        {!isConsultationMode && (
+          <div className={`relative ${
+            darkMode
+              ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-b border-gray-700/50'
+              : 'bg-gradient-to-r from-white/95 to-gray-50/95 backdrop-blur-xl border-b border-gray-200/50'
+          } shadow-lg`}>
+            <div className="px-6 py-3">
+              {/* First Row: Stock Info */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {selectedStock?.name || ticker}
+                    </h2>
+                    <span className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
                       darkMode
-                        ? 'bg-blue-500/20 text-blue-300 backdrop-blur-sm'
-                        : 'bg-blue-100/80 text-blue-700 backdrop-blur-sm'
+                        ? 'bg-gray-700/50 text-gray-300 backdrop-blur-sm'
+                        : 'bg-gray-100/80 text-gray-700 backdrop-blur-sm'
                     }`}>
-                      {rawData.length} 데이터
+                      {ticker}
                     </span>
-                  )}
+                    {rawData && rawData.length > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        darkMode
+                          ? 'bg-blue-500/20 text-blue-300 backdrop-blur-sm'
+                          : 'bg-blue-100/80 text-blue-700 backdrop-blur-sm'
+                      }`}>
+                        {rawData.length} 데이터
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Second Row: Controls */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 flex-wrap">
+              {/* Second Row: Controls */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-wrap">
                 {/* Period Controls with Glassmorphism */}
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${
                   darkMode
@@ -2440,12 +2594,37 @@ const StockChart: React.FC<StockChartProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* Drawing Toolbar for Consultation Mode - Show when header is hidden */}
+        {isConsultationMode && isDrawingMode && (
+          <div className={`px-6 py-3 ${
+            darkMode
+              ? 'bg-gray-900/95 backdrop-blur-xl border-b border-gray-700/50'
+              : 'bg-white/95 backdrop-blur-xl border-b border-gray-200/50'
+          } shadow-lg`}>
+            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
+              darkMode
+                ? 'bg-gray-800/40 backdrop-blur-md border border-gray-700/30'
+                : 'bg-white/60 backdrop-blur-md border border-gray-200/30'
+            } shadow-sm`}>
+              <DrawingToolbar
+                onToolChange={setDrawingTool}
+                onColorChange={setStrokeColor}
+                onWidthChange={setStrokeWidth}
+                onClear={clearCanvas}
+                onDelete={undoLastShape}
+                darkMode={darkMode}
+              />
+            </div>
+          </div>
+        )}
 
         {/* FULLY INTEGRATED Chart Container - Seamless design */}
-        <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} shadow-xl border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col overflow-hidden`}>
+        <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} shadow-xl border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col min-h-0`}>
 
             {/* Main Price Chart Section - Dynamic height based on indicator */}
-            <div className="flex-1 relative" style={{ minHeight: '300px' }}>
+            <div className="relative" style={{ minHeight: '300px', height: 'auto' }}>
               <div
                 className="h-full relative"
                 style={{

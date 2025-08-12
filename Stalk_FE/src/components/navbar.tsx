@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
@@ -11,7 +11,7 @@ import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
-  // const location = useLocation();
+  const location = useLocation();
   const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
@@ -19,6 +19,9 @@ const Navbar: React.FC = () => {
   const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
+  
+  // Check if we're on the products page for glassmorphism effects
+  const isProductsPage = location.pathname === '/products';
   
 
   // 사용자 프로필 이미지 가져오기
@@ -78,7 +81,11 @@ const Navbar: React.FC = () => {
   // 로그인 상태는 AuthContext에서 관리
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-[60] bg-white border-b border-gray-200 shadow-md">
+    <nav className={`fixed top-0 left-0 right-0 z-[60] ${
+        isProductsPage 
+          ? 'bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-xl border-b border-white/20 shadow-lg/50' 
+          : 'bg-white border-b border-gray-200 shadow-md'
+      }`}>
       <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16">
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
@@ -138,7 +145,11 @@ const Navbar: React.FC = () => {
                 
                 {/* Community Dropdown Menu */}
                 {showCommunityMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
+                  <div className={`absolute top-full left-0 mt-2 w-48 ${
+                      isProductsPage
+                        ? 'bg-white/80 backdrop-blur-xl shadow-xl/60 border border-white/30'
+                        : 'bg-white shadow-lg border border-gray-200'
+                    } rounded-lg py-2 z-50`}>
                     {/* Invisible bridge to prevent gap */}
                     <div className="h-4 -mt-4"></div>
                     <button
@@ -170,7 +181,11 @@ const Navbar: React.FC = () => {
           {/* Search Bar and User Actions */}
           <div className="flex items-center space-x-4">
             {/* Search Bar */}
-            <div className="bg-gray-50 hover:bg-gray-100 border border-gray-300 hover:border-blue-400 rounded-full px-4 py-2 flex items-center space-x-3 w-80 transition-all duration-300 group" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+            <div className={`${
+                isProductsPage
+                  ? 'bg-white/60 hover:bg-white/80 backdrop-blur-md border border-white/30 hover:border-blue-400/60'
+                  : 'bg-gray-50 hover:bg-gray-100 border border-gray-300 hover:border-blue-400'
+              } rounded-full px-4 py-2 flex items-center space-x-3 w-80 transition-all duration-300 group`} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
               <input
                 type="text"
                 placeholder="원하는 검색어를 입력하세요"
@@ -221,7 +236,11 @@ const Navbar: React.FC = () => {
 
                 {/* Profile Dropdown Menu */}
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
+                  <div className={`absolute right-0 mt-2 w-48 ${
+                      isProductsPage
+                        ? 'bg-white/80 backdrop-blur-xl shadow-xl/60 border border-white/30'
+                        : 'bg-white shadow-lg border border-gray-200'
+                    } rounded-lg py-2 z-50`}>
                     {/* ADMIN이 아닐 때만 표시되는 메뉴들 */}
                     {userRole !== 'ADMIN' && (
                       <button
@@ -311,7 +330,11 @@ const Navbar: React.FC = () => {
             ) : (
               <button
                 onClick={() => navigate('/login')}
-                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2.5 rounded-full text-sm transition-all duration-300 transform hover:scale-105 shadow-md"
+                className={`${
+                  isProductsPage
+                    ? 'bg-gradient-to-r from-blue-500/90 to-blue-600/90 hover:from-blue-600 hover:to-blue-700 backdrop-blur-sm shadow-lg/60'
+                    : 'bg-blue-500 hover:bg-blue-600 shadow-md'
+                } text-white font-semibold px-6 py-2.5 rounded-full text-sm transition-all duration-300 transform hover:scale-105`}
               >
                 로그인
               </button>
