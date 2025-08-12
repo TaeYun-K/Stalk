@@ -196,7 +196,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
 
   const getCurrentName = () =>
-  selectedStock?.name || sharedChart?.name || chartInfo?.name || '';
+  sharedChart?.name || chartInfo?.name || selectedStock?.name || '';
 
   const getCurrentTicker = () =>
   sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
@@ -383,7 +383,6 @@ const StockChart: React.FC<StockChartProps> = ({
 
         console.log('[chart] apply', info);
 
-      
         fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
     };
