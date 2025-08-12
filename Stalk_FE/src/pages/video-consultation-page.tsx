@@ -592,8 +592,8 @@ const VideoConsultationPage: React.FC = () => {
     const onChartChange = (e: any) => {
       const info = JSON.parse(e.data) as ChartInfo;
       console.log('[chart] recv:', info);
-      
       setCurrentChart(info);
+      setShowStockChart(true);
     };
     session.on('signal:chart:change', onChartChange);
     return () => { session.off('signal:chart:change', onChartChange); };

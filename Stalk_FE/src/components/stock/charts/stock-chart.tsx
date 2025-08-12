@@ -352,9 +352,7 @@ const StockChart: React.FC<StockChartProps> = ({
   // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
-
-    if (chartInfo && period !== chartInfo.period) return;
-
+    
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
