@@ -85,6 +85,7 @@ type ChartType = 'line';
 type ChartInfo = {
   ticker: string;
   period: string;
+  name?: string;
 };
 
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
@@ -191,6 +192,10 @@ const StockChart: React.FC<StockChartProps> = ({
   const macdChartRef = useRef<any>(null);
   const stochasticChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
+
+
+  const getCurrentName = () =>
+  selectedStock?.name || sharedChart?.name || chartInfo?.name || '';
 
   const getCurrentTicker = () =>
   sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
@@ -321,7 +326,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // 내가 가지고 있는 현재 차트 상태
         const ticker = getCurrentTicker();
-        const info = { ticker, period };
+        const info = { ticker, period, name: getCurrentName };
 
         // 내가 아직 차트를 안 보고 있으면 응답할 게 없으니 무시
         if (!info.ticker || !info.period) return;
@@ -1503,7 +1508,7 @@ const StockChart: React.FC<StockChartProps> = ({
     const ticker = getCurrentTicker();
 
     if (ticker) {
-      const info = { ticker, period: newPeriod };
+      const info = { ticker, period: newPeriod, name: getCurrentName() };
       // 기존 상위 콜백 유지
       onChartChange?.(info);
       // ✅ 세션 브로드캐스트 추가
@@ -1519,13 +1524,6 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const handleChartTypeChange = (newType: ChartType) => {
     setChartType(newType);
-  };
-
-  const handleIndicatorChange = (indicator: string, value: boolean) => {
-    setIndicatorSettings(prev => ({
-      ...prev,
-      [indicator]: { ...prev[indicator as keyof typeof prev], enabled: value }
-    }));
   };
 
   // New handler for enhanced indicator settings
@@ -2210,7 +2208,7 @@ const StockChart: React.FC<StockChartProps> = ({
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {selectedStock?.name || ticker}
+                    {getCurrentName() || ticker}
                   </h2>
                   <span className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
                     darkMode
