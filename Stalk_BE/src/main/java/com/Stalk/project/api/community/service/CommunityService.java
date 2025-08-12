@@ -89,9 +89,6 @@ public class CommunityService {
         .pageNo(requestDto.getPageNo())
         .build();
   }
-
-  // CommunityService.java에 추가할 메서드
-
   public CommunityPostDetailDto getCommunityPostDetail(Long postId, PageRequestDto pageRequest) {
     // 1. 글 존재 여부 확인 (삭제되지 않은 글만)
     if (!communityMapper.existsPostById(postId)) {
