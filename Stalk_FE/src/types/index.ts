@@ -1,30 +1,30 @@
 // 백엔드 UserProfileResponseDto와 일치
 export interface UserProfileResponse {
-  userId: string;           // 로그인 ID
-  name: string;             // 이름
-  nickname: string;         // 닉네임 (백엔드에서 추가됨)
-  contact: string;          // 연락처
-  email: string;            // 이메일
-  profileImage: string;     // 프로필 이미지
-  role: 'USER' | 'ADVISOR' | 'ADMIN';  // 역할
+  userId: string; // 로그인 ID
+  name: string; // 이름
+  nickname: string; // 닉네임 (백엔드에서 추가됨)
+  contact: string; // 연락처
+  email: string; // 이메일
+  profileImage: string; // 프로필 이미지
+  role: "USER" | "ADVISOR" | "ADMIN"; // 역할
 }
 
 // 백엔드 User Entity와 일치
 export interface User {
-  id: number;               // PK (Long → number)
+  id: number; // PK (Long → number)
   name: string;
-  userId: string;           // 로그인 ID
+  userId: string; // 로그인 ID
   email: string;
-  password?: string;        // 비밀번호 (보안상 optional)
+  password?: string; // 비밀번호 (보안상 optional)
   contact: string;
   nickname: string;
   loginType?: string;
-  role: 'USER' | 'ADVISOR' | 'ADMIN';
-  image?: string;           // 프로필 이미지
+  role: "USER" | "ADVISOR" | "ADMIN";
+  image?: string; // 프로필 이미지
   isVerified?: boolean;
   termsAgreed?: boolean;
   isActive?: boolean;
-  deletedAt?: string;       // LocalDateTime → string (ISO format)
+  deletedAt?: string; // LocalDateTime → string (ISO format)
   lastLoginAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -33,7 +33,7 @@ export interface User {
 // 백엔드 UserUpdateRequestDto와 일치
 export interface UserUpdateRequest {
   name: string;
-  contact: string;          // 010으로 시작하는 11자리
+  contact: string; // 010으로 시작하는 11자리
 }
 
 // 백엔드 UserUpdateResponseDto와 일치
@@ -83,7 +83,7 @@ export interface AdvisorSignupRequest {
 // 백엔드 SignupResponse와 일치
 export interface SignupResponse {
   success: boolean;
-  userId: number;           // Long → number
+  userId: number; // Long → number
   message: string;
 }
 
@@ -95,7 +95,7 @@ export interface LoginResponse {
 export interface UserInfo {
   userId: number;
   userName: string;
-  role: 'USER' | 'ADVISOR' | 'ADMIN';
+  role: "USER" | "ADVISOR" | "ADMIN";
 }
 
 export interface AuthState {
@@ -121,7 +121,7 @@ export interface ConsultationItem {
   expert: string;
   videoConsultation: string;
   action: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
+  status: "scheduled" | "completed" | "cancelled";
 }
 
 // 전문가 자격증 정보
@@ -136,8 +136,9 @@ export interface QualificationData {
 export interface WatchlistItem {
   code: string;
   name: string;
-  price: number;
-  change: number;
+  price: number; // 현재가
+  changeAmount: number; // 전일 대비 가격 변화 (원)
+  changeRate: number; // 전일 대비 등락률 (%)
 }
 
 // 폼 데이터 타입들
@@ -168,7 +169,7 @@ export interface SignupFormData {
   email: string;
   emailDomain: string;
   verificationCode: string;
-  userType: 'general' | 'expert';
+  userType: "general" | "expert";
   profilePhoto: File | null;
   qualification: QualificationData;
   termsAgreement: boolean;
@@ -192,11 +193,11 @@ export interface TabItem {
 
 // 커뮤니티 관련 타입들
 export enum PostCategory {
-  ALL = 'ALL',
-  QUESTION = 'QUESTION',
-  TRADE_RECORD = 'TRADE_RECORD',
-  STOCK_DISCUSSION = 'STOCK_DISCUSSION',
-  MARKET_ANALYSIS = 'MARKET_ANALYSIS'
+  ALL = "ALL",
+  QUESTION = "QUESTION",
+  TRADE_RECORD = "TRADE_RECORD",
+  STOCK_DISCUSSION = "STOCK_DISCUSSION",
+  MARKET_ANALYSIS = "MARKET_ANALYSIS",
 }
 
 export interface CommunityPostSummaryDto {
@@ -257,18 +258,18 @@ export interface CommunityCommentUpdateRequestDto {
 
 // 관리자 관련 타입들
 export enum ApprovalStatus {
-  ALL = 'ALL',
-  PENDING = 'PENDING', 
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED'
+  ALL = "ALL",
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
 }
 
 export enum RejectionReason {
-  INVALID_CERTIFICATE = 'INVALID_CERTIFICATE',
-  EXPIRED_CERTIFICATE = 'EXPIRED_CERTIFICATE',
-  INSUFFICIENT_DOCUMENTS = 'INSUFFICIENT_DOCUMENTS',
-  VERIFICATION_FAILED = 'VERIFICATION_FAILED',
-  OTHER = 'OTHER'
+  INVALID_CERTIFICATE = "INVALID_CERTIFICATE",
+  EXPIRED_CERTIFICATE = "EXPIRED_CERTIFICATE",
+  INSUFFICIENT_DOCUMENTS = "INSUFFICIENT_DOCUMENTS",
+  VERIFICATION_FAILED = "VERIFICATION_FAILED",
+  OTHER = "OTHER",
 }
 
 // 전문가 인증 요청 정보
@@ -348,7 +349,7 @@ export interface ApprovalHistoryResponse {
   certificateName: string;
   certificateFileSn: string;
   certificateFileNumber: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: "PENDING" | "APPROVED" | "REJECTED";
   statusDisplayName: string;
   requestedAt: string;
   processedAt?: string;
@@ -360,8 +361,7 @@ export interface ApprovalHistoryResponse {
 export interface ProfileStatusResponse {
   advisorId: number;
   message: string;
-} 
-
+}
 
 // 상담일지 관련 타입들
 export interface VideoRecording {
@@ -384,4 +384,4 @@ export interface ConsultationDiaryResponse {
     content: string;
     expert: string;
   };
-} 
+}
