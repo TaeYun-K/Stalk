@@ -300,7 +300,8 @@ const ExpertDetailPage: React.FC = () => {
           period: `${new Date(career.started_at).getFullYear()} - ${
             career.ended_at ? new Date(career.ended_at).getFullYear() : "현재"
           }`,
-          position: career.title,
+          company: career.title,
+          position: career.description,
         })),
         rating: expertData.avg_rating,
         reviewCount: expertData.review_count,
@@ -796,41 +797,6 @@ const ExpertDetailPage: React.FC = () => {
     setDisplayedReviews((prev) => prev + 3);
   };
 
-  const handleDeleteExpert = async () => {
-    if (
-      !window.confirm(
-        "정말로 전문가 프로필을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await AuthService.authenticatedRequest(
-        `/api/advisors/${advisorId}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      if (response.ok) {
-        alert("전문가 프로필이 성공적으로 삭제되었습니다.");
-        navigate("/experts");
-      } else {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || "전문가 프로필 삭제에 실패했습니다."
-        );
-      }
-    } catch (error) {
-      console.error("Error deleting expert:", error);
-      alert(
-        error instanceof Error
-          ? error.message
-          : "전문가 프로필 삭제 중 오류가 발생했습니다."
-      );
-    }
-  };
 
   // 달력 렌더링
   const renderCalendar = () => {
@@ -1085,10 +1051,10 @@ const ExpertDetailPage: React.FC = () => {
               <section className="w-1/2">
                 <div className="flex flex-row items-end space-x-3 mb-4">
                   <h2 className="text-left text-2xl font-bold text-gray-900">
-                    학력 및 경력사항
+                    경력사항
                   </h2>
                   <p className="text-left text-gray-500 text-sm">
-                    Education & Professional Experience
+                    Professional Experience
                   </p>
                 </div>
                 <div className="space-y-4">
@@ -1098,7 +1064,7 @@ const ExpertDetailPage: React.FC = () => {
                         {formatPeriod(exp.period)}
                       </div>
                       <div className="text-left flex-1 text-gray-700">
-                        {exp.position}
+                        {exp.company} {exp.position}
                       </div>
                     </div>
                   ))}
@@ -1261,12 +1227,6 @@ const ExpertDetailPage: React.FC = () => {
                           className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
                         >
                           수정하기
-                        </button>
-                        <button
-                          onClick={handleDeleteExpert}
-                          className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
-                        >
-                          삭제하기
                         </button>
                       </>
                     )}

@@ -6,11 +6,11 @@ const Footer: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top Links */}
         <div className="flex justify-center space-x-12 text-base text-gray-600 mb-8">
-          <a href="#" className="hover:text-blue-600 transition-colors">개인정보 처리방침</a>
+          <span>개인정보 처리방침</span>
           <span className="text-gray-300">|</span>
           <span>고객센터 0000-0000</span>
           <span className="text-gray-300">|</span>
-          <a href="#" className="hover:text-blue-600 transition-colors">공지사항</a>
+          <span>공지사항</span>
         </div>
 
         {/* Company Info */}
