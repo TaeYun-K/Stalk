@@ -45,6 +45,7 @@ interface ChatMessage {
 interface ChartInfo {
   ticker: string;
   period: string;
+  name?: string;
 }
 
 type HoveredButton =
@@ -576,7 +577,7 @@ const VideoConsultationPage: React.FC = () => {
     if (!selectedStock?.ticker) return;
 
     if (currentChart?.ticker !== selectedStock.ticker) {
-      const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7' };
+      const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7', name: selectedStock.name || currentChart?.name || '' };
       setCurrentChart(info);
       session.signal({
         type: 'chart:change',
@@ -1187,7 +1188,7 @@ const VideoConsultationPage: React.FC = () => {
                         <ChartErrorBoundary>
                           <div style={{ width: '100%', height: '100%', minWidth: 0 }}>
                             <StockChart 
-                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: '' } : null)}
+                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: currentChart.name ?? '' } : null)}
                               darkMode={true} 
                               session={session}
                               chartInfo={currentChart ?? undefined}
