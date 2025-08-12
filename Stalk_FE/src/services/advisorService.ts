@@ -57,7 +57,7 @@ class AdvisorService {
 
   // 프로필 생성 - JSON만 사용
   static async createProfile(profileData: any): Promise<{
-    id?: number; // 생성된 프로필 ID (선택적)
+    id: number;
     profileImageUrl: string;
     publicContact: string;
     shortIntro: string;

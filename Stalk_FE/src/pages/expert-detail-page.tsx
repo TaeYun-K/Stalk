@@ -4,6 +4,7 @@ import NewNavbar from "@/components/new-navbar";
 import ExpertProfileImage from "@/assets/expert_profile_image.png";
 import AuthService from "@/services/authService";
 import ProfileDefaultImage from "@/assets/images/profiles/Profile_default.svg";
+import FavoriteService from "@/services/favoriteService";
 
 // 전문가 정보 API Response Interfaces
 interface ApiCareer {
@@ -155,6 +156,31 @@ const ExpertDetailPage: React.FC = () => {
   // 현재 전문가의 ID (URL 파라미터의 id)
   const advisorId = id;
 
+  // 찜하기 토글 상태
+  const [isFavorite, setIsFavorite] = useState<boolean>(false);
+  // 현재 사용자 역할 (로그인하지 않은 경우 undefined)
+  const currentUserRole = AuthService.getUserInfo()?.role;
+
+  // 찜하기 토글 함수
+  const handleFavoriteToggle = async () => {
+    if (!id) return;
+
+    try {
+      const advisorId = parseInt(id);
+      
+      if (isFavorite) {
+        await FavoriteService.removeFavoriteAdvisor(advisorId);
+        setIsFavorite(false);
+      } else {
+        await FavoriteService.addFavoriteAdvisor(advisorId);
+        setIsFavorite(true);
+      }
+    } catch (error) {
+      console.error("찜하기 토글 오류:", error);
+      alert(error instanceof Error ? error.message : "찜하기 처리 중 오류가 발생했습니다.");
+    }
+  };
+
   // API 호출
   useEffect(() => {
     // 페이지 로드 시 전문가 간 예약 오류 메시지 초기화
@@ -194,6 +220,13 @@ const ExpertDetailPage: React.FC = () => {
         const data: ApiResponse = await response.json();
         if (data.isSuccess) {
           setExpertData(data.result);
+          
+          // 찜하기 상태 확인 (USER 역할인 경우에만)
+          if (currentUserRole === "USER") {
+            const advisorId = parseInt(id);
+            const isFav = await FavoriteService.checkIsFavoriteAdvisor(advisorId);
+            setIsFavorite(isFav);
+          }
         } else {
           throw new Error(data.message || "Failed to fetch expert details");
         }
@@ -206,7 +239,7 @@ const ExpertDetailPage: React.FC = () => {
     };
 
     fetchExpertDetails();
-  }, [id, navigate]);
+  }, [id, navigate, currentUserRole]);
 
   const [reservationForm, setReservationForm] = useState({
     name: "",
@@ -572,7 +605,7 @@ const ExpertDetailPage: React.FC = () => {
   };
 
   // 예약 + 결제 API 호출 함수
-  const createReservationWithPayment = async (
+  const _createReservationWithPayment = async (
     requestData: PaymentReservationRequest
   ): Promise<PaymentReservationResponse> => {
     try {
@@ -603,7 +636,7 @@ const ExpertDetailPage: React.FC = () => {
   };
 
   // 토스페이먼츠 결제창으로 이동하는 함수
-  const redirectToPayment = (
+  const _redirectToPayment = (
     paymentData: PaymentReservationResponse["paymentData"]
   ) => {
     // 토스페이먼츠 결제창 SDK 사용
@@ -650,7 +683,7 @@ const ExpertDetailPage: React.FC = () => {
   // 예약 및 결제 처리 함수
   const handleReservation = async (
     reservationData: PaymentReservationRequest,
-    onSuccess?: () => void,
+    _onSuccess?: () => void,
     onError?: (message: string) => void
   ) => {
     // 중복 취소 방지용
@@ -662,7 +695,7 @@ const ExpertDetailPage: React.FC = () => {
     };
 
     // beforeunload 핸들러 (탭 닫기/새로고침 시 취소 시도)
-    let beforeUnloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
+    let beforeUnloadHandler: ((_e: BeforeUnloadEvent) => void) | null = null;
 
     // 결제 생성 후에만 값이 들어감
     let orderIdForCancel: string | null = null;
@@ -718,7 +751,7 @@ const ExpertDetailPage: React.FC = () => {
       const tossPayments = window.TossPayments(clientKey);
 
       // 탭 닫기/새로고침 대비: 결제 진행 구간에서만 임시 등록
-      beforeUnloadHandler = (e: BeforeUnloadEvent) => {
+      beforeUnloadHandler = (_e: BeforeUnloadEvent) => {
         // 사용자에게 경고를 띄우고(브라우저가 무시할 수도), 백엔드 취소 시도
         // e.preventDefault(); // 일부 브라우저에서 필요 없음
         // e.returnValue = ""; // 크롬에서 커스텀 메시지는 무시됨
@@ -739,12 +772,12 @@ const ExpertDetailPage: React.FC = () => {
 
       // 주의: 위에서 성공하면 곧바로 리다이렉트되어 아래 코드는 보통 실행 안 됨
       console.log("결제창 호출 성공");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("예약/결제 처리 오류:", error);
 
       // TossPayments 에러 케이스 분기(주요 예: USER_CANCEL)
       // SDK에서 주는 error.code가 있으면 참고해서 취소 요청
-      const code = error?.code as string | undefined;
+      const code = (error as { code?: string })?.code;
       if (code) {
         // 대표 코드 예시: 'USER_CANCEL', 'INVALID_CARD', 'EXCEED_LIMIT' 등
         // 어떤 코드든 결제 실패면 PENDING 예약은 정리하는 편이 안전
@@ -964,19 +997,49 @@ const ExpertDetailPage: React.FC = () => {
           <div className="flex-1">
             {/* Expert Header */}
             <div className="flex items-end justify-between mb-8 border-b border-gray-300 pb-5">
-              <div className="flex-1">
-                <div className="flex flex-row items-end gap-2">
-                  <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
-                    {expert.name}
-                  </h1>
-                  <h3 className="text-left text-l font-semibold text-blue-500 mb-2">
-                    {expert.title}
-                  </h3>
-                  <h3 className="text-left text-l font-medium text-gray-400 mb-2">
-                    / {expertData?.contact || "010-0000-0000"}
-                  </h3>
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center mb-2 ml-4">
+                <div className="flex flex-row justify-between items-center">
+                 {/* 컨설턴트명 / 연락처 등 기본 정보 */}
+                 <div>
+                   <div className="flex flex-row items-center gap-2">
+                     {/* 찜하기 하트 버튼 */}
+                     {currentUserRole === "USER" && (
+                       <button
+                         type="button"
+                         aria-pressed={isFavorite}
+                         title={isFavorite ? '찜 해제' : '찜하기'}
+                         onClick={handleFavoriteToggle}
+                         className={`inline-flex items-center justify-center w-10 h-10 transition-all duration-200 hover:scale-105 ${
+                           isFavorite
+                             ? 'text-red-500'
+                             : 'text-gray-400 hover:text-red-400'
+                         }`}
+                       >
+                         <svg
+                           className="w-6 h-6"
+                           viewBox="0 0 24 24"
+                           fill={isFavorite ? 'currentColor' : 'none'}
+                           stroke="currentColor"
+                           strokeWidth={2}
+                           aria-hidden="true"
+                         >
+                           <path
+                             strokeLinecap="round"
+                             strokeLinejoin="round"
+                             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                           />
+                         </svg>
+                       </button>
+                     )}
+                     <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
+                       {expert.name}
+                     </h1>
+                    <h3 className="text-left text-l font-semibold text-blue-500 mb-2">
+                      {expert.title}
+                    </h3>
+                    <h3 className="text-left text-l font-medium text-gray-400 mb-2">
+                      / {expertData?.contact || "010-0000-0000"}
+                    </h3>
+                    <div className="flex items-center space-x-4 mb-2 ml-4">
                       <div className="flex text-yellow-400">⭐</div>
                       <span className="ml-2 font-semibold text-gray-900">
                         {expert.rating}
@@ -986,10 +1049,10 @@ const ExpertDetailPage: React.FC = () => {
                       </span>
                     </div>
                   </div>
+                  <p className="text-left text-lg text-gray-600 italic mb-4">
+                    "{expert.tagline}"
+                  </p>
                 </div>
-                <p className="text-left text-lg text-gray-600 italic mb-4">
-                  "{expert.tagline}"
-                </p>
               </div>
               <div className="w-48 h-60 rounded-2xl overflow-hidden">
                 <img
@@ -1109,7 +1172,7 @@ const ExpertDetailPage: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 mb-4">
                   예약 유의사항
                 </h3>
-                <ul className="space-y-3 mb-6 text-sm text-gray-600">
+                <ul className="space-y-3 mb-1 text-sm text-gray-600">
                   <li className="flex items-start">
                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
                     <span>예약은 1시간 단위로 가능합니다.</span>
@@ -1130,6 +1193,11 @@ const ExpertDetailPage: React.FC = () => {
                 </ul>
               </div>
 
+              <div className="flex flex-col overflow-hidden justify-between items-start border border-gray-200 rounded-xl mb-4 shadow-lg">
+                <div className="w-full text-lg font-bold text-white bg-blue-300 py-3 px-7">상담요금</div>
+                <p className="text-left text-md text-gray-700 px-7 py-3">시간당 <span className="font-bold">{expert.consultationFee}</span>원</p>
+              </div>
+              
               {/* 현재 로그인한 사용자가 이 전문가인지 확인 */}
               {(() => {
                 const currentUserInfo = AuthService.getUserInfo();
@@ -1225,16 +1293,10 @@ const ExpertDetailPage: React.FC = () => {
       {/* Reservation Modal */}
       {showReservationModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg border-2 border border-blue-300 max-w-md w-full shadow-lg max-h-[90vh] flex flex-col">
+          <div className="fixed top-[55%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg border-2 border border-blue-300 max-w-md w-full shadow-lg max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center p-8 pb-4">
               <h3 className="text-2xl font-bold text-gray-900">
-                {(() => {
-                  const currentUserInfo = AuthService.getUserInfo();
-                  const isExpertOwner =
-                    currentUserInfo?.role === "ADVISOR" &&
-                    currentUserInfo?.name === expertData?.name;
-                  return isExpertOwner ? "예약하기" : "예약하기";
-                })()}
+                예약하기
               </h3>
               <button
                 onClick={() => setShowReservationModal(false)}
@@ -1451,8 +1513,14 @@ const ExpertDetailPage: React.FC = () => {
                   />
                 </div>
               </form>
+              <div className="mb-5">
+                <p className="flex justify-between">
+                  <span className="font-semibold text-blue-500">결제 예정 금액</span> {expert.consultationFee}원
+                </p>
+              </div>
             </div>
 
+            {/* 전문가/일반사용자에 따라 "닫기"/"결제하기" 버튼 활성화 */}
             <div className="flex justify-end p-8 pt-4 border-t border-gray-200 bg-white">
               {(() => {
                 const currentUserInfo = AuthService.getUserInfo();
@@ -1494,7 +1562,7 @@ const ExpertDetailPage: React.FC = () => {
                       }}
                       className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                     >
-                      예약 완료
+                      결제하기
                     </button>
                   );
                 }

@@ -54,6 +54,36 @@ class FavoriteService {
     return data;
   }
 
+  static async checkIsFavoriteAdvisor(advisorId: number): Promise<boolean> {
+    const token = AuthService.getAccessToken();
+    if (!token) return false; // 로그인하지 않은 경우 false 반환
+
+    try {
+      const favorites = await this.getFavoriteAdvisors();
+      return favorites.result.content.some(advisor => advisor.advisorId === advisorId);
+    } catch (error) {
+      console.error('찜하기 상태 확인 오류:', error);
+      return false;
+    }
+  }
+
+  static async addFavoriteAdvisor(advisorId: number): Promise<void> {
+    const token = AuthService.getAccessToken();
+    if (!token) throw new Error('로그인이 필요합니다.');
+
+    const response = await fetch(`/api/favorites/advisors/${advisorId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('찜하기에 실패했습니다.');
+    }
+  }
+
   static async removeFavoriteAdvisor(advisorId: number): Promise<void> {
     const token = AuthService.getAccessToken();
     if (!token) throw new Error('로그인이 필요합니다.');
