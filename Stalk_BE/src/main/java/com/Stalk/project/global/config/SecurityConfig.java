@@ -181,6 +181,7 @@ public class SecurityConfig {
 
             // 커뮤니티
             .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/community/posts/*").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/community/posts/*/comments")
             .hasAnyRole("ADVISOR")
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()

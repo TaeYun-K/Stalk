@@ -79,7 +79,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     String uri = request.getRequestURI();
 
     return uri.startsWith("/api/auth/")
-        || uri.startsWith("/api/krx/");
+        || uri.startsWith("/api/krx/")
+        || uri.startsWith("/api/community/");
   }
 
   @Override
