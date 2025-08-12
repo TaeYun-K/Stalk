@@ -48,12 +48,13 @@ public class AdvisorProfileService {
 
         try {
             // 4. 프로필 상세 정보 등록
-            int profileResult = advisorProfileMapper.insertAdvisorDetailInfo(advisorId, request);
-            if (profileResult == 0) {
-                throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_CREATE_FAILED);
-            }
+            advisorProfileMapper.insertAdvisorDetailInfo(advisorId, request);
 
-            // 5. 경력 정보 등록
+            // 5. advisor 테이블 업데이트 (상담료 및 프로필 완성 상태)
+            advisorProfileMapper.updateAdvisorProfileCompletion(advisorId, request.getConsultationFee());
+
+
+            // 6. 경력 정보 등록
             for (CareerEntryDto career : request.getCareerEntries()) {
                 int careerResult = advisorProfileMapper.insertCareerEntry(advisorId, career);
                 if (careerResult == 0) {

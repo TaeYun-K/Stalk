@@ -114,6 +114,56 @@
           AND status = 'PENDING'
     </update>
 
+    <!-- 기존 자격증 존재 여부 확인 -->
+    <select id="countExistingCertificate" resultType="int">
+        SELECT COUNT(*)
+        FROM advisor_certificates
+        WHERE advisor_id = #{advisorId}
+          AND certificate_file_sn = #{certificateFileSn}
+          AND birth = #{birth}
+          AND certificate_file_number = #{certificateFileNumber}
+    </select>
+
+    <!-- 기존의 XML을 이렇게 수정 -->
+    <insert id="insertCertificateIfNotExists">
+        INSERT INTO advisor_certificates (
+        advisor_id,
+        certificate_file_sn,
+        birth,
+        certificate_file_number,
+        certificate_name,
+        issued_by,
+        issued_at,
+        expires_at,
+        certificate_url,
+        created_at
+        )
+        SELECT
+        aal.advisor_id,
+        aal.certificate_file_sn,
+        aal.birth,
+        aal.certificate_file_number,
+        COALESCE(aal.certificate_name, '미확인 자격증') as certificate_name,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NOW()
+        FROM advisor_approval_logs aal
+        WHERE aal.id = #{approvalRequest.requestId}  <!-- 이렇게 변경 -->
+        AND aal.status = 'APPROVED'
+        AND aal.certificate_file_sn IS NOT NULL
+        AND aal.birth IS NOT NULL
+        AND aal.certificate_file_number IS NOT NULL
+        AND NOT EXISTS (
+        SELECT 1
+        FROM advisor_certificates ac
+        WHERE ac.advisor_id = aal.advisor_id
+        AND ac.certificate_file_sn = aal.certificate_file_sn
+        AND ac.certificate_file_number = aal.certificate_file_number
+        );
+    </insert>
+
     <!-- advisor 테이블의 is_approved 업데이트 -->
     <update id="updateAdvisorApprovalStatus">
         UPDATE advisor

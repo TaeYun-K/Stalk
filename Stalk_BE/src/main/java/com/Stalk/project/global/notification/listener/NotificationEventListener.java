@@ -24,16 +24,17 @@ public class NotificationEventListener {
     public void handleReservationCreated(ReservationCreatedEvent event) {
         try {
             NotificationCreateDto dto = NotificationCreateDto.builder()
-                    .userId(event.getTargetUserId())
-                    .type(NotificationType.RESERVATION_CREATED)
-                    .title("새로운 상담 예약")
-                    .message(event.getMessage())
-                    .build();
-            
+                .userId(event.getTargetUserId())
+                .type(NotificationType.RESERVATION_CREATED)
+                .title("새로운 상담 예약")
+                .message(event.getMessage())
+                .relatedId(event.getReservationId())  // 이 줄만 추가
+                .build();
+
             notificationService.createNotification(dto);
-            
+
             log.debug("예약 생성 알람 전송 완료 - advisorId: {}", event.getAdvisorUserId());
-            
+
         } catch (Exception e) {
             log.error("예약 생성 알람 전송 실패 - advisorId: {}", event.getAdvisorUserId(), e);
         }
