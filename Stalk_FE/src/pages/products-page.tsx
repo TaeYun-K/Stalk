@@ -2,6 +2,7 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { StockDetailHeader, StockRankingTable, StockSearch, StockChart } from "../components/stock";
+import { useWatchlist } from "@/context/WatchlistContext";
 import {
   useMarketIndices,
   useStockBasicInfo,
@@ -63,9 +64,11 @@ const ProductsPage = () => {
   const [timeRange, setTimeRange] = useState<TimeRange>("1w");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
   const [chartType, setChartType] = useState<'line'>('line');
   const [drawingMode, setDrawingMode] = useState(false);
+
+  // 관심종목(찜) 컨텍스트
+  const { isInWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
 
   // Use custom hooks for data fetching
   const {
@@ -498,12 +501,14 @@ const ProductsPage = () => {
   };
 
   const toggleFavorite = () => {
-    if (selectedStock) {
-      setFavorites((prev) =>
-        prev.includes(selectedStock.ticker)
-          ? prev.filter((t) => t !== selectedStock.ticker)
-          : [...prev, selectedStock.ticker]
-      );
+    const ticker = selectedTicker || selectedStock?.ticker;
+    const name = selectedStock?.name || (realtimePriceData?.name as string) || "";
+    if (!ticker) return;
+
+    if (isInWatchlist(ticker)) {
+      removeFromWatchlist(ticker);
+    } else {
+      addToWatchlist({ code: ticker, name, price: 0, change: 0 });
     }
   };
 
@@ -612,7 +617,7 @@ const ProductsPage = () => {
                     prevClose={parseFloat(realtimePriceData?.prevClosePrice) || undefined}
                     volume={realtimePriceData?.volume || selectedStock?.volume}
                     onFavoriteToggle={toggleFavorite}
-                    isFavorite={favorites.includes(selectedTicker || "")}
+                    isFavorite={isInWatchlist(selectedTicker || "")}
                   />
                 ) : (
                   <div className="bg-white rounded-lg shadow-sm p-6">

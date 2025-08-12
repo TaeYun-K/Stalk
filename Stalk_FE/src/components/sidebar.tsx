@@ -83,12 +83,6 @@ const Sidebar: React.FC = () => {
       icon: '❤️'
     },
     {
-      id: 'holdings',
-      label: '보유종목',
-      path: '/holdings',
-      icon: '🛒'
-    },
-    {
       id: 'reservations',
       label: '예약내역',
       path: '/reservations',
@@ -134,7 +128,14 @@ const Sidebar: React.FC = () => {
     try {
       setLoading(true);
       const response = await ReservationService.getReservations(1, 20);
-      const sortedReservations = ReservationService.sortReservations(response.content);
+      const now = new Date();
+      const upcoming = (response.content || []).filter((r) => {
+        const scheduledAt = new Date(`${r.consultationDate} ${r.consultationTime}`);
+        const isUpcoming = scheduledAt >= now;
+        const isActiveStatus = r.status === 'PENDING' || r.status === 'CONFIRMED';
+        return isUpcoming && isActiveStatus;
+      });
+      const sortedReservations = ReservationService.sortReservations(upcoming);
       setReservations(sortedReservations);
     } catch (error) {
       console.error('예약 내역 로드 실패:', error);
@@ -301,12 +302,7 @@ const Sidebar: React.FC = () => {
                         <div className="font-semibold text-gray-900">{item.name}</div>
                         <div className="text-sm text-gray-500">{item.code}</div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-gray-900">{item.price.toLocaleString()}원</div>
-                        <div className={`text-sm ${item.change > 0 ? 'text-red-500' : item.change < 0 ? 'text-blue-500' : 'text-gray-500'}`}>
-                          {item.change > 0 ? '+' : ''}{item.change}%
-                        </div>
-                      </div>
+                      
                     </div>
                   </div>
                 </div>
@@ -400,7 +396,13 @@ const Sidebar: React.FC = () => {
                 <div className="text-center py-4 text-gray-500">로딩 중...</div>
               ) : knowledgePosts.length > 0 ? (
                 knowledgePosts.map((post) => (
-                  <div key={post.postId} className="bg-white border rounded-lg p-4 shadow-sm">
+                  <div
+                    key={post.postId}
+                    className="bg-white border rounded-lg p-4 shadow-sm hover:bg-gray-50 cursor-pointer"
+                    onClick={() => navigate(`/knowledge-board/${post.postId}`)}
+                    role="button"
+                    tabIndex={0}
+                  >
                     <div className="font-semibold text-gray-900 mb-2 line-clamp-2">
                       {post.title}
                     </div>
@@ -597,7 +599,17 @@ const Sidebar: React.FC = () => {
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">{getCurrentMenuLabel()}</h2>
             {selectedMenu === 'notifications' && (
-              <button className="text-sm text-gray-500 hover:text-gray-700" onClick={() => setNotifications([])}>
+              <button
+                className="text-sm text-gray-500 hover:text-gray-700"
+                onClick={async () => {
+                  try {
+                    await NotificationService.markAllAsRead();
+                    setNotifications([]);
+                  } catch (e) {
+                    console.error('전체 읽음 처리 실패:', e);
+                  }
+                }}
+              >
                 모두 비우기
               </button>
             )}
