@@ -594,7 +594,11 @@ const VideoConsultationPage: React.FC = () => {
       const info = JSON.parse(e.data) as ChartInfo;
       console.log('[chart] recv:', info);
       setShowStockChart(true);
-      setCurrentChart(info);
+      setCurrentChart(prev => ({
+        ...(prev || {}),
+        ...info,
+        name: info.name || prev?.name || ''
+      }));
     };
     session.on('signal:chart:change', onChartChange);
     return () => { session.off('signal:chart:change', onChartChange); };
@@ -626,7 +630,11 @@ const VideoConsultationPage: React.FC = () => {
     if (!session) return;
     const onSyncState = (e: any) => {
       const info = JSON.parse(e.data) as ChartInfo;
-      setCurrentChart(info);
+      setCurrentChart(prev => ({
+        ...(prev || {}),
+        ...info,
+        name: info.name || prev?.name || ''
+      }));
     };
     session.on('signal:chart:sync_state', onSyncState);
     return () => { session.off('signal:chart:sync_state', onSyncState); };
