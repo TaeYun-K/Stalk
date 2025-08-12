@@ -939,7 +939,7 @@ const VideoConsultationPage: React.FC = () => {
       window.removeEventListener("unload", handleUnload);
     };
   }, []); // 의존성 배열을 비워 한 번만 실행되도록 함
-  
+
   return (
     <div className="h-screen w-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Header navbar */}
@@ -1190,7 +1190,7 @@ const VideoConsultationPage: React.FC = () => {
                               selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: '' } : null)}
                               darkMode={true} 
                               session={session}
-                              chartInfo={currentChart}
+                              chartInfo={currentChart ?? undefined}
                               onChartChange={handleChartChange}
                               key={(selectedStock?.ticker ?? currentChart?.ticker) || 'chart'}
                               />
