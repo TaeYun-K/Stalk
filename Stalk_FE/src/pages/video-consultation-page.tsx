@@ -578,6 +578,7 @@ const VideoConsultationPage: React.FC = () => {
 
     if (currentChart?.ticker !== selectedStock.ticker) {
       const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7', name: selectedStock.name || currentChart?.name || '' };
+      console.log('chartinfo : ' , info);
       setCurrentChart(info);
       session.signal({
         type: 'chart:change',
