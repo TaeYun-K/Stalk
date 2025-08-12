@@ -3,6 +3,7 @@ package com.Stalk.project.api.user.dao;
 import com.Stalk.project.api.signup.entity.User;
 import com.Stalk.project.api.user.dto.in.UserUpdateRequestDto;
 import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
+import java.util.Optional;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -46,4 +47,13 @@ public interface UserProfileMapper {
    */
   Long deactivateUser(@Param("userId") Long userId);
 
+  Optional<User> findByNickname(String nickname);
+
+  /**
+   * 사용자 프로필 정보(닉네임, 이미지) 업데이트
+   *
+   * @param user 업데이트할 사용자 정보 객체
+   * @return 업데이트된 행의 수
+   */
+  int updateProfile(User user);
 }

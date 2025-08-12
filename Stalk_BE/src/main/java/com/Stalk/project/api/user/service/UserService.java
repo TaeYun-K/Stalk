@@ -7,9 +7,19 @@ import static com.Stalk.project.global.response.BaseResponseStatus.USER_NOT_FOUN
 import com.Stalk.project.api.login.service.AuthService;
 import com.Stalk.project.api.signup.entity.User;
 import com.Stalk.project.api.user.dto.in.PasswordChangeRequestDto;
+import com.Stalk.project.api.user.dto.in.ProfileUpdateRequestDto;
+import com.Stalk.project.api.user.dto.out.ProfileUpdateResponseDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +30,7 @@ import com.Stalk.project.api.user.dto.out.UserProfileResponseDto;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +39,7 @@ public class UserService {
   private final UserProfileMapper userProfileMapper;
   private final AuthService authService;
   private final PasswordEncoder passwordEncoder;
+  private final FileStorageService fileStorageService;
 
   public UserProfileResponseDto getUserProfile(Long userId) {
     // 기존 메서드 유지
@@ -183,5 +195,40 @@ public class UserService {
 
     // @Transactional에 의해 메소드 종료 시 변경 감지(Dirty Checking)로 자동 업데이트
     // userRepository.save(user); // 명시적으로 호출해도 무방
+  }
+
+  @Transactional
+  public ProfileUpdateResponseDto updateNicknameAndImage(Long userId,
+      ProfileUpdateRequestDto requestDto) {
+    User user = userProfileMapper.findUserById(userId);
+
+    String newNickname = requestDto.getNickname();
+    String oldImageUrl = user.getImage();
+    String newImageUrl = null;
+
+    if (StringUtils.hasText(newNickname) && !newNickname.equals(user.getNickname())) {
+      userProfileMapper.findByNickname(newNickname).ifPresent(u -> {
+        throw new BaseException(BaseResponseStatus.NICKNAME_DUPLICATION);
+      });
+      user.setNickname(newNickname);
+    }
+
+    // 프로필 이미지 파일이 있으면 저장 처리
+    // FileStorageService 내부에서 예외 발생 시 BaseException이 던져짐
+    newImageUrl = fileStorageService.storeFile(requestDto.getProfileImage());
+    if (newImageUrl != null) {
+      user.setImage(newImageUrl);
+    }
+
+    // 데이터베이스 업데이트
+    userProfileMapper.updateProfile(user);
+
+    // DB 업데이트 성공 후, 기존 이미지가 있다면 파일 시스템에서 삭제
+    if (newImageUrl != null) {
+      fileStorageService.deleteFile(oldImageUrl);
+    }
+
+    // 응답 DTO 생성 및 반환
+    return new ProfileUpdateResponseDto(user.getNickname(), user.getImage());
   }
 }

@@ -1,4 +1,3 @@
-// 1. Request DTO
 package com.Stalk.project.api.user.dto.in;
 
 import jakarta.validation.constraints.Pattern;

@@ -3,12 +3,15 @@ package com.Stalk.project.api.advisor.dto.out;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import lombok.Setter;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class AdvisorDetailResponseDto {
@@ -34,6 +37,19 @@ public class AdvisorDetailResponseDto {
     // 리뷰 목록 (최신 10개)
     private List<ReviewDto> reviews;
     private Boolean has_more_reviews;
+
+    // 프로필 이미지 URL 변환
+    public String getProfile_image_url() {
+        if (this.profile_image_url != null) {
+            if (this.profile_image_url.startsWith("http://") || this.profile_image_url.startsWith("https://")) {
+                return this.profile_image_url;
+            }
+            if (this.profile_image_url.startsWith("/")) {
+                return "http://localhost:8081" + this.profile_image_url;
+            }
+        }
+        return this.profile_image_url;
+    }
 
     @Data
     @NoArgsConstructor

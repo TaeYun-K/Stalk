@@ -7,16 +7,18 @@
   <!-- 사용자 프로필 조회 -->
   <select id="findUserProfileById"
     resultType="com.Stalk.project.api.user.dto.out.UserProfileResponseDto">
-    SELECT user_id as userId,
-           name,
-           contact,
-           email,
-           image   as profileImage,
-           role
+    SELECT id,                    <!-- 👈 새로 추가: 숫자 기본키 -->
+    user_id as userId,
+    name,
+    nickname,              <!-- 👈 새로 추가: 커뮤니티 닉네임 -->
+    contact,
+    email,
+    image as profileImage,
+    role
     FROM users
     WHERE id = #{userId}
-      AND is_active = 1
-      AND deleted_at IS NULL
+    AND is_active = 1
+    AND deleted_at IS NULL
   </select>
 
   <!-- ID로 사용자 정보 조회 -->
@@ -42,19 +44,12 @@
     WHERE id = #{userId}
   </select>
 
-  <!-- 사용자 비활성화 (Soft Delete) -->
-  <update id="deactivateUser">
-    UPDATE users
-    SET is_active  = 0,
-        deleted_at = NOW(),
-        user_id    = CONCAT('deactivated_', user_id, '_', UNIX_TIMESTAMP()),
-        nickname   = CONCAT('탈퇴한사용자_', id),
-        email      = CONCAT('deactivated_', id, '@deleted.com'),
-        contact    = NULL, -- 연락처 정보 삭제
-        password   = NULL  -- 비밀번호 정보 삭제
-    WHERE id = #{userId}
+  <select id="findByNickname" resultType="com.Stalk.project.api.signup.entity.User">
+    SELECT *
+    FROM users
+    WHERE nickname = #{nickname}
       AND is_active = 1
-  </update>
+  </select>
 
   <!-- 사용자 정보 업데이트 쿼리 -->
   <update id="updateUserProfile">
@@ -74,6 +69,36 @@
     UPDATE users
     SET password = #{encodedPassword}
     WHERE id = #{userId}
+  </update>
+
+
+  <!-- 사용자 비활성화 (Soft Delete) -->
+  <update id="deactivateUser">
+    UPDATE users
+    SET is_active  = 0,
+        deleted_at = NOW(),
+        user_id    = CONCAT('deactivated_', user_id, '_', UNIX_TIMESTAMP()),
+        nickname   = CONCAT('탈퇴한사용자_', id),
+        email      = CONCAT('deactivated_', id, '@deleted.com'),
+        contact    = NULL, -- 연락처 정보 삭제
+        password   = NULL  -- 비밀번호 정보 삭제
+    WHERE id = #{userId}
+      AND is_active = 1
+  </update>
+
+  <!-- 프로필 수정을 위한 UPDATE 쿼리 -->
+  <update id="updateProfile" parameterType="com.Stalk.project.api.signup.entity.User">
+    UPDATE users
+    <set>
+      <if test="nickname != null and nickname != ''">
+        nickname = #{nickname},
+      </if>
+      <if test="image != null and image != ''">
+        image = #{image},
+      </if>
+      updated_at = CURRENT_TIMESTAMP
+    </set>
+    WHERE id = #{id}
   </update>
 
 </mapper>
