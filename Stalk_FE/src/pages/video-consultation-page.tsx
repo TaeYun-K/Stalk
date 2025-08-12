@@ -557,17 +557,42 @@ const VideoConsultationPage: React.FC = () => {
 
   // 차트 변경 감지 후 signaling
   const handleChartChange = (info: ChartInfo) => {
-    // 로컬 상태 업데이트
-    setCurrentChart(info);
-
-    // signaling
+    // 1. 현재 선택된 주식에서 name 가져오기
+    let name = info.name;
+    
+    // 2. name이 없으면 selectedStock에서 가져오기
+    if (!name && selectedStock?.name) {
+      name = selectedStock.name;
+    }
+    
+    // 3. 그래도 없으면 현재 차트에서 가져오기
+    if (!name && currentChart?.name) {
+      name = currentChart.name;
+    }
+    
+    // 4. 마지막으로 ticker를 name으로 사용
+    if (!name) {
+      name = info.ticker;
+    }
+    
+    const fullInfo: ChartInfo = {
+      ...info,
+      name: name
+    };
+    
+    console.log('[chart] preparing to send:', fullInfo); // 디버깅용
+    
+    setCurrentChart(fullInfo);
+    
     if (session) {
       session.signal({
         type: 'chart:change',
-        data: JSON.stringify(info)
+        data: JSON.stringify(fullInfo)
       }).then(() => {
-          console.log('[chart] sent:', info);
-      }).catch(err => console.error('Chart change signaling failed', err));
+        console.log('[chart] sent successfully:', fullInfo);
+      }).catch(err => {
+        console.error('Chart change signaling failed:', err);
+      });
     }
   };
 
@@ -615,9 +640,13 @@ const VideoConsultationPage: React.FC = () => {
     if (!session) return;
     const onSyncReq = async () => {
       if (currentChart) {
+        const chartWithName = {
+          ...currentChart,
+          name: currentChart.name || selectedStock?.name || currentChart.ticker
+        };
         await session.signal({
           type: 'chart:sync_state',
-          data: JSON.stringify(currentChart),
+          data: JSON.stringify(chartWithName),
         });
       }
     };
