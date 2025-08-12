@@ -183,14 +183,14 @@ const VideoConsultationPage: React.FC = () => {
   try {
     console.log('fetchUserInfo called');
     setIsLoadingUserInfo(true);
-    
+
     const userProfile = await AuthService.getUserProfile();
     console.log('User profile received:', userProfile);
-    
+
     setUserInfo(userProfile);
   } catch (error) {
     console.error('사용자 정보 조회 실패:', error);
-    
+
     // 실패 시에도 기본 구조는 설정 (OpenVidu 초기화를 위해)
     setUserInfo({
       name: '', // 빈 문자열로 설정하여 기본값 로직이 작동하도록
@@ -241,10 +241,10 @@ const VideoConsultationPage: React.FC = () => {
       console.log('Initializing OpenVidu...');
       const openVidu = new OpenVidu();
       setOv(openVidu);
-      
+
       if (ovToken) {
         const session = openVidu.initSession();
-  
+
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
@@ -258,7 +258,7 @@ const VideoConsultationPage: React.FC = () => {
             setTimeout(() => {
               attachSubscriberVideo(subscriber, newSubscribers.length - 1);
             }, 100);
-            
+
             return newSubscribers;
           });
         });
@@ -300,13 +300,13 @@ const VideoConsultationPage: React.FC = () => {
             console.error("채팅 수신 파싱 오류:", err);
           }
         });
-      
+
         session.on('streamDestroyed', (event) => {
           console.log('Stream destroyed:', event.stream.streamId);
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
         });
-  
-        session.on('connectionCreated', (event) => { 
+
+        session.on('connectionCreated', (event) => {
           const raw = event.connection.data;
           const userData = JSON.parse(raw.split("%/%")[0]);
           const username = userData.userData || "익명";
@@ -317,13 +317,13 @@ const VideoConsultationPage: React.FC = () => {
             timestamp: new Date(),
             type: "system",
           };
-          setChatMessages((prev) => [...prev, msg]);      
+          setChatMessages((prev) => [...prev, msg]);
         });
-  
+
         session.on('connectionDestroyed', (event) => {
             const raw = event.connection.data;
             const userData = JSON.parse(raw.split("%/%")[0]);
-            const username = userData.userData || "익명";          
+            const username = userData.userData || "익명";
             const msg: ChatMessage = {
               id: `sys-${Date.now()}`,
               sender: "system",
@@ -333,20 +333,20 @@ const VideoConsultationPage: React.FC = () => {
             };
             setChatMessages((prev) => [...prev, msg]);
         });
-  
+
         // 사용자 정보를 포함한 연결 데이터 준비
         const connectionData = {
           role: userInfo?.role || 'USER',
           userData: userInfo?.name || ('익명'),
           userId: userInfo?.userId || '0'
         };
-  
+
         // 세션에 연결
         console.log('Connecting to session with token:', ovToken.substring(0, 20) + '...');
         await session.connect(ovToken, JSON.stringify(connectionData));
         setSession(session);
         console.log('Connected to session successfully');
-        
+
         // Publisher 생성 및 발행
         await createAndPublishStream(openVidu, session);
       }
@@ -366,7 +366,7 @@ const VideoConsultationPage: React.FC = () => {
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
-      
+
       // Publisher 스트림이 준비되면 발행
       publisher.on('streamCreated', () => {
         console.log('Publisher stream created');
@@ -383,9 +383,9 @@ const VideoConsultationPage: React.FC = () => {
       setPublisher(publisher);
       setIsVideoEnabled(true);
       setIsAudioEnabled(false); // 초기 상태는 오디오 비활성화
-      
+
       console.log('Publisher created and published');
-      
+
     } catch (error) {
       console.error("Error creating publisher:", error);
       throw error;
@@ -443,13 +443,13 @@ const VideoConsultationPage: React.FC = () => {
       alert('연결이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
       return;
     }
-    
+
     // 이미 publisher가 있다면 재시작하지 않음
     if (publisher) {
       console.log('Publisher already exists');
       return;
     }
-  
+
     try {
       await createAndPublishStream(ov, session);
     } catch (error) {
@@ -465,14 +465,14 @@ const VideoConsultationPage: React.FC = () => {
       console.warn('Publisher not available');
       return;
     }
-  
+
     const newVideoState = !isVideoEnabled;
-  
+
     try {
       if (newVideoState) {
         // 비디오 켜기
         await publisher.publishVideo(true);
-        
+
           setTimeout(() => {
           attachLocalVideo(publisher);
         }, 100); // 100ms 후 시도
@@ -481,7 +481,7 @@ const VideoConsultationPage: React.FC = () => {
         await publisher.publishVideo(false);
         console.log('Video disabled');
       }
-  
+
       setIsVideoEnabled(newVideoState);
     } catch (error) {
       console.error("Error toggling video:", error);
@@ -496,9 +496,9 @@ const VideoConsultationPage: React.FC = () => {
       console.warn('Publisher not available');
       return;
     }
-  
+
     const newAudioState = !isAudioEnabled;
-  
+
     try {
       if (newAudioState) {
         // 오디오 켜기
@@ -509,7 +509,7 @@ const VideoConsultationPage: React.FC = () => {
         await publisher.publishAudio(false);
         console.log('Audio disabled');
       }
-  
+
       setIsAudioEnabled(newAudioState);
     } catch (error) {
       console.error("Error toggling audio:", error);
@@ -521,9 +521,9 @@ const VideoConsultationPage: React.FC = () => {
   const checkMediaPermissions = async () => {
     try {
       console.log('Checking media permissions...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
       });
       console.log('Media permissions granted');
       stream.getTracks().forEach(track => track.stop());
@@ -690,6 +690,26 @@ const VideoConsultationPage: React.FC = () => {
     return () => { session.off('signal:chart:sync_state', onSyncState); };
   }, [session]);
 
+  // 드로잉 모드 시그널 수신 처리
+  useEffect(() => {
+    if (!session) return;
+    const onDrawingMode = (e: any) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (typeof msg.enabled === 'boolean') {
+          console.log('Received drawing mode signal:', msg.enabled);
+          setIsDrawingMode(msg.enabled);
+          // Drawing mode state will be passed to StockChart as prop
+          // which will handle the future space addition
+        }
+      } catch (err) {
+        console.error('Failed to parse drawing mode signal:', err);
+      }
+    };
+    session.on('signal:chart:drawingMode', onDrawingMode);
+    return () => { session.off('signal:chart:drawingMode', onDrawingMode); };
+  }, [session]);
+
   // 녹화 시작
   const handleStartRecording = async () => {
     if (!ovSessionId || !consultationId) {
@@ -837,7 +857,7 @@ const VideoConsultationPage: React.FC = () => {
     const initializeConsultation = async () => {
       try {
         console.log('Starting consultation initialization...');
-        
+
         // 1. 미디어 권한 확인
         const hasPermissions = await checkMediaPermissions();
         if (!hasPermissions) {
@@ -851,7 +871,7 @@ const VideoConsultationPage: React.FC = () => {
 
         // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
         console.log('User info fetch completed, OpenVidu initialization will be handled separately');
-        
+
       } catch (error) {
         console.error('Error during consultation initialization:', error);
         alert('상담 초기화 중 오류가 발생했습니다.');
@@ -865,7 +885,7 @@ const VideoConsultationPage: React.FC = () => {
         hasConsultationId: !!consultationId
     });
     }
-  }, [ovToken, consultationId]); 
+  }, [ovToken, consultationId]);
 
   // 사용자 로딩 후 OpenVidu 초기화
   useEffect(() => {
@@ -962,8 +982,8 @@ const VideoConsultationPage: React.FC = () => {
       if (isInSessionRef.current) {
         // 사용자에게 경고 메시지를 표시
         e.preventDefault();
-        e.returnValue = ""; 
-        
+        e.returnValue = "";
+
         sessionStorage.setItem('navigateToMyPageAfterReload', '1');
       }
     };
@@ -1005,7 +1025,7 @@ const VideoConsultationPage: React.FC = () => {
       <div className={`${showStockChart ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl' : 'bg-gray-800'} px-6 py-3 flex items-center justify-between border-b border-gray-700 transition-all duration-300`}>
         <div className="flex items-center space-x-4 flex-1">
           <img src={stalkLogoWhite} alt="Stalk Logo" className="h-6" />
-          
+
           {/* Chart Mode Controls */}
           {showStockChart && (
             <>
@@ -1018,7 +1038,7 @@ const VideoConsultationPage: React.FC = () => {
                   </span>
                 </div>
               )}
-              
+
               {/* Period Controls */}
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-800/40 backdrop-blur-md border border-gray-700/30">
                 <ChartControls
@@ -1029,14 +1049,14 @@ const VideoConsultationPage: React.FC = () => {
                   darkMode={true}
                 />
               </div>
-              
+
               {/* Indicator Controls - Complete set */}
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">지표:</span>
-                
+
                 {/* Volume Indicator */}
                 <div className="flex items-center gap-1">
-                  <button 
+                  <button
                     onClick={() => {
                       setActiveIndicator('volume');
                       if (session) {
@@ -1047,27 +1067,27 @@ const VideoConsultationPage: React.FC = () => {
                       }
                     }}
                     className={`px-2 py-1 rounded text-xs transition-all ${
-                      activeIndicator === 'volume' 
-                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                      activeIndicator === 'volume'
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                         : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
                     }`}
                   >
                     거래량
                   </button>
-                  <div 
+                  <div
                     className="relative"
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const tooltipWidth = 280;
                       const tooltipHeight = 100;
-                      
+
                       let x = rect.right + 8;
                       let y = rect.top + rect.height / 2;
-                      
+
                       if (x + tooltipWidth > window.innerWidth) {
                         x = rect.left - tooltipWidth - 8;
                       }
-                      
+
                       if (y + tooltipHeight / 2 > window.innerHeight) {
                         y = window.innerHeight - tooltipHeight - 8;
                       } else if (y - tooltipHeight / 2 < 0) {
@@ -1075,7 +1095,7 @@ const VideoConsultationPage: React.FC = () => {
                       } else {
                         y = y - tooltipHeight / 2;
                       }
-                      
+
                       setTooltipPosition({ x, y });
                       setHoveredIndicator('volume');
                     }}
@@ -1091,7 +1111,7 @@ const VideoConsultationPage: React.FC = () => {
                 </div>
                 {/* RSI Indicator */}
                 <div className="flex items-center gap-1">
-                  <button 
+                  <button
                     onClick={() => {
                       if (dataPointCount >= 14) {
                         setActiveIndicator('rsi');
@@ -1105,30 +1125,30 @@ const VideoConsultationPage: React.FC = () => {
                     }}
                     disabled={dataPointCount < 14}
                     className={`px-2 py-1 rounded text-xs transition-all ${
-                      dataPointCount < 14 
+                      dataPointCount < 14
                         ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
-                        : activeIndicator === 'rsi' 
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                        : activeIndicator === 'rsi'
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                           : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
                     }`}
                     title={dataPointCount < 14 ? `RSI requires 14+ data points (current: ${dataPointCount})` : ''}
                   >
                     RSI
                   </button>
-                  <div 
+                  <div
                     className="relative"
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const tooltipWidth = 320;
                       const tooltipHeight = 140;
-                      
+
                       let x = rect.right + 8;
                       let y = rect.top + rect.height / 2;
-                      
+
                       if (x + tooltipWidth > window.innerWidth) {
                         x = rect.left - tooltipWidth - 8;
                       }
-                      
+
                       if (y + tooltipHeight / 2 > window.innerHeight) {
                         y = window.innerHeight - tooltipHeight - 8;
                       } else if (y - tooltipHeight / 2 < 0) {
@@ -1136,7 +1156,7 @@ const VideoConsultationPage: React.FC = () => {
                       } else {
                         y = y - tooltipHeight / 2;
                       }
-                      
+
                       setTooltipPosition({ x, y });
                       setHoveredIndicator('rsi');
                     }}
@@ -1152,7 +1172,7 @@ const VideoConsultationPage: React.FC = () => {
                 </div>
                 {/* MACD Indicator */}
                 <div className="flex items-center gap-1">
-                  <button 
+                  <button
                     onClick={() => {
                       if (dataPointCount >= 26) {
                         setActiveIndicator('macd');
@@ -1166,30 +1186,30 @@ const VideoConsultationPage: React.FC = () => {
                     }}
                     disabled={dataPointCount < 26}
                     className={`px-2 py-1 rounded text-xs transition-all ${
-                      dataPointCount < 26 
+                      dataPointCount < 26
                         ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
-                        : activeIndicator === 'macd' 
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                        : activeIndicator === 'macd'
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                           : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
                     }`}
                     title={dataPointCount < 26 ? `MACD requires 26+ data points (current: ${dataPointCount})` : ''}
                   >
                     MACD
                   </button>
-                  <div 
+                  <div
                     className="relative"
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const tooltipWidth = 320;
                       const tooltipHeight = 140;
-                      
+
                       let x = rect.right + 8;
                       let y = rect.top + rect.height / 2;
-                      
+
                       if (x + tooltipWidth > window.innerWidth) {
                         x = rect.left - tooltipWidth - 8;
                       }
-                      
+
                       if (y + tooltipHeight / 2 > window.innerHeight) {
                         y = window.innerHeight - tooltipHeight - 8;
                       } else if (y - tooltipHeight / 2 < 0) {
@@ -1197,7 +1217,7 @@ const VideoConsultationPage: React.FC = () => {
                       } else {
                         y = y - tooltipHeight / 2;
                       }
-                      
+
                       setTooltipPosition({ x, y });
                       setHoveredIndicator('macd');
                     }}
@@ -1213,7 +1233,7 @@ const VideoConsultationPage: React.FC = () => {
                 </div>
                 {/* Stochastic Indicator */}
                 <div className="flex items-center gap-1">
-                  <button 
+                  <button
                     onClick={() => {
                       if (dataPointCount >= 14) {
                         setActiveIndicator('stochastic');
@@ -1227,30 +1247,30 @@ const VideoConsultationPage: React.FC = () => {
                     }}
                     disabled={dataPointCount < 14}
                     className={`px-2 py-1 rounded text-xs transition-all ${
-                      dataPointCount < 14 
+                      dataPointCount < 14
                         ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
-                        : activeIndicator === 'stochastic' 
-                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' 
+                        : activeIndicator === 'stochastic'
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                           : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
                     }`}
                     title={dataPointCount < 14 ? `Stochastic requires 14+ data points (current: ${dataPointCount})` : ''}
                   >
                     스토캐스틱
                   </button>
-                  <div 
+                  <div
                     className="relative"
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const tooltipWidth = 320;
                       const tooltipHeight = 140;
-                      
+
                       let x = rect.right + 8;
                       let y = rect.top + rect.height / 2;
-                      
+
                       if (x + tooltipWidth > window.innerWidth) {
                         x = rect.left - tooltipWidth - 8;
                       }
-                      
+
                       if (y + tooltipHeight / 2 > window.innerHeight) {
                         y = window.innerHeight - tooltipHeight - 8;
                       } else if (y - tooltipHeight / 2 < 0) {
@@ -1258,7 +1278,7 @@ const VideoConsultationPage: React.FC = () => {
                       } else {
                         y = y - tooltipHeight / 2;
                       }
-                      
+
                       setTooltipPosition({ x, y });
                       setHoveredIndicator('stochastic');
                     }}
@@ -1273,10 +1293,10 @@ const VideoConsultationPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Drawing Mode Button */}
               <div className="flex items-center">
-                <button 
+                <button
                   onClick={() => {
                     const newDrawingMode = !isDrawingMode;
                     console.log('Consultation: Toggling drawing mode from', isDrawingMode, 'to', newDrawingMode);
@@ -1289,17 +1309,17 @@ const VideoConsultationPage: React.FC = () => {
                     }
                   }}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                    isDrawingMode 
-                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30' 
+                    isDrawingMode
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30'
                       : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
                   }`}
                 >
                   {isDrawingMode ? '✏️ 그리기 중' : '✏️ 그리기'}
                 </button>
               </div>
-              
+
               {/* Stock Search - moved to right side */}
-              <div className="ml-auto max-w-xs [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0">
+              <div className="ml-auto w-55 [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0 [&_.z-50]:!w-full [&_.z-50]:!right-0 [&_.z-50]:!left-0 [&_.px-4.py-3]:!px-2 [&_.px-4.py-3]:!py-2">
                 <StockSearch
                   onStockSelect={setSelectedStock}
                   darkMode={true}
@@ -1359,7 +1379,7 @@ const VideoConsultationPage: React.FC = () => {
                             }
                           }}
                           autoPlay
-                          playsInline 
+                          playsInline
                           muted={false}
                           id={`subscriber-video-${index}`}
                           className="w-full h-full object-contain"
@@ -1525,9 +1545,9 @@ const VideoConsultationPage: React.FC = () => {
                 <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
                   <div className="flex-1 relative overflow-y-auto chart-scrollbar">
                     {selectedStock ? (
-                      <div 
-                        style={{ 
-                          position: 'relative', 
+                      <div
+                        style={{
+                          position: 'relative',
                           minHeight: '600px',
                           width: '100%',
                           maxWidth: '100%'
@@ -1535,9 +1555,9 @@ const VideoConsultationPage: React.FC = () => {
                       >
                         <ChartErrorBoundary>
                           <div style={{ width: '100%', minHeight: '600px', minWidth: 0 }}>
-                            <StockChart 
+                            <StockChart
                               selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: '' } : null)}
-                              darkMode={true} 
+                              darkMode={true}
                               session={session}
                               chartInfo={currentChart ?? undefined}
                               onChartChange={handleChartChange}
@@ -1749,7 +1769,7 @@ const VideoConsultationPage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* 구독자들 */}
                   {subscribers.map((subscriber, index) => (
                     <div

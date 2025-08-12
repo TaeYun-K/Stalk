@@ -383,6 +383,33 @@ const StockChart: React.FC<StockChartProps> = ({
     }
     if (propDrawingMode !== isDrawingMode) {
       setIsDrawingMode(propDrawingMode);
+      
+      // When drawing mode is activated, automatically add future space
+      if (propDrawingMode && !isDrawingMode) {
+        // Add 30 days of future space when entering drawing mode
+        setFutureDays(30);
+        
+        // Show scroll indicator briefly
+        setScrollIndicatorVisible(true);
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = setTimeout(() => {
+          setScrollIndicatorVisible(false);
+        }, 2000);
+        
+        // Small delay to ensure chart is rendered with future space
+        setTimeout(() => {
+          const chartContainer = document.querySelector('.chart-container');
+          if (chartContainer) {
+            // Just ensure the chart is visible, don't auto-scroll
+            chartContainer.scrollLeft = 0;
+          }
+        }, 100);
+      } else if (!propDrawingMode && isDrawingMode) {
+        // When exiting drawing mode, reset future space to 0
+        setFutureDays(0);
+      }
     }
 
     // period: chartInfo가 없을 때만 보조로 반영
@@ -2698,12 +2725,19 @@ const StockChart: React.FC<StockChartProps> = ({
         <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} shadow-xl border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col min-h-0`}>
 
             {/* Main Price Chart Section - Dynamic height based on indicator */}
-            <div className="relative" style={{ minHeight: '300px', height: 'auto' }}>
+            <div className="relative chart-container" style={{ 
+              minHeight: '300px', 
+              height: 'auto', 
+              overflowX: isDrawingMode && futureDays > 0 ? 'auto' : 'hidden',
+              overflowY: 'hidden'
+            }}>
               <div
-                className="h-full relative"
+                className={`h-full relative ${isDrawingMode && futureDays > 0 ? 'chart-scrollbar' : ''}`}
                 style={{
                   padding: '20px 20px 10px 20px',
-                  cursor: isDrawingMode ? 'default' : 'default'
+                  cursor: isDrawingMode ? 'default' : 'default',
+                  width: isDrawingMode && futureDays > 0 ? '150%' : '100%',
+                  minWidth: '100%'
                 }}
                 ref={chartContainerRef}>
                 {isLoading && (
@@ -2737,50 +2771,49 @@ const StockChart: React.FC<StockChartProps> = ({
                   <>
                     <Line data={chartData} options={chartOptions} ref={chartRef} />
 
-                    {/* Future period visual indicator - subtle overlay only */}
-                    {enableFutureSpace && futureDays > 0 && chartData.actualDataLength < chartData.labels.length && (
-                      <div
-                        className="absolute top-0 bottom-0 pointer-events-none"
-                        style={{
-                          left: `${(chartData.actualDataLength / chartData.labels.length) * 100}%`,
-                          right: 0,
-                          background: darkMode
-                            ? 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.02) 50%, rgba(59, 130, 246, 0.04) 100%)'
-                            : 'linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.01) 50%, rgba(59, 130, 246, 0.02) 100%)',
-                          borderLeft: `1px dashed ${darkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.3)'}`
-                        }}
-                      />
-                    )}
 
-                    {/* Relocated Future Space Indicator - Top left corner, more subtle */}
+                    {/* Future Space Indicator - Enhanced for drawing mode */}
                     {enableFutureSpace && futureDays > 0 && (
                       <div
                         className={`absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md backdrop-blur-sm transition-all duration-500 ${
-                          darkMode 
-                            ? 'bg-white/10 border border-white/20' 
-                            : 'bg-black/10'
+                          isDrawingMode
+                            ? darkMode 
+                              ? 'bg-purple-600/20 border border-purple-500/30' 
+                              : 'bg-purple-100/80 border border-purple-300'
+                            : darkMode 
+                              ? 'bg-white/10 border border-white/20' 
+                              : 'bg-black/10'
                         }`}
-                        style={{ opacity: scrollIndicatorVisible ? 0.7 : 0.4 }}
+                        style={{ opacity: isDrawingMode || scrollIndicatorVisible ? 0.9 : 0.4 }}
                       >
                         <span className={`text-[10px] font-medium ${
-                          darkMode ? 'text-white/70' : 'text-black/60'
+                          isDrawingMode
+                            ? darkMode ? 'text-purple-300' : 'text-purple-700'
+                            : darkMode ? 'text-white/70' : 'text-black/60'
                         }`}>
-                          미래 {futureDays}일
+                          {isDrawingMode ? '✏️ 그리기 영역: ' : ''}미래 {futureDays}일
                         </span>
                       </div>
                     )}
+                    
 
                   </>
                 )}
 
-                {/* Always render the canvas container to avoid DOM manipulation issues */}
+                {/* Drawing canvas - positioned relative to chart content */}
                 <div
                   id="drawing-canvas"
-                  className={`absolute inset-0 ${isDrawingMode ? 'pointer-events-auto' : 'pointer-events-none'}`}
+                  className={`${isDrawingMode ? 'pointer-events-auto' : 'pointer-events-none'}`}
                   style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
                     display: isDrawingMode ? 'block' : 'none',
                     opacity: isCanvasReady ? 1 : 0,
-                    transition: 'opacity 0.3s'
+                    transition: 'opacity 0.3s',
+                    width: '100%',
+                    right: 0
                   }}
                 />
               </div>
