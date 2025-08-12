@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
-import tossLogoBlue from '@/assets/images/logos/Toss_logo_blue.svg';
-import checkIcon from '@/assets/images/icons/check_icon.svg';
-import sidebarSlideupIcon from '@/assets/images/icons/sidebar_slideup_icon.svg';
-import likeClickIcon from '@/assets/images/icons/like_click_icon.svg';
-import sidebarOpenCloseIcon from '@/assets/images/icons/sidebar_openclose_icon.svg';
-import { useWatchlist } from '@/context/WatchlistContext';
-import NotificationService from '@/services/notificationService';
-import ReservationService from '@/services/reservationService';
-import CommunityService from '@/services/communityService';
-import AuthService from '@/services/authService';
-import kofiaLogo from '@/assets/images/logos/kofia_logo.png';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useNavigate, useLocation } from "react-router-dom";
+import tossLogoBlue from "@/assets/images/logos/Toss_logo_blue.svg";
+import checkIcon from "@/assets/images/icons/check_icon.svg";
+import sidebarSlideupIcon from "@/assets/images/icons/sidebar_slideup_icon.svg";
+import likeClickIcon from "@/assets/images/icons/like_click_icon.svg";
+import sidebarOpenCloseIcon from "@/assets/images/icons/sidebar_openclose_icon.svg";
+import { useWatchlist } from "@/context/WatchlistContext";
+import FavoriteStockService from "@/services/favoriteStockService";
+import NotificationService from "@/services/notificationService";
+import ReservationService from "@/services/reservationService";
+import CommunityService from "@/services/communityService";
+import AuthService from "@/services/authService";
+import kofiaLogo from "@/assets/images/logos/kofia_logo.png";
 
 interface MenuItem {
   id: string;
@@ -54,10 +55,10 @@ const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { userRole } = useAuth();
-  const isHomePage = location.pathname === '/';
+  const isHomePage = location.pathname === "/";
   const { watchlist, removeFromWatchlist } = useWatchlist();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
-  const [selectedMenu, setSelectedMenu] = useState<string>('notifications');
+  const [selectedMenu, setSelectedMenu] = useState<string>("notifications");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [knowledgePosts, setKnowledgePosts] = useState<KnowledgePost[]>([]);
@@ -65,63 +66,63 @@ const Sidebar: React.FC = () => {
 
   const getAllMenuItems = (): MenuItem[] => [
     {
-      id: 'notifications',
-      label: '알림',
-      path: '/notifications',
-      icon: '🔔'
+      id: "notifications",
+      label: "알림",
+      path: "/notifications",
+      icon: "🔔",
     },
     {
-      id: 'certification',
-      label: '자격인증',
-      path: '/admin',
-      icon: 'kofia' // 특별한 값으로 kofia 로고 사용
+      id: "certification",
+      label: "자격인증",
+      path: "/admin",
+      icon: "kofia", // 특별한 값으로 kofia 로고 사용
     },
     {
-      id: 'watchlist',
-      label: '관심종목',
-      path: '/watchlist',
-      icon: '❤️'
+      id: "watchlist",
+      label: "관심종목",
+      path: "/watchlist",
+      icon: "❤️",
     },
     {
-      id: 'holdings',
-      label: '보유종목',
-      path: '/holdings',
-      icon: '🛒'
+      id: "holdings",
+      label: "보유종목",
+      path: "/holdings",
+      icon: "🛒",
     },
     {
-      id: 'reservations',
-      label: '예약내역',
-      path: '/reservations',
-      icon: '📅'
+      id: "reservations",
+      label: "예약내역",
+      path: "/reservations",
+      icon: "📅",
     },
     {
-      id: 'knowledge-board',
-      label: '투자 지식iN',
-      path: '/knowledge-board',
-      icon: '📚'
-    }
+      id: "knowledge-board",
+      label: "투자 지식iN",
+      path: "/knowledge-board",
+      icon: "📚",
+    },
   ];
 
   const menuItems: MenuItem[] = getAllMenuItems().filter((item) => {
-    if (userRole === 'ADMIN') {
+    if (userRole === "ADMIN") {
       // ADMIN은 알림과 자격인증만 보이게
-      return item.id === 'notifications' || item.id === 'certification';
+      return item.id === "notifications" || item.id === "certification";
     } else {
       // USER, ADVISOR는 자격인증을 제외한 모든 메뉴
-      return item.id !== 'certification';
+      return item.id !== "certification";
     }
   });
 
   // 알림 데이터 로드
   const loadNotifications = async () => {
     if (!AuthService.isLoggedIn()) return;
-    
+
     try {
       setLoading(true);
       const response = await NotificationService.getNotifications(1, 10);
       setNotifications(response.content);
     } catch (error) {
-      console.error('알림 로드 실패:', error);
+      console.error("알림 로드 실패:", error);
     } finally {
       setLoading(false);
     }
@@ -130,14 +131,16 @@ const Sidebar: React.FC = () => {
   // 예약 내역 데이터 로드
   const loadReservations = async () => {
     if (!AuthService.isLoggedIn()) return;
-    
+
     try {
       setLoading(true);
       const response = await ReservationService.getReservations(1, 20);
-      const sortedReservations = ReservationService.sortReservations(response.content);
+      const sortedReservations = ReservationService.sortReservations(
+        response.content
+      );
       setReservations(sortedReservations);
     } catch (error) {
-      console.error('예약 내역 로드 실패:', error);
+      console.error("예약 내역 로드 실패:", error);
     } finally {
       setLoading(false);
     }
@@ -146,13 +149,13 @@ const Sidebar: React.FC = () => {
   // 투자 지식iN 데이터 로드
   const loadKnowledgePosts = async () => {
     if (!AuthService.isLoggedIn()) return;
-    
+
     try {
       setLoading(true);
-      const response = await CommunityService.getMyPosts('ALL', 1, 50);
+      const response = await CommunityService.getMyPosts("ALL", 1, 50);
       setKnowledgePosts(response.content);
     } catch (error) {
-      console.error('투자 지식iN 로드 실패:', error);
+      console.error("투자 지식iN 로드 실패:", error);
     } finally {
       setLoading(false);
     }
@@ -162,23 +165,23 @@ const Sidebar: React.FC = () => {
   const handleMarkAsRead = async (notificationId: number) => {
     try {
       await NotificationService.markAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.notificationId === notificationId 
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.notificationId === notificationId
             ? { ...notification, isRead: true }
             : notification
         )
       );
     } catch (error) {
-      console.error('읽음 처리 실패:', error);
+      console.error("읽음 처리 실패:", error);
     }
   };
 
   // 메뉴 클릭 시 데이터 로드
   const handleMenuClick = (menuId: string) => {
     // 자격인증 클릭 시 admin 페이지로 이동
-    if (menuId === 'certification') {
-      navigate('/admin');
+    if (menuId === "certification") {
+      navigate("/admin");
       return;
     }
 
@@ -187,16 +190,16 @@ const Sidebar: React.FC = () => {
     } else {
       setSelectedMenu(menuId);
       setIsCollapsed(false);
-      
+
       // 메뉴별 데이터 로드
       switch (menuId) {
-        case 'notifications':
+        case "notifications":
           loadNotifications();
           break;
-        case 'reservations':
+        case "reservations":
           loadReservations();
           break;
-        case 'knowledge-board':
+        case "knowledge-board":
           loadKnowledgePosts();
           break;
       }
@@ -206,7 +209,7 @@ const Sidebar: React.FC = () => {
   const handleToggleSidebar = () => {
     if (isCollapsed) {
       // 사이드바가 닫혀있으면 알림으로 열기
-      setSelectedMenu('notifications');
+      setSelectedMenu("notifications");
       setIsCollapsed(false);
       loadNotifications(); // 알림 데이터 로드
     } else {
@@ -218,17 +221,23 @@ const Sidebar: React.FC = () => {
   const scrollToTop = () => {
     window.scrollTo({
       top: 0,
-      behavior: 'smooth'
+      behavior: "smooth",
     });
   };
 
-  const toggleLike = (stockCode: string) => {
-    removeFromWatchlist(stockCode);
+  const toggleLike = async (stockCode: string) => {
+    try {
+      // Optimistic UI remove
+      removeFromWatchlist(stockCode);
+      await FavoriteStockService.removeFavoriteStock(stockCode);
+    } catch (e) {
+      console.error("관심종목 삭제 실패:", e);
+    }
   };
 
   const renderContent = () => {
     switch (selectedMenu) {
-      case 'notifications':
+      case "notifications":
         return (
           <div className="p-6">
             <div className="space-y-6">
@@ -241,19 +250,31 @@ const Sidebar: React.FC = () => {
                       <img src={checkIcon} alt="check" className="w-6 h-6" />
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center text-left text-sm text-gray-500 mb-2">
-                          <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                          <span>
+                            {new Date(notification.createdAt).toLocaleString()}
+                          </span>
                           <div className="flex items-center space-x-2">
                             {!notification.isRead && (
                               <button
                                 className="text-xs text-blue-500 hover:text-blue-700"
-                                onClick={() => handleMarkAsRead(notification.notificationId)}
+                                onClick={() =>
+                                  handleMarkAsRead(notification.notificationId)
+                                }
                               >
                                 읽음
                               </button>
                             )}
                             <button
                               className="w-6 h-6 flex items-center justify-center bg-transparent hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-700 transition-colors ml-2"
-                              onClick={() => setNotifications(notifications.filter(n => n.notificationId !== notification.notificationId))}
+                              onClick={() =>
+                                setNotifications(
+                                  notifications.filter(
+                                    (n) =>
+                                      n.notificationId !==
+                                      notification.notificationId
+                                  )
+                                )
+                              }
                               aria-label="알림 삭제"
                             >
                               ×
@@ -273,38 +294,54 @@ const Sidebar: React.FC = () => {
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   <div className="text-lg mb-2">알림이 없습니다</div>
-                  <div className="text-sm">새로운 알림이 오면 여기에 표시됩니다</div>
+                  <div className="text-sm">
+                    새로운 알림이 오면 여기에 표시됩니다
+                  </div>
                 </div>
               )}
             </div>
           </div>
         );
-      case 'watchlist':
+      case "watchlist":
         return (
           <div className="p-6">
             <div className="space-y-4">
               {watchlist.map((item) => (
                 <div key={item.code} className="py-2 rounded-lg">
                   <div className="flex items-center space-x-3">
-                    <button 
+                    <button
                       onClick={() => toggleLike(item.code)}
                       className="flex-shrink-0 p-2 hover:bg-gray-100 rounded-full transition-colors"
                     >
-                      <img 
-                        src={likeClickIcon} 
-                        alt="like" 
-                        className="w-5 h-5" 
-                      />
+                      <img src={likeClickIcon} alt="like" className="w-5 h-5" />
                     </button>
                     <div className="flex-1 flex justify-between items-center">
                       <div>
-                        <div className="font-semibold text-gray-900">{item.name}</div>
+                        <div className="font-semibold text-gray-900">
+                          {item.name}
+                        </div>
                         <div className="text-sm text-gray-500">{item.code}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-gray-900">{item.price.toLocaleString()}원</div>
-                        <div className={`text-sm ${item.change > 0 ? 'text-red-500' : item.change < 0 ? 'text-blue-500' : 'text-gray-500'}`}>
-                          {item.change > 0 ? '+' : ''}{item.change}%
+                        <div className="font-semibold text-gray-900">
+                          {item.price.toLocaleString()}원
+                        </div>
+                        <div
+                          className={`text-sm ${
+                            item.changeAmount > 0
+                              ? "text-red-500"
+                              : item.changeAmount < 0
+                              ? "text-blue-500"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          {item.changeAmount === 0
+                            ? "— 0원 (0.00%)"
+                            : `${item.changeAmount > 0 ? "▲" : "▼"} ${Math.abs(
+                                item.changeAmount
+                              ).toLocaleString()}원 (${Math.abs(
+                                item.changeRate
+                              ).toFixed(2)}%)`}
                         </div>
                       </div>
                     </div>
@@ -320,7 +357,7 @@ const Sidebar: React.FC = () => {
             </div>
           </div>
         );
-      case 'holdings':
+      case "holdings":
         return (
           <div className="p-6">
             <div className="space-y-4">
@@ -330,7 +367,9 @@ const Sidebar: React.FC = () => {
                   <div className="text-sm text-gray-500">10주</div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">평균매수가: 195,000원</div>
+                  <div className="text-sm text-gray-600">
+                    평균매수가: 195,000원
+                  </div>
                   <div className="text-sm text-blue-500">+5.2%</div>
                 </div>
               </div>
@@ -340,18 +379,22 @@ const Sidebar: React.FC = () => {
                   <div className="text-sm text-gray-500">5주</div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">평균매수가: 420,000원</div>
+                  <div className="text-sm text-gray-600">
+                    평균매수가: 420,000원
+                  </div>
                   <div className="text-sm text-red-500">-2.1%</div>
                 </div>
               </div>
               <div className="text-center py-8 text-gray-500">
                 <div className="text-lg mb-2">보유종목 기능 준비 중</div>
-                <div className="text-sm">상품조회 페이지에서 추가할 수 있습니다</div>
+                <div className="text-sm">
+                  상품조회 페이지에서 추가할 수 있습니다
+                </div>
               </div>
             </div>
           </div>
         );
-      case 'reservations':
+      case "reservations":
         return (
           <div className="p-6">
             <div className="space-y-4">
@@ -359,22 +402,37 @@ const Sidebar: React.FC = () => {
                 <div className="text-center py-4 text-gray-500">로딩 중...</div>
               ) : reservations.length > 0 ? (
                 reservations.map((reservation) => (
-                  <div key={reservation.reservationId} className="border rounded-lg p-4">
+                  <div
+                    key={reservation.reservationId}
+                    className="border rounded-lg p-4"
+                  >
                     <div className="flex justify-between items-start mb-2">
-                      <div className="font-semibold text-gray-900">{reservation.advisorName}</div>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        reservation.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                        reservation.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
-                        reservation.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {reservation.status === 'PENDING' ? '대기중' :
-                         reservation.status === 'CONFIRMED' ? '확정' :
-                         reservation.status === 'COMPLETED' ? '완료' : '취소'}
+                      <div className="font-semibold text-gray-900">
+                        {reservation.advisorName}
+                      </div>
+                      <span
+                        className={`text-xs px-2 py-1 rounded ${
+                          reservation.status === "PENDING"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : reservation.status === "CONFIRMED"
+                            ? "bg-blue-100 text-blue-800"
+                            : reservation.status === "COMPLETED"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {reservation.status === "PENDING"
+                          ? "대기중"
+                          : reservation.status === "CONFIRMED"
+                          ? "확정"
+                          : reservation.status === "COMPLETED"
+                          ? "완료"
+                          : "취소"}
                       </span>
                     </div>
                     <div className="text-sm text-gray-600 mb-2">
-                      {reservation.consultationDate} {reservation.consultationTime}
+                      {reservation.consultationDate}{" "}
+                      {reservation.consultationTime}
                     </div>
                     {reservation.requestMessage && (
                       <div className="text-sm text-gray-500">
@@ -392,7 +450,7 @@ const Sidebar: React.FC = () => {
             </div>
           </div>
         );
-      case 'knowledge-board':
+      case "knowledge-board":
         return (
           <div className="p-6">
             <div className="space-y-4">
@@ -400,7 +458,10 @@ const Sidebar: React.FC = () => {
                 <div className="text-center py-4 text-gray-500">로딩 중...</div>
               ) : knowledgePosts.length > 0 ? (
                 knowledgePosts.map((post) => (
-                  <div key={post.postId} className="bg-white border rounded-lg p-4 shadow-sm">
+                  <div
+                    key={post.postId}
+                    className="bg-white border rounded-lg p-4 shadow-sm"
+                  >
                     <div className="font-semibold text-gray-900 mb-2 line-clamp-2">
                       {post.title}
                     </div>
@@ -409,13 +470,17 @@ const Sidebar: React.FC = () => {
                         <span>👁️ {post.viewCount}</span>
                         <span>💬 {post.commentCount}</span>
                       </div>
-                      <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                      <span>
+                        {new Date(post.createdAt).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  <div className="text-lg mb-2">작성한 투자 지식이 없습니다</div>
+                  <div className="text-lg mb-2">
+                    작성한 투자 지식이 없습니다
+                  </div>
                   <div className="text-sm">투자 지식을 공유해보세요</div>
                 </div>
               )}
@@ -428,39 +493,39 @@ const Sidebar: React.FC = () => {
   };
 
   const getCurrentMenuLabel = () => {
-    return menuItems.find(item => item.id === selectedMenu)?.label || '알림';
+    return menuItems.find((item) => item.id === selectedMenu)?.label || "알림";
   };
 
   // Push content style for body and navbar
   useEffect(() => {
     // 홈페이지에서는 margin을 적용하지 않음
     if (isHomePage) return;
-    
-    const navbar = document.querySelector('nav');
-    
+
+    const navbar = document.querySelector("nav");
+
     // 초기 렌더링 시에도 collapsed 상태에 맞는 margin 설정
     if (!isCollapsed) {
-      document.body.style.marginRight = '384px'; // 64px (collapsed sidebar) + 320px (panel width: w-80)
-      document.body.style.transition = 'margin-right 0.3s ease';
+      document.body.style.marginRight = "384px"; // 64px (collapsed sidebar) + 320px (panel width: w-80)
+      document.body.style.transition = "margin-right 0.3s ease";
       if (navbar) {
-        navbar.style.marginRight = '384px';
-        navbar.style.transition = 'margin-right 0.3s ease';
+        navbar.style.marginRight = "384px";
+        navbar.style.transition = "margin-right 0.3s ease";
       }
     } else {
-      document.body.style.marginRight = '64px'; // 64px (collapsed sidebar width)
-      document.body.style.transition = 'margin-right 0.3s ease';
+      document.body.style.marginRight = "64px"; // 64px (collapsed sidebar width)
+      document.body.style.transition = "margin-right 0.3s ease";
       if (navbar) {
-        navbar.style.marginRight = '64px';
-        navbar.style.transition = 'margin-right 0.3s ease';
+        navbar.style.marginRight = "64px";
+        navbar.style.transition = "margin-right 0.3s ease";
       }
     }
 
     return () => {
-      document.body.style.marginRight = '0';
-      document.body.style.transition = '';
+      document.body.style.marginRight = "0";
+      document.body.style.transition = "";
       if (navbar) {
-        navbar.style.marginRight = '0';
-        navbar.style.transition = '';
+        navbar.style.marginRight = "0";
+        navbar.style.transition = "";
       }
     };
   }, [isCollapsed, isHomePage]);
@@ -469,24 +534,24 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     // 홈페이지에서는 margin을 적용하지 않음
     if (isHomePage) return;
-    
-    const navbar = document.querySelector('nav');
-    
+
+    const navbar = document.querySelector("nav");
+
     // 사이드바가 collapsed 상태일 때의 초기 margin 설정
-    document.body.style.marginRight = '64px';
-    document.body.style.transition = 'margin-right 0.3s ease';
+    document.body.style.marginRight = "64px";
+    document.body.style.transition = "margin-right 0.3s ease";
     if (navbar) {
-      navbar.style.marginRight = '64px';
-      navbar.style.transition = 'margin-right 0.3s ease';
+      navbar.style.marginRight = "64px";
+      navbar.style.transition = "margin-right 0.3s ease";
     }
 
     // 컴포넌트 언마운트 시 cleanup
     return () => {
-      document.body.style.marginRight = '0';
-      document.body.style.transition = '';
+      document.body.style.marginRight = "0";
+      document.body.style.transition = "";
       if (navbar) {
-        navbar.style.marginRight = '0';
-        navbar.style.transition = '';
+        navbar.style.marginRight = "0";
+        navbar.style.transition = "";
       }
     };
   }, [isHomePage]); // isHomePage 의존성 추가
@@ -495,16 +560,16 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     // 홈페이지에서는 margin을 적용하지 않음
     if (isHomePage) return;
-    
-    const navbar = document.querySelector('nav');
+
+    const navbar = document.querySelector("nav");
     if (navbar) {
       // 현재 collapsed 상태에 맞는 margin 설정
       if (!isCollapsed) {
-        navbar.style.marginRight = '384px';
-        navbar.style.transition = 'margin-right 0.3s ease';
+        navbar.style.marginRight = "384px";
+        navbar.style.transition = "margin-right 0.3s ease";
       } else {
-        navbar.style.marginRight = '64px';
-        navbar.style.transition = 'margin-right 0.3s ease';
+        navbar.style.marginRight = "64px";
+        navbar.style.transition = "margin-right 0.3s ease";
       }
     }
   }); // 의존성 배열 없이 모든 렌더링에서 실행
@@ -513,21 +578,21 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      
+
       // 사이드바 영역 내부 클릭인지 확인
-      const isSidebarClick = target.closest('.sidebar-container');
-      
+      const isSidebarClick = target.closest(".sidebar-container");
+
       if (!isCollapsed && !isSidebarClick) {
         setIsCollapsed(true);
       }
     };
 
     if (!isCollapsed) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isCollapsed]);
 
@@ -541,16 +606,16 @@ const Sidebar: React.FC = () => {
             onClick={handleToggleSidebar}
             className="w-12 h-12 rounded-lg flex items-center justify-center transition-all duration-300 text-gray-600 hover:bg-gray-100"
           >
-            <img 
-              src={sidebarOpenCloseIcon} 
-              alt="toggle sidebar" 
+            <img
+              src={sidebarOpenCloseIcon}
+              alt="toggle sidebar"
               className={`w-6 h-6 transition-transform duration-300 ${
-                !isCollapsed ? 'rotate-180' : ''
+                !isCollapsed ? "rotate-180" : ""
               }`}
             />
           </button>
         </div>
-        
+
         {/* Menu Items */}
         <div className="flex-1 flex flex-col items-center py-4 space-y-4">
           {menuItems.map((item) => (
@@ -559,34 +624,40 @@ const Sidebar: React.FC = () => {
                 onClick={() => handleMenuClick(item.id)}
                 className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
                   selectedMenu === item.id && !isCollapsed
-                    ? 'bg-blue-100 text-blue-600'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? "bg-blue-100 text-blue-600"
+                    : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
-                {item.icon === 'kofia' ? (
+                {item.icon === "kofia" ? (
                   <img src={kofiaLogo} alt="kofia" className="w-5 h-5" />
                 ) : (
                   <span className="text-xl">{item.icon}</span>
                 )}
               </button>
-              <span className="text-xs text-gray-500 font-medium">{item.label}</span>
+              <span className="text-xs text-gray-500 font-medium">
+                {item.label}
+              </span>
             </div>
           ))}
         </div>
 
         {/* Bottom Icons */}
         <div className="pb-4 flex flex-col items-center space-y-2">
-          <button 
-            onClick={() => window.open('https://www.tossinvest.com/', '_blank')}
+          <button
+            onClick={() => window.open("https://www.tossinvest.com/", "_blank")}
             className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors border border-gray-200"
           >
             <img src={tossLogoBlue} alt="Toss" className="w-6 h-6" />
           </button>
-          <button 
+          <button
             onClick={scrollToTop}
             className="w-10 h-10 border border-gray-200 bg-white rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
           >
-            <img src={sidebarSlideupIcon} alt="scroll to top" className="w-5 h-5" />
+            <img
+              src={sidebarSlideupIcon}
+              alt="scroll to top"
+              className="w-5 h-5"
+            />
           </button>
         </div>
       </div>
@@ -595,28 +666,31 @@ const Sidebar: React.FC = () => {
       {!isCollapsed && (
         <div className="sidebar-container fixed right-20 top-0 h-full bg-white shadow-xl border-l border-gray-200 w-80 z-[9998]">
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900">{getCurrentMenuLabel()}</h2>
-            {selectedMenu === 'notifications' && (
-              <button className="text-sm text-gray-500 hover:text-gray-700" onClick={() => setNotifications([])}>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {getCurrentMenuLabel()}
+            </h2>
+            {selectedMenu === "notifications" && (
+              <button
+                className="text-sm text-gray-500 hover:text-gray-700"
+                onClick={() => setNotifications([])}
+              >
                 모두 비우기
               </button>
             )}
-            {selectedMenu === 'watchlist' && (
-              <button 
+            {selectedMenu === "watchlist" && (
+              <button
                 className="text-sm text-blue-500 hover:text-blue-700"
-                onClick={() => navigate('/products')}
+                onClick={() => navigate("/products")}
               >
                 + 추가
               </button>
             )}
           </div>
-          <div className="overflow-y-auto h-full">
-            {renderContent()}
-          </div>
+          <div className="overflow-y-auto h-full">{renderContent()}</div>
         </div>
       )}
     </>
   );
 };
 
-export default Sidebar; 
+export default Sidebar;
