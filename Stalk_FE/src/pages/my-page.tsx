@@ -35,6 +35,7 @@ interface ConsultationItem {
   expert: string;
   videoConsultation: string;
   action: string;
+  status?: 'scheduled' | 'completed' | 'cancelled';
 }
 
 // 영상 분석 결과 타입 정의
@@ -543,7 +544,7 @@ const MyPage = () => {
       if (data.isSuccess && data.result) {
         const reservations = data.result.content || [];
 
-        // 예약 데이터를 ConsultationItem 형태로 변환
+        // 예약 데이터를 ConsultationItem 형태로 변환 및 정렬
         const scheduledConsultations: ConsultationItem[] = [];
         const completedConsultations: ConsultationItem[] = [];
 
@@ -558,6 +559,14 @@ const MyPage = () => {
             advisorUserId?: number;
             profileImageUrl?: string;
           }) => {
+            const rawStatus = (reservation.status || '').toUpperCase();
+            const normalizedStatus: ConsultationItem['status'] =
+              ['CANCELLED', 'CANCELED', 'CANCEL', 'CANCELLED_BY_USER', 'REJECTED'].includes(rawStatus)
+                ? 'cancelled'
+                : ['COMPLETED', 'APPROVED', 'DONE'].includes(rawStatus)
+                ? 'completed'
+                : 'scheduled';
+
             const consultationItem: ConsultationItem = {
               id: reservation.reservationId?.toString() || "",
               date: reservation.consultationDate || "",
@@ -568,18 +577,29 @@ const MyPage = () => {
                 reservation.advisorUserId?.toString() ||
                 "전문가",
               videoConsultation:
-                reservation.status === "APPROVED" ? "상담 완료" : "상담 입장",
+                normalizedStatus === "completed" ? "상담 완료" : "상담 입장",
               action:
-                reservation.status === "APPROVED" ? "상세보기" : "취소 요청",
+                normalizedStatus === "completed" ? "상세보기" : normalizedStatus === 'cancelled' ? '취소됨' : "취소 요청",
+              status: normalizedStatus,
             };
 
-            if (reservation.status === "APPROVED") {
+            if (normalizedStatus === "completed") {
               completedConsultations.push(consultationItem);
             } else {
               scheduledConsultations.push(consultationItem);
             }
           }
         );
+
+        // 다가오는 일정 우선, 취소 항목은 하단 배치
+        scheduledConsultations.sort((a, b) => {
+          const aCancelled = a.status === 'cancelled';
+          const bCancelled = b.status === 'cancelled';
+          if (aCancelled !== bCancelled) return aCancelled ? 1 : -1;
+          const aTime = new Date(`${a.date} ${a.time}`).getTime();
+          const bTime = new Date(`${b.date} ${b.time}`).getTime();
+          return aTime - bTime;
+        });
 
         setRealConsultationData({
           "상담 전": scheduledConsultations,
@@ -1176,16 +1196,15 @@ const MyPage = () => {
                       </button>
                       <button
                         onClick={() => {
-                          // 현재 사용자 정보로 profileForm 초기화
-                          setProfileForm({
-                            nickname: userProfile?.nickname || userInfo?.userName || "",
-                            selectedAvatar: "fox", // 기본값
+                          setEditInfoForm({
+                            name: userProfile?.name || editInfoForm.name || "",
+                            contact: userProfile?.contact || editInfoForm.contact || "",
                           });
-                          setShowProfileEditModal(true);
+                          setShowEditInfoModal(true);
                         }}
                         className="text-blue-600 hover:text-blue-700 font-medium"
                       >
-                        프로필 편집
+                        내 정보 수정
                       </button>
                     </div>
                   </div>
@@ -1487,8 +1506,12 @@ const MyPage = () => {
                               </td>
                               <td className="px-4 py-3 text-left">
                                 <button
-                                  className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors"
+                                  className={`${(item.status === 'cancelled' || consultationTab === '상담 완료')
+                                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                                    : 'bg-gray-500 text-white hover:bg-gray-600'
+                                  } px-3 py-1 rounded-lg text-sm transition-colors`}
                                   onClick={() => handleEnterConsultation(item)}
+                                  disabled={item.status === 'cancelled' || consultationTab === '상담 완료'}
                                 >
                                   {item.videoConsultation}
                                 </button>
@@ -1496,8 +1519,11 @@ const MyPage = () => {
                               <td className="px-4 py-3">
                                 <button
                                   onClick={() => handleCancelConsultation(item)}
-                                  className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors"
-                                  disabled={isCancelling}
+                                  className={`${item.status === 'cancelled'
+                                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                                    : 'bg-red-500 text-white hover:bg-red-600'
+                                  } px-3 py-1 rounded-lg text-sm transition-colors`}
+                                  disabled={isCancelling || item.status === 'cancelled'}
                                 >
                                   {item.action}
                                 </button>
