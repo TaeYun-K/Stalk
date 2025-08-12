@@ -354,6 +354,10 @@ const StockChart: React.FC<StockChartProps> = ({
         if (!info?.ticker || !info?.period) return;
         setSharedChart(info);
         setPeriod(info.period);
+
+        console.log('[chart] apply', info);
+
+      
         fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
     };
@@ -729,6 +733,11 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
+      console.log('[fetch] start', {
+        ticker: override?.ticker ?? getCurrentTicker(),
+        period: override?.period ?? period
+      }); 
+
       // More comprehensive market type detection - same logic as in use-stock-data.ts
       const ticker = override?.ticker ?? getCurrentTicker();
       let marketType: string;
