@@ -55,7 +55,7 @@ const Sidebar: React.FC = () => {
   const location = useLocation();
   const { userRole } = useAuth();
   const isHomePage = location.pathname === '/';
-  const { watchlist, removeFromWatchlist } = useWatchlist();
+  const { watchlist, removeFromWatchlist, reloadWatchlist } = useWatchlist();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
   const [selectedMenu, setSelectedMenu] = useState<string>('notifications');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -210,6 +210,8 @@ const Sidebar: React.FC = () => {
       setSelectedMenu('notifications');
       setIsCollapsed(false);
       loadNotifications(); // 알림 데이터 로드
+      // 관심종목도 서버에서 최신화
+      void reloadWatchlist();
     } else {
       // 사이드바가 열려있으면 닫기
       setIsCollapsed(true);
@@ -302,7 +304,6 @@ const Sidebar: React.FC = () => {
                         <div className="font-semibold text-gray-900">{item.name}</div>
                         <div className="text-sm text-gray-500">{item.code}</div>
                       </div>
-                      
                     </div>
                   </div>
                 </div>

@@ -2,12 +2,14 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { WatchlistItem } from '@/types';
 import FavoriteStockService from '@/services/favoriteStockService';
 import AuthService from '@/services/authService';
+import { useAuth } from '@/context/AuthContext';
 
 interface WatchlistContextType {
   watchlist: WatchlistItem[];
   addToWatchlist: (item: WatchlistItem) => void;
   removeFromWatchlist: (code: string) => void;
   isInWatchlist: (code: string) => boolean;
+  reloadWatchlist: () => Promise<void>;
 }
 
 const WatchlistContext = createContext<WatchlistContextType | undefined>(undefined);
@@ -26,28 +28,33 @@ interface WatchlistProviderProps {
 
 export const WatchlistProvider: React.FC<WatchlistProviderProps> = ({ children }) => {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const { isLoggedIn } = useAuth();
 
-  // 서버에서 관심 종목 초기 로드
+  // 서버에서 관심 종목 로드 함수 (초기/수동 새로고침 공용)
+  const reloadWatchlist = async (): Promise<void> => {
+    if (!AuthService.isLoggedIn()) return;
+    try {
+      const favorites = await FavoriteStockService.list();
+      const mapped: WatchlistItem[] = favorites.map((f) => ({
+        code: f.ticker,
+        name: f.name,
+        price: Number((f.price as any)?.toString().replace(/[^0-9.-]/g, '')) || 0,
+        change: Number((f.changeRate as any)?.toString().replace('%', '')) || 0,
+      }));
+      setWatchlist(mapped);
+    } catch (e) {
+      console.error('관심 종목 로드 실패:', e);
+    }
+  };
+
+  // 초기 로드: 로그인 완료 후에만 실행
   useEffect(() => {
-    const init = async () => {
-      if (!AuthService.isLoggedIn()) return;
-      try {
-        const favorites = await FavoriteStockService.list();
-        // 서버 응답(FavoriteStockItem[])을 WatchlistItem으로 매핑
-        const mapped: WatchlistItem[] = favorites.map((f) => ({
-          code: f.ticker,
-          name: f.name,
-          price: Number(f.price?.replace(/[^0-9.-]/g, '')) || 0,
-          change: Number(f.changeRate?.replace('%', '')) || 0,
-        }));
-        setWatchlist(mapped);
-      } catch (e) {
-        // 초기 로드 실패는 무시 (로컬 비우기)
-        console.error('관심 종목 초기 로드 실패:', e);
-      }
-    };
-    void init();
-  }, []);
+    if (isLoggedIn) {
+      void reloadWatchlist();
+    } else {
+      setWatchlist([]);
+    }
+  }, [isLoggedIn]);
 
   const addToWatchlist = (item: WatchlistItem) => {
     setWatchlist(prev => {
@@ -78,7 +85,8 @@ export const WatchlistProvider: React.FC<WatchlistProviderProps> = ({ children }
       watchlist,
       addToWatchlist,
       removeFromWatchlist,
-      isInWatchlist
+      isInWatchlist,
+      reloadWatchlist,
     }}>
       {children}
     </WatchlistContext.Provider>
