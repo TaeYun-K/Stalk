@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import AuthService from '../../services/authService';
 
 interface StockData {
@@ -18,7 +19,9 @@ const StockSearch: React.FC<StockSearchProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<StockData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -80,10 +83,42 @@ const StockSearch: React.FC<StockSearchProps> = ({
   };
 
   const handleStockClick = (stock: StockData) => {
-    onStockSelect(stock);
     setSearchQuery(stock.name);
     setSearchResults([]);
+    onStockSelect(stock);
+    // Clear any pending debounce
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
   };
+
+  // Update dropdown position when search results change
+  useEffect(() => {
+    if (searchResults.length > 0 && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  }, [searchResults]);
+
+  // Handle clicks outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
+        setSearchResults([]);
+      }
+    };
+
+    if (searchResults.length > 0) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [searchResults]);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -98,6 +133,7 @@ const StockSearch: React.FC<StockSearchProps> = ({
     <div className="mb-5 relative">
       <div className="relative">
         <input
+          ref={inputRef}
           type="text"
           placeholder="주식 검색"
           value={searchQuery}
@@ -117,12 +153,19 @@ const StockSearch: React.FC<StockSearchProps> = ({
         )}
       </div>
 
-      {searchResults.length > 0 && (
-        <div className={`absolute top-full left-0 right-0 ${
-          darkMode
-            ? 'bg-gray-800 border-gray-600'
-            : 'bg-white border-gray-300'
-        } border border-t-0 rounded-b-lg max-h-60 overflow-y-auto z-50 shadow-lg`}>
+      {searchResults.length > 0 && createPortal(
+        <div 
+          className={`fixed ${
+            darkMode
+              ? 'bg-gray-800 border-gray-600'
+              : 'bg-white border-gray-300'
+          } border rounded-lg max-h-60 overflow-y-auto z-[99999] shadow-lg`}
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`
+          }}
+        >
           {searchResults.map((stock) => (
             <div
               key={stock.ticker}
@@ -131,7 +174,10 @@ const StockSearch: React.FC<StockSearchProps> = ({
                   ? 'border-gray-700 hover:bg-gray-700 text-gray-200'
                   : 'border-gray-200 hover:bg-gray-50'
               } last:border-b-0 transition-colors`}
-              onClick={() => handleStockClick(stock)}
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevent input blur
+                handleStockClick(stock);
+              }}
             >
               <div className="flex justify-between items-center gap-2">
                 <span className="font-medium text-xs truncate flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">{stock.name}</span>
@@ -143,7 +189,8 @@ const StockSearch: React.FC<StockSearchProps> = ({
               </div>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

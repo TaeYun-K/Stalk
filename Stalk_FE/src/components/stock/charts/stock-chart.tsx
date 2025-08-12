@@ -81,7 +81,7 @@ interface StockChartProps {
   isConsultationMode?: boolean;
   onPeriodChange?: (period: number) => void;
   onIndicatorChange?: (indicators: any) => void;
-  activeIndicator?: 'volume' | 'rsi' | 'macd' | 'stochastic';
+  activeIndicator?: 'volume' | 'rsi' | 'macd' | 'stochastic' | null;
   onDataPointsUpdate?: (count: number) => void;
 }
 
@@ -128,6 +128,8 @@ const StockChart: React.FC<StockChartProps> = ({
   const [futureDays, setFutureDays] = useState<number>(initialFutureDays);
   const [scrollIndicatorVisible, setScrollIndicatorVisible] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingFutureDaysRef = useRef<number>(initialFutureDays);
   const [sharedChart, setSharedChart] = useState<ChartInfo | null>(null);
 
   // Detect sidebar state from body margin
@@ -386,17 +388,20 @@ const StockChart: React.FC<StockChartProps> = ({
       
       // When drawing mode is activated, automatically add future space
       if (propDrawingMode && !isDrawingMode) {
-        // Add 30 days of future space when entering drawing mode
-        setFutureDays(30);
-        
-        // Show scroll indicator briefly
-        setScrollIndicatorVisible(true);
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
+        // Only set initial future space if user hasn't manually scrolled
+        if (futureDays === 0) {
+          // Add 30 days of future space when entering drawing mode
+          setFutureDays(30);
+          
+          // Show scroll indicator briefly
+          setScrollIndicatorVisible(true);
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+          }
+          scrollTimeoutRef.current = setTimeout(() => {
+            setScrollIndicatorVisible(false);
+          }, 2000);
         }
-        scrollTimeoutRef.current = setTimeout(() => {
-          setScrollIndicatorVisible(false);
-        }, 2000);
         
         // Small delay to ensure chart is rendered with future space
         setTimeout(() => {
@@ -407,8 +412,8 @@ const StockChart: React.FC<StockChartProps> = ({
           }
         }, 100);
       } else if (!propDrawingMode && isDrawingMode) {
-        // When exiting drawing mode, reset future space to 0
-        setFutureDays(0);
+        // Don't automatically reset when exiting - let user control it
+        // setFutureDays(0);
       }
     }
 
@@ -431,12 +436,10 @@ const StockChart: React.FC<StockChartProps> = ({
   // Reprocess chart data when futureDays changes
   useEffect(() => {
     if (rawData && rawData.length > 0 && enableFutureSpace) {
-      // Trigger a re-fetch to add future dates
+      // Re-fetch to update with new future space
       fetchChartData(true);
-      // Also update indicator charts with new future space
-      updateSeparateChartIndicators();
     }
-  }, [futureDays]);
+  }, [futureDays, enableFutureSpace]);
 
   // Detect sidebar state and calculate proper offset
   useEffect(() => {
@@ -483,18 +486,19 @@ const StockChart: React.FC<StockChartProps> = ({
   return () => clearInterval(id);
   }, [sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
 
-  // Add native wheel event listener for better scroll prevention
+  // Add native wheel event listener for scroll-based future space
   useEffect(() => {
     if (!chartContainerRef.current || !enableFutureSpace) return;
 
     const handleNativeWheel = (e: WheelEvent) => {
-      if (isDrawingMode) return;
-
+      // Only handle vertical scroll, not horizontal
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      
       // Prevent default scrolling
       e.preventDefault();
       e.stopPropagation();
 
-      // Handle future space expansion
+      // Simple direct update
       const delta = e.deltaY;
       const scrollSensitivity = 3;
       const deltaFutureDays = delta > 0 ? scrollSensitivity : -scrollSensitivity;
@@ -525,13 +529,12 @@ const StockChart: React.FC<StockChartProps> = ({
     };
 
     const element = chartContainerRef.current;
-    // Use passive: false to ensure preventDefault works
     element.addEventListener('wheel', handleNativeWheel, { passive: false });
 
     return () => {
       element.removeEventListener('wheel', handleNativeWheel);
     };
-  }, [enableFutureSpace, isDrawingMode]);
+  }, [enableFutureSpace, session, chartKey.ticker, chartKey.period]);
 
   // Single effect to manage canvas lifecycle with proper cleanup
   useEffect(() => {
@@ -731,18 +734,15 @@ const StockChart: React.FC<StockChartProps> = ({
         // Check if update is for current chart
         if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
         
-        // Update local future days with a small delay to ensure chart is ready
+        // Update local future days
         if (typeof msg.futureDays === 'number') {
-          // Small delay to ensure charts are fully initialized
-          setTimeout(() => {
-            setFutureDays(msg.futureDays);
-            // Show indicator briefly when receiving update
-            setScrollIndicatorVisible(true);
-            if (scrollTimeoutRef.current) {
-              clearTimeout(scrollTimeoutRef.current);
-            }
-            scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
-          }, 100);
+          setFutureDays(msg.futureDays);
+          // Show indicator briefly when receiving update
+          setScrollIndicatorVisible(true);
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+          }
+          scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
         }
       } catch (error) {
         console.warn('Error processing future space update:', error);
@@ -760,7 +760,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
   // Sync external activeIndicator with internal state
   useEffect(() => {
-    if (activeIndicator && isConsultationMode) {
+    if (isConsultationMode) {
       console.log('Chart: Syncing indicator from consultation room:', activeIndicator);
       // Directly set the indicator settings instead of calling handleExclusiveIndicatorChange
       setIndicatorSettings(prev => ({
@@ -770,7 +770,11 @@ const StockChart: React.FC<StockChartProps> = ({
         macd: { ...prev.macd, enabled: activeIndicator === 'macd' },
         stochastic: { ...prev.stochastic, enabled: activeIndicator === 'stochastic' }
       }));
-      setActiveIndicatorTab(activeIndicator);
+      
+      // Only set active tab if there's an indicator, otherwise keep current tab
+      if (activeIndicator) {
+        setActiveIndicatorTab(activeIndicator);
+      }
     }
   }, [activeIndicator, isConsultationMode]);
 
@@ -968,11 +972,40 @@ const StockChart: React.FC<StockChartProps> = ({
           return date || '';
         });
 
-        const prices = finalData.map(item => item.close);
-        const volumes = finalData.map(item => item.volume);
-        const opens = finalData.map(item => item.open || item.close);
-        const highs = finalData.map(item => item.high || item.close);
-        const lows = finalData.map(item => item.low || item.close);
+        // Only use real data for price arrays, pad with NaN for future space
+        const realPrices = sortedData.map(item => item.close);
+        const realVolumes = sortedData.map(item => item.volume);
+        const realOpens = sortedData.map(item => item.open || item.close);
+        const realHighs = sortedData.map(item => item.high || item.close);
+        const realLows = sortedData.map(item => item.low || item.close);
+        
+        // Create arrays with correct length including future padding
+        const futureCount = Math.max(0, finalData.length - sortedData.length);
+        // Use NaN for future padding - Chart.js will skip these points with spanGaps: false
+        const futurePadding = new Array(futureCount).fill(NaN);
+        const prices = [...realPrices, ...futurePadding];
+        const volumes = [...realVolumes, ...new Array(futureCount).fill(0)];
+        const opens = [...realOpens, ...futurePadding];
+        const highs = [...realHighs, ...futurePadding];
+        const lows = [...realLows, ...futurePadding];
+        
+        // Critical debug - check if data aligns correctly
+        console.log('CHART DATA ALIGNMENT CHECK:', {
+          futureDays,
+          realDataCount: sortedData.length,
+          labelsCount: labels.length,
+          pricesCount: prices.length,
+          lastRealPrice: realPrices[realPrices.length - 1],
+          lastRealDate: sortedData[sortedData.length - 1]?.date,
+          labelAtLastRealData: labels[sortedData.length - 1],
+          priceAtLastRealData: prices[sortedData.length - 1],
+          firstNaNIndex: prices.findIndex(p => isNaN(p)),
+          sample: {
+            labels: labels.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2),
+            prices: prices.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2)
+          }
+        });
+        
 
 
         // Simplified line chart configuration
@@ -1300,6 +1333,8 @@ const StockChart: React.FC<StockChartProps> = ({
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHitRadius: 10,
               fill: false,
               spanGaps: false, // Don't connect NaN values
             },
@@ -1377,41 +1412,49 @@ const StockChart: React.FC<StockChartProps> = ({
             {
               label: 'MACD',
               data: macdLine,
-              type: 'line' as const,
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHitRadius: 10,
               fill: false,
               borderWidth: 2,
-              yAxisID: 'y',
               spanGaps: false,
             },
             {
               label: 'Signal',
               data: signalLine,
-              type: 'line' as const,
               borderColor: 'rgb(255, 99, 132)',
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHitRadius: 10,
               fill: false,
               borderWidth: 2,
-              yAxisID: 'y',
               spanGaps: false,
             },
+            // Render histogram as vertical lines with fill to simulate bars
             {
               label: 'Histogram',
               data: histogram,
-              type: 'bar' as const,
-              backgroundColor: histogram.map((val: number | null) =>
-                val && val > 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
-              ),
-              borderColor: histogram.map((val: number | null) =>
-                val && val > 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'
-              ),
-              borderWidth: 1,
-              yAxisID: 'y',
+              borderColor: 'rgba(128, 128, 128, 0.5)',
+              backgroundColor: (context: any) => {
+                const value = context.parsed?.y;
+                return value > 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+              },
+              borderWidth: 0,
+              pointRadius: 1,
+              pointHoverRadius: 3,
+              pointHitRadius: 10,
+              fill: {
+                target: 'origin',
+                above: 'rgba(34, 197, 94, 0.5)',
+                below: 'rgba(239, 68, 68, 0.5)'
+              },
+              tension: 0,
+              spanGaps: false,
             },
             // MACD reference lines
             {
@@ -1495,6 +1538,8 @@ const StockChart: React.FC<StockChartProps> = ({
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHitRadius: 10,
               fill: false,
               spanGaps: false,
             },
@@ -1505,6 +1550,8 @@ const StockChart: React.FC<StockChartProps> = ({
               backgroundColor: 'transparent',
               tension: 0.1,
               pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHitRadius: 10,
               fill: false,
               spanGaps: false,
             },
@@ -1696,8 +1743,12 @@ const StockChart: React.FC<StockChartProps> = ({
       }
     },
     animation: {
-      duration: 500,
+      duration: 0, // Disabled for better sync with indicators
       easing: 'easeInOutQuart' as const,
+    },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
     },
     onHover: (event: any, activeElements: any, chart: any) => {
       try {
@@ -1846,16 +1897,14 @@ const StockChart: React.FC<StockChartProps> = ({
         displayColors: true,
         callbacks: {
           title: function(context: any) {
-            const index = context[0]?.dataIndex;
-            if (chartData && index >= chartData.actualDataLength) {
-              return 'Future Period (예측 영역)';
-            }
+            // Always show the date, whether it's real data or future
             return context[0]?.label || '';
           },
           label: function(context: any) {
             const index = context.dataIndex;
-            if (chartData && index >= chartData.actualDataLength && context.dataset.label === '종가') {
-              return null; // Hide tooltip for future dates
+            // Don't show price values for future dates, only the date in title
+            if (chartData && index >= chartData.actualDataLength) {
+              return null; // Hide all data labels for future dates
             }
             const label = context.dataset.label || '';
             const value = context.parsed?.y;
@@ -1998,11 +2047,22 @@ const StockChart: React.FC<StockChartProps> = ({
           // Sync with main chart - comprehensive safety checks
           if (chartRef.current?.data?.datasets && chartRef.current.setActiveElements) {
             try {
-              chartRef.current.setActiveElements([{ datasetIndex: 0, index }]);
-              if (chartRef.current.tooltip?.setActiveElements) {
-                chartRef.current.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
+              const mainElements = [];
+              const mainTooltipElements = [];
+              for (let i = 0; i < chartRef.current.data.datasets.length; i++) {
+                const dataset = chartRef.current.data.datasets[i];
+                if (dataset && dataset.label) {
+                  mainElements.push({ datasetIndex: i, index });
+                  mainTooltipElements.push({ datasetIndex: i, index });
+                }
               }
-              chartRef.current.update('none');
+              if (mainElements.length > 0) {
+                chartRef.current.setActiveElements(mainElements);
+                if (chartRef.current.tooltip?.setActiveElements) {
+                  chartRef.current.tooltip.setActiveElements(mainTooltipElements);
+                }
+                chartRef.current.update('none');
+              }
             } catch (syncError) {
               console.warn('Main chart sync error:', syncError);
             }
@@ -2128,12 +2188,19 @@ const StockChart: React.FC<StockChartProps> = ({
         displayColors: true,
         callbacks: {
           title: function(context: any) {
+            // Always show the date
             if (context[0]) {
               return context[0].label || '';
             }
             return '';
           },
           label: function(context: any) {
+            const index = context.dataIndex;
+            // Don't show values for future dates, only the date in title
+            if (chartData && index >= chartData.actualDataLength) {
+              return null;
+            }
+            
             const value = context.parsed.y;
             const datasetLabel = context.dataset.label || '';
 
@@ -2539,19 +2606,17 @@ const StockChart: React.FC<StockChartProps> = ({
                     <div className="relative flex items-center gap-1">
                       <button
                         onClick={() => canShowMACD && handleExclusiveIndicatorChange('macd')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all transform ${
-                          canShowMACD ? 'hover:scale-105' : ''
-                        } ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all transform hover:scale-105 ${
                           showMACD && canShowMACD
                             ? darkMode
                               ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                               : 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                             : darkMode
                               ? canShowMACD
-                                ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
+                                ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/70 hover:text-white hover:shadow-md'
                                 : 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
                               : canShowMACD
-                                ? 'bg-white/70 text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm'
+                                ? 'bg-white/70 text-gray-700 hover:bg-white/90 hover:text-gray-900 hover:shadow-md shadow-sm'
                                 : 'bg-gray-100/50 text-gray-400 cursor-not-allowed'
                         }`}
                         disabled={!canShowMACD}
@@ -2736,14 +2801,16 @@ const StockChart: React.FC<StockChartProps> = ({
                 style={{
                   padding: '20px 20px 10px 20px',
                   cursor: isDrawingMode ? 'default' : 'default',
-                  width: isDrawingMode && futureDays > 0 ? '150%' : '100%',
+                  width: '100%',
                   minWidth: '100%'
                 }}
                 ref={chartContainerRef}>
                 {isLoading && (
-                  <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10 rounded-xl">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-500"></div>
-                    <p className="mt-3 text-sm font-medium text-gray-600 dark:text-gray-400">차트 데이터를 불러오는 중...</p>
+                  <div className="absolute top-2 right-2 z-20">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-white"></div>
+                      <span className="text-xs text-white">업데이트 중...</span>
+                    </div>
                   </div>
                 )}
 
@@ -2767,12 +2834,12 @@ const StockChart: React.FC<StockChartProps> = ({
                   </div>
                 )}
 
-                {chartData && !isLoading && !error && (
-                  <>
+                {chartData && !error && (
+                  <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-50' : 'opacity-100'}`}>
                     <Line data={chartData} options={chartOptions} ref={chartRef} />
 
 
-                    {/* Future Space Indicator - Enhanced for drawing mode */}
+                    {/* Future Space Indicator */}
                     {enableFutureSpace && futureDays > 0 && (
                       <div
                         className={`absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md backdrop-blur-sm transition-all duration-500 ${
@@ -2797,7 +2864,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     )}
                     
 
-                  </>
+                  </div>
                 )}
 
                 {/* Drawing canvas - positioned relative to chart content */}
@@ -2838,16 +2905,30 @@ const StockChart: React.FC<StockChartProps> = ({
                   className={`${darkMode ? 'bg-gradient-to-b from-gray-900 to-gray-950' : 'bg-gradient-to-b from-white to-gray-50'}`}
                   style={{ height: `${indicatorHeight}px`, transition: 'height 0.2s' }}
                 >
-                  <div className="h-full" style={{ padding: '20px 20px 10px 20px' }}>
-                    {activeIndicatorTab === 'volume' && showVolume && volumeChartData ? (
-                      <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef} />
-                    ) : activeIndicatorTab === 'rsi' && showRSI && rsiChartData && canShowRSI ? (
-                      <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef} />
-                    ) : activeIndicatorTab === 'macd' && showMACD && macdChartData && canShowMACD ? (
-                      <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
-                    ) : activeIndicatorTab === 'stochastic' && showStochastic && stochChartData && canShowStochastic ? (
-                      <Line data={stochChartData} options={stochasticChartOptions} ref={stochasticChartRef} />
-                    ) : (
+                  <div className="h-full" style={{ padding: '20px 20px 10px 20px', position: 'relative' }}>
+                    {/* Render all charts but only show the active one */}
+                    {showVolume && volumeChartData && (
+                      <div style={{ display: activeIndicatorTab === 'volume' ? 'block' : 'none', height: '100%' }}>
+                        <Bar data={volumeChartData} options={volumeChartOptions} ref={volumeChartRef} />
+                      </div>
+                    )}
+                    {showRSI && rsiChartData && canShowRSI && (
+                      <div style={{ display: activeIndicatorTab === 'rsi' ? 'block' : 'none', height: '100%' }}>
+                        <Line data={rsiChartData} options={rsiChartOptions} ref={rsiChartRef} />
+                      </div>
+                    )}
+                    {showMACD && macdChartData && canShowMACD && (
+                      <div style={{ display: activeIndicatorTab === 'macd' ? 'block' : 'none', height: '100%' }}>
+                        <Line data={macdChartData} options={macdChartOptions} ref={macdChartRef} />
+                      </div>
+                    )}
+                    {showStochastic && stochChartData && canShowStochastic && (
+                      <div style={{ display: activeIndicatorTab === 'stochastic' ? 'block' : 'none', height: '100%' }}>
+                        <Line data={stochChartData} options={stochasticChartOptions} ref={stochasticChartRef} />
+                      </div>
+                    )}
+                    {/* Show message when no indicators are active */}
+                    {!showVolume && !showRSI && !showMACD && !showStochastic && (
                       <div className={`flex items-center justify-center h-full ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                         <p className="text-xs">선택된 지표가 없습니다</p>
                       </div>

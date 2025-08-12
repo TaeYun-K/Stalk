@@ -24,6 +24,33 @@ import StockSearch from "@/components/stock/stock-search";
 import ChartErrorBoundary from "@/components/ChartErrorBoundary";
 import ChartControls from "@/components/stock/chart-controls/chart-controls";
 
+// Indicator explanations for tooltips
+const indicatorExplanations = {
+  volume: {
+    title: '거래량',
+    description: '특정 기간 동안의 주식 거래량을 표시합니다.',
+    usage: '거래량이 많으면 강한 추세를 의미합니다.',
+  },
+  rsi: {
+    title: 'RSI (상대강도지수)',
+    description: '가격의 상승압력과 하락압력 간의 상대적 강도를 나타냅니다.',
+    usage: '70 이상: 과매수 구간, 30 이하: 과매도 구간',
+    params: '기간(일): 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
+  },
+  macd: {
+    title: 'MACD',
+    description: '두 이동평균선의 차이를 이용한 추세 추종 모멘텀 지표입니다.',
+    usage: 'MACD선이 시그널선을 상향 돌파시 매수 신호, 하향 돌파시 매도 신호',
+    params: '단기(12), 장기(26), 시그널(9)이 기본값 (최소 26개 데이터 포인트 필요)'
+  },
+  stochastic: {
+    title: '스토캐스틱',
+    description: '일정 기간 중 현재 가격의 상대적 위치를 나타내는 모멘텀 지표입니다.',
+    usage: '80 이상: 과매수, 20 이하: 과매도. %K와 %D선의 교차로 매매 신호 포착',
+    params: '%K 기간, %D 기간 (smoothing) - 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
+  }
+};
+
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
   consultationId: string;
@@ -67,32 +94,6 @@ const DEFAULT_VIDEO_CONFIG = {
 
 const TIMER_INTERVAL_MS = 1000;
 
-// Indicator explanations for tooltips
-const indicatorExplanations = {
-  volume: {
-    title: '거래량',
-    description: '특정 기간 동안의 주식 거래량을 표시합니다.',
-    usage: '거래량이 많으면 강한 추세를 의미합니다.',
-  },
-  rsi: {
-    title: 'RSI (상대강도지수)',
-    description: '가격의 상승압력과 하락압력 간의 상대적 강도를 나타냅니다.',
-    usage: '70 이상: 과매수 구간, 30 이하: 과매도 구간',
-    params: '기간(일): 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
-  },
-  macd: {
-    title: 'MACD',
-    description: '두 이동평균선의 차이를 이용한 추세 추종 모멘텀 지표입니다.',
-    usage: 'MACD선이 시그널선을 상향 돌파시 매수 신호, 하향 돌파시 매도 신호',
-    params: '단기(12), 장기(26), 시그널(9)이 기본값 (최소 26개 데이터 포인트 필요)'
-  },
-  stochastic: {
-    title: '스토캐스틱',
-    description: '일정 기간 중 현재 가격의 상대적 위치를 나타내는 모멘텀 지표입니다.',
-    usage: '80 이상: 과매수, 20 이하: 과매도. %K와 %D선의 교차로 매매 신호 포착',
-    params: '%K 기간, %D 기간 (smoothing) - 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
-  }
-};
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -1022,7 +1023,7 @@ const VideoConsultationPage: React.FC = () => {
   return (
     <div className="h-screen w-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* Unified Header navbar - expands when chart mode is active */}
-      <div className={`${showStockChart ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl' : 'bg-gray-800'} px-6 py-3 flex items-center justify-between border-b border-gray-700 transition-all duration-300`}>
+      <div className={`${showStockChart ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl' : 'bg-gray-800'} px-6 py-3 flex items-center justify-between border-b border-gray-700 transition-all duration-300 relative overflow-visible`}>
         <div className="flex items-center space-x-4 flex-1">
           <img src={stalkLogoWhite} alt="Stalk Logo" className="h-6" />
 
@@ -1058,11 +1059,12 @@ const VideoConsultationPage: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => {
-                      setActiveIndicator('volume');
+                      const newIndicator = activeIndicator === 'volume' ? null : 'volume';
+                      setActiveIndicator(newIndicator);
                       if (session) {
                         session.signal({
                           type: 'chart:indicator',
-                          data: JSON.stringify({ indicator: 'volume' })
+                          data: JSON.stringify({ indicator: newIndicator })
                         }).catch(console.error);
                       }
                     }}
@@ -1074,51 +1076,18 @@ const VideoConsultationPage: React.FC = () => {
                   >
                     거래량
                   </button>
-                  <div
-                    className="relative"
-                    onMouseEnter={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const tooltipWidth = 280;
-                      const tooltipHeight = 100;
-
-                      let x = rect.right + 8;
-                      let y = rect.top + rect.height / 2;
-
-                      if (x + tooltipWidth > window.innerWidth) {
-                        x = rect.left - tooltipWidth - 8;
-                      }
-
-                      if (y + tooltipHeight / 2 > window.innerHeight) {
-                        y = window.innerHeight - tooltipHeight - 8;
-                      } else if (y - tooltipHeight / 2 < 0) {
-                        y = 8;
-                      } else {
-                        y = y - tooltipHeight / 2;
-                      }
-
-                      setTooltipPosition({ x, y });
-                      setHoveredIndicator('volume');
-                    }}
-                    onMouseLeave={() => setHoveredIndicator(null)}
-                  >
-                    <button
-                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
-                      type="button"
-                    >
-                      ?
-                    </button>
-                  </div>
                 </div>
                 {/* RSI Indicator */}
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => {
                       if (dataPointCount >= 14) {
-                        setActiveIndicator('rsi');
+                        const newIndicator = activeIndicator === 'rsi' ? null : 'rsi';
+                        setActiveIndicator(newIndicator);
                         if (session) {
                           session.signal({
                             type: 'chart:indicator',
-                            data: JSON.stringify({ indicator: 'rsi' })
+                            data: JSON.stringify({ indicator: newIndicator })
                           }).catch(console.error);
                         }
                       }
@@ -1175,11 +1144,12 @@ const VideoConsultationPage: React.FC = () => {
                   <button
                     onClick={() => {
                       if (dataPointCount >= 26) {
-                        setActiveIndicator('macd');
+                        const newIndicator = activeIndicator === 'macd' ? null : 'macd';
+                        setActiveIndicator(newIndicator);
                         if (session) {
                           session.signal({
                             type: 'chart:indicator',
-                            data: JSON.stringify({ indicator: 'macd' })
+                            data: JSON.stringify({ indicator: newIndicator })
                           }).catch(console.error);
                         }
                       }
@@ -1236,11 +1206,12 @@ const VideoConsultationPage: React.FC = () => {
                   <button
                     onClick={() => {
                       if (dataPointCount >= 14) {
-                        setActiveIndicator('stochastic');
+                        const newIndicator = activeIndicator === 'stochastic' ? null : 'stochastic';
+                        setActiveIndicator(newIndicator);
                         if (session) {
                           session.signal({
                             type: 'chart:indicator',
-                            data: JSON.stringify({ indicator: 'stochastic' })
+                            data: JSON.stringify({ indicator: newIndicator })
                           }).catch(console.error);
                         }
                       }
@@ -1319,7 +1290,7 @@ const VideoConsultationPage: React.FC = () => {
               </div>
 
               {/* Stock Search - moved to right side */}
-              <div className="ml-auto w-55 [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0 [&_.z-50]:!w-full [&_.z-50]:!right-0 [&_.z-50]:!left-0 [&_.px-4.py-3]:!px-2 [&_.px-4.py-3]:!py-2">
+              <div className="ml-auto w-55 relative z-[1000] [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0 [&_.px-4.py-3]:!px-2 [&_.px-4.py-3]:!py-2">
                 <StockSearch
                   onStockSelect={setSelectedStock}
                   darkMode={true}
@@ -1566,7 +1537,7 @@ const VideoConsultationPage: React.FC = () => {
                               onIndicatorChange={handleIndicatorChange}
                               drawingMode={isDrawingMode}
                               period={chartPeriod}
-                              activeIndicator={activeIndicator as 'volume' | 'rsi' | 'macd' | 'stochastic'}
+                              activeIndicator={activeIndicator as 'volume' | 'rsi' | 'macd' | 'stochastic' | null}
                               onDataPointsUpdate={setDataPointCount}
                               key={(selectedStock?.ticker ?? currentChart?.ticker) || 'chart'}
                               />
@@ -2015,27 +1986,39 @@ const VideoConsultationPage: React.FC = () => {
       {/* Indicator Tooltips */}
       {hoveredIndicator && createPortal(
         <div
-          className="fixed p-3 rounded-lg shadow-xl text-xs w-80 z-[2147483647] bg-gray-800 border border-gray-700"
+          className="fixed p-4 rounded-xl shadow-2xl text-xs w-80 z-[2147483647] bg-gray-800/95 backdrop-blur-sm border border-gray-600/50"
           style={{
             left: `${tooltipPosition.x}px`,
             top: `${tooltipPosition.y}px`,
             pointerEvents: 'none'
           }}
         >
-          <h4 className="font-semibold mb-1 text-blue-400">
-            {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.title}
-          </h4>
-          <p className="mb-2 text-gray-300">
-            {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.description}
-          </p>
-          <p className="mb-1 text-gray-400">
-            <strong>사용법:</strong> {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.usage}
-          </p>
-          {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params && (
-            <p className="text-gray-400">
-              <strong>설정:</strong> {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params}
-            </p>
-          )}
+          <div className="space-y-3">
+            <div>
+              <h4 className="font-bold text-sm mb-1 text-blue-400">
+                {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.title}
+              </h4>
+              <p className="text-gray-300 leading-relaxed whitespace-normal">
+                {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.description}
+              </p>
+            </div>
+            
+            <div>
+              <span className="text-green-400 font-semibold">사용법</span>
+              <p className="text-gray-300 mt-1 leading-relaxed whitespace-normal">
+                {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.usage}
+              </p>
+            </div>
+            
+            {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params && (
+              <div>
+                <span className="text-yellow-400 font-semibold">설정</span>
+                <p className="text-gray-300 mt-1 leading-relaxed whitespace-normal">
+                  {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params}
+                </p>
+              </div>
+            )}
+          </div>
         </div>,
         document.body
       )}

@@ -165,7 +165,7 @@ const ProductsPage = () => {
       // Show optimistic UI immediately to reduce perceived loading time
       setRealtimePriceData({
         ticker: selectedTicker,
-        name: `Loading ${selectedTicker}...`,
+        name: `${selectedTicker} 로딩 중...`,
         closePrice: "0",
         priceChange: "0",
         changeRate: "0",
