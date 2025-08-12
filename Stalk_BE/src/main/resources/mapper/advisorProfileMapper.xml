@@ -160,8 +160,8 @@
   <select id="findApprovalHistory" resultType="java.util.LinkedHashMap">
     SELECT
       aal.id as requestId,
-      -- 자격증명은 advisor 테이블의 certificate_name을 사용 (회원가입시 입력한 자격증명)
-      a.certificate_name as certificateName,
+      -- 자격증명은 advisor_certificates 테이블에서 조회
+      ac.certificate_name as certificateName,
       aal.certificate_file_sn as certificateFileSn,
       aal.certificate_file_number as certificateFileNumber,
       aal.status,
@@ -170,7 +170,13 @@
       aal.reason as rejectionReason,
       au.name as processedByAdminName
     FROM advisor_approval_logs aal
-           INNER JOIN advisor a ON aal.advisor_id = a.advisor_id
+           -- advisor_certificates와 조인 (certificate_file_sn과 birth로 매칭)
+           LEFT JOIN advisor_certificates ac ON (
+      aal.advisor_id = ac.advisor_id
+        AND aal.certificate_file_sn = ac.certificate_file_sn
+        AND aal.birth = ac.birth
+        AND aal.certificate_file_number = ac.certificate_file_number
+      )
            LEFT JOIN users au ON aal.admin_id = au.id
     WHERE aal.advisor_id = #{advisorId}
     ORDER BY aal.created_at DESC
