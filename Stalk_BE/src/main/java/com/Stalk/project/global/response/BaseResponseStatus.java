@@ -237,7 +237,18 @@ public enum BaseResponseStatus {
   INVALID_PAYMENT_AMOUNT(HttpStatus.BAD_REQUEST, false, 1905, "유효하지 않은 결제 금액입니다."),
   PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, false, 1906, "이미 처리된 결제입니다."),
   PAYMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, false, 1907, "결제 접근 권한이 없습니다."), // 추가
-  INVALID_PAYMENT_STATUS(HttpStatus.FORBIDDEN, false, 1908, "유효하지 않은 결제 현황입니다.");
+  INVALID_PAYMENT_STATUS(HttpStatus.FORBIDDEN, false, 1908, "유효하지 않은 결제 현황입니다."),
+
+  // 전문가 후기(리뷰) 관련 에러 (2000번대)
+  CONSULTATION_NOT_FOUND(HttpStatus.NOT_FOUND, false, 2001, "상담을 찾을 수 없습니다."),
+  UNAUTHORIZED_REVIEW_REQUEST(HttpStatus.FORBIDDEN, false, 2002, "해당 상담의 리뷰를 작성할 권한이 없습니다."),
+  CONSULTATION_NOT_APPROVED(HttpStatus.BAD_REQUEST, false, 2003, "승인되지 않은 상담입니다."),
+  CONSULTATION_APPROVED_DATE_MISSING(HttpStatus.BAD_REQUEST, false, 2004, "상담 승인 날짜가 없습니다."),
+  REVIEW_PERIOD_EXPIRED(HttpStatus.BAD_REQUEST, false, 2005, "리뷰 작성 기간이 만료되었습니다. (승인 후 5일 이내)"),
+  REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, false, 2006, "이미 해당 상담에 대한 리뷰가 존재합니다."),
+  ADVISOR_REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, false, 2007, "리뷰를 찾을 수 없습니다."),
+  UNAUTHORIZED_REVIEW_UPDATE(HttpStatus.FORBIDDEN, false, 2008, "리뷰를 수정할 권한이 없습니다."),
+  UNAUTHORIZED_REVIEW_DELETE(HttpStatus.FORBIDDEN, false, 2009, "리뷰를 삭제할 권한이 없습니다.");
 
 
   private final HttpStatus httpStatus;

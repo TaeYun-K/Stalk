@@ -216,20 +216,6 @@ public class ReservationService {
   }
 
   /**
-   * 예약만 취소 (결제 처리 없음)
-   */
-  private void cancelReservationOnly(Long reservationId, Long currentUserId,
-      ReservationCancelRequestDto requestDto) {
-    int result = reservationMapper.cancelReservation(
-        reservationId, currentUserId, CancelReason.valueOf(requestDto.getCancelReason().name()),
-        requestDto.getCancelMemo(), LocalDateTime.now());
-
-    if (result != 1) {
-      throw new BaseException(CANCEL_REQUEST_FAILED);
-    }
-  }
-
-  /**
    * 취소 가능 상태 확인 (결제 상태 고려)
    */
   private void validateCancelableStatusWithPayment(ReservationCancelWithPaymentCheckDto reservation) {

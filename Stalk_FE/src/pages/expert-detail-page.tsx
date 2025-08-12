@@ -167,7 +167,7 @@ const ExpertDetailPage: React.FC = () => {
 
     try {
       const advisorId = parseInt(id);
-      
+
       if (isFavorite) {
         await FavoriteService.removeFavoriteAdvisor(advisorId);
         setIsFavorite(false);
@@ -177,7 +177,11 @@ const ExpertDetailPage: React.FC = () => {
       }
     } catch (error) {
       console.error("찜하기 토글 오류:", error);
-      alert(error instanceof Error ? error.message : "찜하기 처리 중 오류가 발생했습니다.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "찜하기 처리 중 오류가 발생했습니다."
+      );
     }
   };
 
@@ -220,11 +224,13 @@ const ExpertDetailPage: React.FC = () => {
         const data: ApiResponse = await response.json();
         if (data.isSuccess) {
           setExpertData(data.result);
-          
+
           // 찜하기 상태 확인 (USER 역할인 경우에만)
           if (currentUserRole === "USER") {
             const advisorId = parseInt(id);
-            const isFav = await FavoriteService.checkIsFavoriteAdvisor(advisorId);
+            const isFav = await FavoriteService.checkIsFavoriteAdvisor(
+              advisorId
+            );
             setIsFavorite(isFav);
           }
         } else {
@@ -667,6 +673,8 @@ const ExpertDetailPage: React.FC = () => {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
+      console.log("결제 취소 API 호출");
+
       await fetch("/api/cancel", {
         method: "POST",
         headers: {
@@ -694,9 +702,6 @@ const ExpertDetailPage: React.FC = () => {
       cancelSent = true;
       await cancelPaymentReservation(orderId);
     };
-
-    // beforeunload 핸들러 (탭 닫기/새로고침 시 취소 시도)
-    let beforeUnloadHandler: ((_e: BeforeUnloadEvent) => void) | null = null;
 
     // 결제 생성 후에만 값이 들어감
     let orderIdForCancel: string | null = null;
@@ -751,16 +756,6 @@ const ExpertDetailPage: React.FC = () => {
 
       const tossPayments = window.TossPayments(clientKey);
 
-      // 탭 닫기/새로고침 대비: 결제 진행 구간에서만 임시 등록
-      beforeUnloadHandler = (_e: BeforeUnloadEvent) => {
-        // 사용자에게 경고를 띄우고(브라우저가 무시할 수도), 백엔드 취소 시도
-        // e.preventDefault(); // 일부 브라우저에서 필요 없음
-        // e.returnValue = ""; // 크롬에서 커스텀 메시지는 무시됨
-        void safeCancel(orderIdForCancel);
-      };
-      window.addEventListener("beforeunload", beforeUnloadHandler);
-
-      // 실 결제창 호출 (여기서 사용자 취소/닫힘/에러 시 Promise reject)
       await tossPayments.requestPayment("카드", {
         amount: paymentData.amount,
         orderId: paymentData.orderId,
@@ -771,33 +766,21 @@ const ExpertDetailPage: React.FC = () => {
         failUrl: `${window.location.origin}/payment/fail`,
       });
 
-      // 주의: 위에서 성공하면 곧바로 리다이렉트되어 아래 코드는 보통 실행 안 됨
-      console.log("결제창 호출 성공");
+      // 성공 시에는 곧바로 리다이렉트되어 아래 코드는 실행 안 됨
     } catch (error: unknown) {
-      console.error("예약/결제 처리 오류:", error);
-
-      // TossPayments 에러 케이스 분기(주요 예: USER_CANCEL)
-      // SDK에서 주는 error.code가 있으면 참고해서 취소 요청
       const code = (error as { code?: string })?.code;
-      if (code) {
-        // 대표 코드 예시: 'USER_CANCEL', 'INVALID_CARD', 'EXCEED_LIMIT' 등
-        // 어떤 코드든 결제 실패면 PENDING 예약은 정리하는 편이 안전
-        await safeCancel(orderIdForCancel);
-      } else {
-        // 일반 오류라도, 예약이 생성된 상태(orderId 있음)면 취소
-        await safeCancel(orderIdForCancel);
-      }
 
-      const errorMessage =
+      // 2) 명시적 실패에만 취소 (catch에서만)
+      // Toss에서 reject되는 케이스 = 사용자 취소/카드오류 등 "실패" 상황
+      // if (orderIdForCancel) {
+      //   await safeCancel(orderIdForCancel);
+      // }
+
+      onError?.(
         error instanceof Error
           ? error.message
-          : "알 수 없는 오류가 발생했습니다.";
-      onError?.(errorMessage);
-    } finally {
-      // 정리
-      if (beforeUnloadHandler) {
-        window.removeEventListener("beforeunload", beforeUnloadHandler);
-      }
+          : "알 수 없는 오류가 발생했습니다."
+      );
     }
   };
 
@@ -963,42 +946,42 @@ const ExpertDetailPage: React.FC = () => {
           <div className="flex-1">
             {/* Expert Header */}
             <div className="flex items-end justify-between mb-8 border-b border-gray-300 pb-5">
-                <div className="flex flex-row justify-between items-center">
-                 {/* 컨설턴트명 / 연락처 등 기본 정보 */}
-                 <div>
-                   <div className="flex flex-row items-center gap-2">
-                     {/* 찜하기 하트 버튼 */}
-                     {currentUserRole === "USER" && (
-                       <button
-                         type="button"
-                         aria-pressed={isFavorite}
-                         title={isFavorite ? '찜 해제' : '찜하기'}
-                         onClick={handleFavoriteToggle}
-                         className={`inline-flex items-center justify-center w-10 h-10 transition-all duration-200 hover:scale-105 ${
-                           isFavorite
-                             ? 'text-red-500'
-                             : 'text-gray-400 hover:text-red-400'
-                         }`}
-                       >
-                         <svg
-                           className="w-6 h-6"
-                           viewBox="0 0 24 24"
-                           fill={isFavorite ? 'currentColor' : 'none'}
-                           stroke="currentColor"
-                           strokeWidth={2}
-                           aria-hidden="true"
-                         >
-                           <path
-                             strokeLinecap="round"
-                             strokeLinejoin="round"
-                             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                           />
-                         </svg>
-                       </button>
-                     )}
-                     <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
-                       {expert.name}
-                     </h1>
+              <div className="flex flex-row justify-between items-center">
+                {/* 컨설턴트명 / 연락처 등 기본 정보 */}
+                <div>
+                  <div className="flex flex-row items-center gap-2">
+                    {/* 찜하기 하트 버튼 */}
+                    {currentUserRole === "USER" && (
+                      <button
+                        type="button"
+                        aria-pressed={isFavorite}
+                        title={isFavorite ? "찜 해제" : "찜하기"}
+                        onClick={handleFavoriteToggle}
+                        className={`inline-flex items-center justify-center w-10 h-10 transition-all duration-200 hover:scale-105 ${
+                          isFavorite
+                            ? "text-red-500"
+                            : "text-gray-400 hover:text-red-400"
+                        }`}
+                      >
+                        <svg
+                          className="w-6 h-6"
+                          viewBox="0 0 24 24"
+                          fill={isFavorite ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                    <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
+                      {expert.name}
+                    </h1>
                     <h3 className="text-left text-l font-semibold text-blue-500 mb-2">
                       {expert.title}
                     </h3>
@@ -1160,10 +1143,15 @@ const ExpertDetailPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col overflow-hidden justify-between items-start border border-gray-200 rounded-xl mb-4 shadow-lg">
-                <div className="w-full text-lg font-bold text-white bg-blue-300 py-3 px-7">상담요금</div>
-                <p className="text-left text-md text-gray-700 px-7 py-3">시간당 <span className="font-bold">{expert.consultationFee}</span>원</p>
+                <div className="w-full text-lg font-bold text-white bg-blue-300 py-3 px-7">
+                  상담요금
+                </div>
+                <p className="text-left text-md text-gray-700 px-7 py-3">
+                  시간당{" "}
+                  <span className="font-bold">{expert.consultationFee}</span>원
+                </p>
               </div>
-              
+
               {/* 현재 로그인한 사용자가 이 전문가인지 확인 */}
               {(() => {
                 const currentUserInfo = AuthService.getUserInfo();
@@ -1175,54 +1163,54 @@ const ExpertDetailPage: React.FC = () => {
                   <>
                     {/* 모든 사용자(전문가 본인 포함)에게 예약하기 버튼 표시 */}
                     {currentUserInfo?.name !== expertData?.name && (
-                    <button
-                      onClick={() => {
-                        // 토큰 확인
-                        const token = AuthService.getAccessToken();
-                        if (!token) {
-                          alert("로그인이 필요한 서비스입니다.");
-                          navigate("/login");
-                          return;
-                        }
+                      <button
+                        onClick={() => {
+                          // 토큰 확인
+                          const token = AuthService.getAccessToken();
+                          if (!token) {
+                            alert("로그인이 필요한 서비스입니다.");
+                            navigate("/login");
+                            return;
+                          }
 
-                        const currentUserInfo = AuthService.getUserInfo();
+                          const currentUserInfo = AuthService.getUserInfo();
 
-                        // 전문가가 다른 전문가에게 예약하려는 경우 차단
-                        if (
-                          currentUserInfo?.role === "ADVISOR" &&
-                          currentUserInfo?.name !== expertData?.name
-                        ) {
-                          setExpertReservationError(
-                            "🚫 전문가는 다른 전문가에게 예약할 수 없습니다."
-                          );
-                          return;
-                        }
+                          // 전문가가 다른 전문가에게 예약하려는 경우 차단
+                          if (
+                            currentUserInfo?.role === "ADVISOR" &&
+                            currentUserInfo?.name !== expertData?.name
+                          ) {
+                            setExpertReservationError(
+                              "🚫 전문가는 다른 전문가에게 예약할 수 없습니다."
+                            );
+                            return;
+                          }
 
-                        // 정상적인 경우 오류 메시지 초기화
-                        setExpertReservationError(null);
+                          // 정상적인 경우 오류 메시지 초기화
+                          setExpertReservationError(null);
 
-                        setReservationForm({
-                          name: currentUserInfo?.name || "",
-                          phone: currentUserInfo?.contact || "",
-                          requestDetails: "",
-                        });
-                        setSelectedDate("");
-                        setSelectedTime("");
-                        setSelectedCalendarDate(null);
-                        setAvailableTimes([]);
-                        setAvailableTimesError(null);
-                        setShowReservationModal(true);
-                      }}
-                      className={`w-full font-semibold py-3 px-6 mb-3 rounded-lg transition-colors shadow-lg ${
-                        isExpertOwner
-                          ? "bg-blue-500 hover:bg-blue-600 text-white"
-                          : "bg-blue-500 hover:bg-blue-600 text-white"
-                      }`}
-                    >
-                      예약하기
-                    </button>
+                          setReservationForm({
+                            name: currentUserInfo?.name || "",
+                            phone: currentUserInfo?.contact || "",
+                            requestDetails: "",
+                          });
+                          setSelectedDate("");
+                          setSelectedTime("");
+                          setSelectedCalendarDate(null);
+                          setAvailableTimes([]);
+                          setAvailableTimesError(null);
+                          setShowReservationModal(true);
+                        }}
+                        className={`w-full font-semibold py-3 px-6 mb-3 rounded-lg transition-colors shadow-lg ${
+                          isExpertOwner
+                            ? "bg-blue-500 hover:bg-blue-600 text-white"
+                            : "bg-blue-500 hover:bg-blue-600 text-white"
+                        }`}
+                      >
+                        예약하기
+                      </button>
                     )}
-                    
+
                     {/* 전문가 간 예약 제한 오류 메시지 */}
                     {expertReservationError && (
                       <div className="w-full mb-3 p-3 border border-red-300 bg-red-50 text-red-600 rounded-lg text-sm text-center">
@@ -1255,9 +1243,7 @@ const ExpertDetailPage: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="fixed top-[55%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg border-2 border border-blue-300 max-w-md w-full shadow-lg max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center p-8 pb-4">
-              <h3 className="text-2xl font-bold text-gray-900">
-                예약하기
-              </h3>
+              <h3 className="text-2xl font-bold text-gray-900">예약하기</h3>
               <button
                 onClick={() => setShowReservationModal(false)}
                 className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -1475,7 +1461,10 @@ const ExpertDetailPage: React.FC = () => {
               </form>
               <div className="mb-5">
                 <p className="flex justify-between">
-                  <span className="font-semibold text-blue-500">결제 예정 금액</span> {expert.consultationFee}원
+                  <span className="font-semibold text-blue-500">
+                    결제 예정 금액
+                  </span>{" "}
+                  {expert.consultationFee}원
                 </p>
               </div>
             </div>
