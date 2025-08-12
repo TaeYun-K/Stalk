@@ -326,7 +326,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // 내가 가지고 있는 현재 차트 상태
         const ticker = getCurrentTicker();
-        const info = { ticker, period, name: getCurrentName };
+        const info = { ticker, period, name: getCurrentName() };
 
         // 내가 아직 차트를 안 보고 있으면 응답할 게 없으니 무시
         if (!info.ticker || !info.period) return;
