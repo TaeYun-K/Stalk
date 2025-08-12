@@ -11,7 +11,6 @@
       cs.user_id as userId,
       cs.advisor_id as advisorId,
       cs.status,
-      cs.approved_at as approvedAt,
       au.name as advisorName,
       cu.name as userName
     FROM consultation_sessions cs

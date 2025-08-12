@@ -28,47 +28,37 @@ public class ReviewService {
     
     private final ReviewMapper reviewMapper;
     private final ApplicationEventPublisher eventPublisher;
-    
+
     /**
      * 리뷰 작성
      */
     @Transactional
     public ReviewCreateResponseDto createReview(Long userId, ReviewCreateRequestDto requestDto) {
-        
+
         // 1. 상담 정보 조회 및 검증
-        ReviewMapper.ConsultationForReviewDto consultation = 
+        ReviewMapper.ConsultationForReviewDto consultation =
             reviewMapper.findConsultationForReview(requestDto.getConsultationId());
-        
+
         if (consultation == null) {
             throw new BaseException(BaseResponseStatus.CONSULTATION_NOT_FOUND);
         }
-        
+
         // 2. 권한 확인 (본인의 상담인지)
         if (!consultation.userId.equals(userId)) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_REVIEW_REQUEST);
         }
-        
+
         // 3. 상담 상태 확인 (APPROVED 상태인지)
         if (!"APPROVED".equals(consultation.status)) {
             throw new BaseException(BaseResponseStatus.CONSULTATION_NOT_APPROVED);
         }
-        
-        // 4. 리뷰 작성 기간 확인 (APPROVED 후 5일 이내)
-        if (consultation.approvedAt == null) {
-            throw new BaseException(BaseResponseStatus.CONSULTATION_APPROVED_DATE_MISSING);
-        }
-        
-        long daysSinceApproval = ChronoUnit.DAYS.between(consultation.approvedAt, LocalDateTime.now());
-        if (daysSinceApproval > 5) {
-            throw new BaseException(BaseResponseStatus.REVIEW_PERIOD_EXPIRED);
-        }
-        
-        // 5. 중복 리뷰 확인
+
+        // 4. 중복 리뷰 확인
         if (reviewMapper.existsReviewByConsultationId(requestDto.getConsultationId())) {
             throw new BaseException(BaseResponseStatus.REVIEW_ALREADY_EXISTS);
         }
-        
-        // 6. 리뷰 저장
+
+        // 5. 리뷰 저장
         reviewMapper.insertReview(
             userId,
             requestDto.getConsultationId(),
@@ -76,10 +66,10 @@ public class ReviewService {
             requestDto.getRating(),
             requestDto.getContent()
         );
-        
+
         Long reviewId = reviewMapper.getLastInsertId();
-        
-        // 7. 이벤트 발행 (전문가에게 알림)
+
+        // 6. 이벤트 발행 (전문가에게 알림)
         ReviewCreatedEvent event = new ReviewCreatedEvent(
             reviewId,
             requestDto.getConsultationId(),
@@ -91,10 +81,10 @@ public class ReviewService {
             consultation.advisorName
         );
         eventPublisher.publishEvent(event);
-        
-        log.info("리뷰 작성 완료: reviewId={}, consultationId={}, userId={}", 
-                reviewId, requestDto.getConsultationId(), userId);
-        
+
+        log.info("리뷰 작성 완료: reviewId={}, consultationId={}, userId={}",
+            reviewId, requestDto.getConsultationId(), userId);
+
         return new ReviewCreateResponseDto(reviewId, "리뷰가 성공적으로 작성되었습니다.");
     }
     
