@@ -11,7 +11,7 @@ import AuthService from '@/services/authService';
 import { UserInfo } from '@/types';
 
 // 로그인이 필요하지 않은 public 라우트들
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete', '/products', '/community', '/experts', '/search'];
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/SignupChoicePage', '/signup-complete', '/products', '/community', '/experts', '/search', '/advisors-list'];
 
 interface AuthContextType {
   isLoggedIn: boolean;
