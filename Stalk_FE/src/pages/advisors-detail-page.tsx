@@ -334,7 +334,7 @@ const AdvisorsDetailPage: React.FC = () => {
   };
 
   const formatConsultationFee = (fee?: number) =>
-    fee != null ? `${fee.toLocaleString()}원` : '미설정';
+    fee != null ? `${fee.toLocaleString()}원` : "미설정";
 
   const formatDate = (date: Date) => {
     // 로컬 시간대 기준으로 YYYY-MM-DD 형식 생성 (UTC 변환 문제 방지)
@@ -744,7 +744,6 @@ const AdvisorsDetailPage: React.FC = () => {
     setDisplayedReviews((prev) => prev + 3);
   };
 
-
   // 달력 렌더링
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth);
@@ -1090,7 +1089,10 @@ const AdvisorsDetailPage: React.FC = () => {
                   상담요금
                 </div>
                 <p className="text-left text-md text-gray-700 px-7 py-3">
-                  시간당 <span className="font-bold">{formatConsultationFee(expert.consultationFee)}</span>
+                  시간당{" "}
+                  <span className="font-bold">
+                    {formatConsultationFee(expert.consultationFee)}
+                  </span>
                 </p>
               </div>
 
@@ -1164,7 +1166,7 @@ const AdvisorsDetailPage: React.FC = () => {
                         {/* 전문가 본인인 경우 수정/삭제 버튼 */}
                         <button
                           onClick={() =>
-                            navigate(`/advisors-introduction-update/${advisorId}`)
+                            navigate(`/expert-introduction-update/${advisorId}`)
                           }
                           className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
                         >

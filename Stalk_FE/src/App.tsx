@@ -97,8 +97,10 @@ const AppContent: React.FC = () => {
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean =
     location.pathname === "/" ||
-    sidebarPrefixes.some(prefix => location.pathname.startsWith(prefix));
-  const showFooter: boolean = !hideFooterRoutes.some(route => location.pathname.startsWith(route));
+    sidebarPrefixes.some((prefix) => location.pathname.startsWith(prefix));
+  const showFooter: boolean = !hideFooterRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
   const isVideoPage = location.pathname.startsWith("/video-consultation");
 
   return (
@@ -126,13 +128,33 @@ const AppContent: React.FC = () => {
 
               {/* 전문가 관련 path */}
               <Route path="/advisors-list" element={<AdvisorsListPage />} />
-              <Route path="/advisors-detail/:id" element={<AdvisorstDetailPage />} />
-              <Route path="/advisors-introduction-create/:advisorId" element={<AdvisorsIntroductionCreatePage />} />
-              <Route path="/advisors-introduction-update/:advisorId" element={<AdvisorsIntroductionUpdatePage />} />
+              <Route
+                path="/advisors-detail/:id"
+                element={<AdvisorstDetailPage />}
+              />
+              <Route
+                path="/advisors-introduction-create/:advisorId"
+                element={<AdvisorsIntroductionCreatePage />}
+              />
+              <Route
+                path="/advisors-introduction-update/:advisorId"
+                element={<AdvisorsIntroductionUpdatePage />}
+              />
+              {/* Alias route for expert-introduction-update to point to the same page */}
+              <Route
+                path="/expert-introduction-update/:advisorId"
+                element={<AdvisorsIntroductionUpdatePage />}
+              />
 
               {/* 투자 지식 in 관련 path */}
-              <Route path="/investment-knowledge-list" element={<InvestmentKnowledgeListPage />} />
-              <Route path="/investment-knowledge-detail/:postId" element={<InvestmentKnowledgeDetailPage />} />
+              <Route
+                path="/investment-knowledge-list"
+                element={<InvestmentKnowledgeListPage />}
+              />
+              <Route
+                path="/investment-knowledge-detail/:postId"
+                element={<InvestmentKnowledgeDetailPage />}
+              />
               <Route path="/write-post" element={<WritePostPage />} />
 
               {/* 상품 관련 path */}
@@ -140,7 +162,7 @@ const AppContent: React.FC = () => {
 
               {/* 관리자 관련 path */}
               <Route
-                path="/admin" 
+                path="/admin"
                 element={
                   <AdminProtectedRoute>
                     <AdminPage />
@@ -160,7 +182,6 @@ const AppContent: React.FC = () => {
               {/* 결제 결과 관련 path */}
               <Route path="/payment/success" element={<PaymentSuccess />} />
               <Route path="/payment/fail" element={<PaymentFail />} />
-
 
               <Route
                 path="/products"
