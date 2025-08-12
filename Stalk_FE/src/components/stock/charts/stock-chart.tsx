@@ -304,7 +304,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
     if (noLocalChart) {
       session.signal({
-        type: 'chart:request-latest',
+        type: 'chart:sync_request',
         data: JSON.stringify({ ts: Date.now() }),
       }).catch(console.error);
     }
@@ -313,45 +313,17 @@ const StockChart: React.FC<StockChartProps> = ({
   // ✅ chart:change 수신 시 내 sharedChart 반영
   useEffect(() => {
     if (!session) return;
-
     const onChartChange = (e: any) => {
       try {
-        const info: ChartInfo = JSON.parse(e.data);
+        const info = JSON.parse(e.data);
         if (!info?.ticker || !info?.period) return;
-        setSharedChart(info);      // ticker/period 둘 다 내부에 세팅
-        setPeriod(info.period);    // period 즉시 반영
-      } catch (err) {
-        console.error('[chart] invalid chart:change payload', err);
-      }
+        setSharedChart(info);
+        setPeriod(info.period);
+      } catch (err) { console.error('chart:change payload error', err); }
     };
-
-    // 누군가 최신 차트 달라고 하면 내가 알고 있으면 보내주기
-    const onChartRequest = async (_e: any) => {
-      // 내가 현재 알고 있는 차트
-      const current: ChartInfo | null =
-        sharedChart ??
-        (chartInfo?.ticker && chartInfo?.period
-          ? { ticker: chartInfo.ticker, period: chartInfo.period }
-          : (selectedStock?.ticker
-              ? { ticker: selectedStock.ticker, period }
-              : null));
-
-      if (current?.ticker) {
-        session.signal({
-          type: 'chart:change',
-          data: JSON.stringify(current),
-        }).catch(console.error);
-      }
-    };
-
     session.on('signal:chart:change', onChartChange);
-    session.on('signal:chart:request-latest', onChartRequest);
-    return () => {
-      session.off('signal:chart:change', onChartChange);
-      session.off('signal:chart:request-latest', onChartRequest);
-    };
-  }, [session, chartInfo?.ticker, chartInfo?.period, selectedStock?.ticker, sharedChart, period]);
-
+    return () => {session.off('signal:chart:change', onChartChange)};
+  }, [session]);
 
   // 외부 chartInfo 들어오면 내부 period 동기화
   useEffect(() => {
@@ -383,11 +355,10 @@ const StockChart: React.FC<StockChartProps> = ({
 
     if (chartInfo && period !== chartInfo.period) return;
 
-
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
-  }, [chartInfo?.ticker, selectedStock?.ticker, period]);
+  }, [sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period]);
 
   // Reprocess chart data when futureDays changes
   useEffect(() => {
@@ -442,7 +413,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const id = setInterval(() => fetchChartData(true), REAL_TIME_UPDATE_INTERVAL_MS);
   return () => clearInterval(id);
-  }, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
+  }, [sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
 
   // Add native wheel event listener for better scroll prevention
   useEffect(() => {
