@@ -96,7 +96,8 @@ public class ReservationService {
         currentUserId, paymentResponse.getReservationId(), paymentResponse.getOrderId(), paymentResponse.getAmount());
 
     // 예약 생성 이벤트 발행
-    publishCreatedEvent(requestDto.getAdvisorUserId(), currentUserId, scheduledTimeStr);
+    Long reservationId = paymentResponse.getReservationId();
+    publishCreatedEvent(requestDto.getAdvisorUserId(), currentUserId, scheduledTimeStr, reservationId);
 
     return PaymentReservationResponseDto.builder()
         .reservationId(paymentResponse.getReservationId())
@@ -429,18 +430,19 @@ public class ReservationService {
   /**
    * 예약 생성 이벤트 발행
    */
-  private void publishCreatedEvent(Long advisorUserId, Long clientUserId, String scheduledTime) {
+  private void publishCreatedEvent(Long advisorUserId, Long clientUserId, String scheduledTime, Long reservationId) {  // reservationId 파라미터 추가
     try {
       String clientName = getUserName(clientUserId);
 
       eventPublisher.publishEvent(new ReservationCreatedEvent(
           advisorUserId,
           clientName,
-          scheduledTime
+          scheduledTime,
+          reservationId  // reservationId 추가
       ));
 
-      log.debug("예약 생성 이벤트 발행 완료 - advisorId={}, clientName={}, dateTime={}",
-          advisorUserId, clientName, scheduledTime);
+      log.debug("예약 생성 이벤트 발행 완료 - advisorId={}, clientName={}, dateTime={}, reservationId={}",
+          advisorUserId, clientName, scheduledTime, reservationId);
     } catch (Exception e) {
       log.warn("예약 생성 이벤트 발행 실패 (예약은 성공)", e);
     }

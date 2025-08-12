@@ -281,24 +281,24 @@
   </select>
 
 
-  <!-- 기존 findAdvisorDetailById 쿼리 - ResultMap 사용 -->
+  <!-- 수정된 findAdvisorDetailById 쿼리 -->
   <select id="findAdvisorDetailById" resultMap="AdvisorDetailResultMap">
     SELECT
-      a.advisor_id as user_id,
-      u.name as name,
-      a.profile_image_url as profile_image_url,
-      a.public_contact as contact,
-      a.consultation_fee as consultation_fee,
-      adi.short_intro as short_intro,
-      adi.long_intro as long_intro,
-      adi.preferred_trade_style as preferred_trade_style,
-      adi.avg_rating as avg_rating,
-      adi.review_counting as review_count
+    a.advisor_id as user_id,
+    u.name as name,
+    a.profile_image_url as profile_image_url,
+    adi.public_contact as contact,  <!-- 이 부분을 advisor_detail_info에서 가져오도록 수정 -->
+    a.consultation_fee as consultation_fee,
+    adi.short_intro as short_intro,
+    adi.long_intro as long_intro,
+    adi.preferred_trade_style as preferred_trade_style,
+    adi.avg_rating as avg_rating,
+    adi.review_counting as review_count
     FROM advisor a
-           INNER JOIN users u ON a.advisor_id = u.id
-           LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+    INNER JOIN users u ON a.advisor_id = u.id
+    LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
     WHERE a.advisor_id = #{advisorId}
-      AND a.is_approved = 1
+    AND a.is_approved = 1
   </select>
 
   <!-- 전문가 상담료 조회 (기존 쿼리는 그대로 유지) -->

@@ -142,7 +142,7 @@ const SearchPage: React.FC = () => {
             type: 'expert',
             title: '투자 전문가 상담',
             description: '경험 많은 투자 전문가와 1:1 상담을 받아보세요',
-            link: '/experts'
+            link: '/advisors-list'
           },
           {
             type: 'product',
@@ -151,10 +151,10 @@ const SearchPage: React.FC = () => {
             link: '/products'
           },
           {
-            type: 'community',
-            title: '투자 커뮤니티',
-            description: '다른 투자자들과 정보를 공유하고 토론하세요',
-            link: '/community'
+            type: 'investment-knowledge',
+            title: '투자 지식 iN',
+            description: '궁금한 점에 대해 전문가에게 물어보세요',
+            link: '/investment-knowledge-list'
           },
           {
             type: 'mypage',

@@ -83,10 +83,15 @@ public class AdminApprovalService {
                 throw new BaseException(APPROVAL_PROCESSING_FAILED);
             }
 
-            // 3. 전문가에게 승인 알림 발송
+            // 3. 자격증 정보를 advisor_certificates 테이블에 추가 (중복 시 스킵)
+            int certificateInsertResult = adminApprovalMapper.insertCertificateIfNotExists(request);
+            log.info("자격증 정보 추가 결과: advisorId={}, insertCount={}",
+                request.getAdvisorId(), certificateInsertResult);
+
+            // 4. 전문가에게 승인 알림 발송
             createApprovalNotification(request.getAdvisorId(), true, null);
 
-            // 4. 응답 생성
+            // 5. 응답 생성
             return createActionResponse(requestId, request.getAdvisorId(), "APPROVED", null, null);
 
         } catch (Exception e) {

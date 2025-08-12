@@ -104,7 +104,7 @@ const Navbar: React.FC = () => {
           
             <div className="hidden md:flex items-center space-x-8">
               <button 
-                onClick={() => navigate('/experts')}
+                onClick={() => navigate('/advisors-list')}
                 className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
               >
                 투자 전문가
@@ -117,64 +117,14 @@ const Navbar: React.FC = () => {
                 상품 조회
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
               </button>
-              
-              <div 
-                className="relative group"
-                onMouseEnter={() => {
-                  if (communityMenuTimeout) {
-                    clearTimeout(communityMenuTimeout);
-                    setCommunityMenuTimeout(null);
-                  }
-                  setShowCommunityMenu(true);
-                }}
-                onMouseLeave={() => {
-                  const timeout = setTimeout(() => {
-                    setShowCommunityMenu(false);
-                  }, 200);
-                  setCommunityMenuTimeout(timeout);
-                }}
-              >
-                <button 
-                  onClick={() => navigate('/community')}
-                  className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative flex items-center space-x-1"
+              <button 
+                onClick={() => navigate('/investment-knowledge-list')}
+                className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
                 >
-                  <span>커뮤니티</span>
-                 
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
-                </button>
+                <span>투자 지식 iN</span>
                 
-                {/* Community Dropdown Menu */}
-                {showCommunityMenu && (
-                  <div className={`absolute top-full left-0 mt-2 w-48 ${
-                      isProductsPage
-                        ? 'bg-white/80 backdrop-blur-xl shadow-xl/60 border border-white/30'
-                        : 'bg-white shadow-lg border border-gray-200'
-                    } rounded-lg py-2 z-50`}>
-                    {/* Invisible bridge to prevent gap */}
-                    <div className="h-4 -mt-4"></div>
-                    <button
-                      onClick={() => {
-                        navigate('/community?tab=news');
-                        setShowCommunityMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
-                      <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
-                      <span>뉴스</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/community?tab=knowledge');
-                        setShowCommunityMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
-                      <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
-                      <span>투자 지식iN</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
+              </button>
             </div>
           
 

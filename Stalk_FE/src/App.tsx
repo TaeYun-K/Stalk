@@ -30,18 +30,18 @@ import SignupPage from "@/pages/signup-page";
 import SignupComplete from "@/pages/signup-complete";
 
 // Experts =================================================================================================
-import ExpertsPage from "@/pages/experts-page";
-import ExpertsIntroductionRegistrationPage from "@/pages/experts-introduction-registration-page";
-import ExpertIntroductionUpdatePage from "@/pages/expert-introduction-update-page";
-import ExpertDetailPage from "@/pages/expert-detail-page";
+import AdvisorsListPage from "@/pages/advisors-list-page";
+import AdvisorsIntroductionCreatePage from "@/pages/advisors-introduction-create-page";
+import AdvisorsIntroductionUpdatePage from "@/pages/advisors-introduction-update-page";
+import AdvisorstDetailPage from "@/pages/advisors-detail-page";
 
 // Products =================================================================================================
 import ProductsPage from "@/pages/products-page";
 
-// Community =================================================================================================
-import CommunityPage from "@/pages/community-page";
+// investment knowledge =================================================================================================
+import InvestmentKnowledgeListPage from "@/pages/investment-knowledge-list-page";
 import WritePostPage from "@/pages/write-post-page";
-import KnowledgeBoardPage from "@/pages/knowledge-board-page";
+import InvestmentKnowledgeDetailPage from "@/pages/investment-knowledge-detail-page";
 import MyPage from "@/pages/my-page";
 
 import SearchPage from "@/pages/search-page";
@@ -61,12 +61,17 @@ const hideNavbarRoutes: string[] = [
   "/signup-complete",
 ];
 
-// Sidebar를 보여줄 페이지 목록 (모든 페이지에 적용)
-const showSidebarRoutes: string[] = [
-  "/",
-  "/experts",
-  "/admin",
-  "/community",
+// Sidebar를 보여줄 경로 Prefix 목록
+const sidebarPrefixes: string[] = [
+  // 전문가 관련 페이지
+  "/advisors-list",
+  "/advisors-detail/", // 동적 파라미터 대응
+  "/advisors-introduction-create",
+  "/advisors-introduction-update",
+  // 투자 지식 관련 페이지
+  "/investment-knowledge-list",
+  "/investment-knowledge-detail/", // 동적 파라미터 대응
+  // 기타
   "/products",
   "/mypage",
   "/settings",
@@ -77,9 +82,7 @@ const showSidebarRoutes: string[] = [
   "/watchlist",
   "/holdings",
   "/reservations",
-  "/expert-detail",
-  "/expert-registration",
-  "/knowledge-board",
+  "/admin",
 ];
 
 // Footer를 숨길 페이지 목록
@@ -93,10 +96,11 @@ const AppContent: React.FC = () => {
   const location = useLocation();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean =
-    showSidebarRoutes.includes(location.pathname) ||
-    location.pathname.startsWith("/expert-detail/") ||
-    location.pathname.startsWith("/community/post/");
-  const showFooter: boolean = !hideFooterRoutes.some(route => location.pathname.startsWith(route));
+    location.pathname === "/" ||
+    sidebarPrefixes.some((prefix) => location.pathname.startsWith(prefix));
+  const showFooter: boolean = !hideFooterRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
   const isVideoPage = location.pathname.startsWith("/video-consultation");
 
   return (
@@ -110,10 +114,53 @@ const AppContent: React.FC = () => {
         <div className={`flex-1 ${showSidebar ? "mr-0" : ""} flex flex-col`}>
           <main className="flex-1 overflow-auto">
             <Routes>
-              {/* Public Routes */}
-              <Route path="/experts" element={<ExpertsPage />} />
-              <Route path="/community" element={<CommunityPage />} />
+              {/* 홈페이지 관련 path */}
+              <Route path="/" element={<HomePage />} />
+
+              {/* 로그인 & 회원가입 관련 path */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/SignupChoicePage" element={<SignupChoicePage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/signup-complete" element={<SignupComplete />} />
+
+              {/* 마이페이지 관련 path */}
+              <Route path="/mypage" element={<MyPage />} />
+
+              {/* 전문가 관련 path */}
+              <Route path="/advisors-list" element={<AdvisorsListPage />} />
+              <Route
+                path="/advisors-detail/:id"
+                element={<AdvisorstDetailPage />}
+              />
+              <Route
+                path="/advisors-introduction-create/:advisorId"
+                element={<AdvisorsIntroductionCreatePage />}
+              />
+              <Route
+                path="/advisors-introduction-update/:advisorId"
+                element={<AdvisorsIntroductionUpdatePage />}
+              />
+              {/* Alias route for expert-introduction-update to point to the same page */}
+              <Route
+                path="/expert-introduction-update/:advisorId"
+                element={<AdvisorsIntroductionUpdatePage />}
+              />
+
+              {/* 투자 지식 in 관련 path */}
+              <Route
+                path="/investment-knowledge-list"
+                element={<InvestmentKnowledgeListPage />}
+              />
+              <Route
+                path="/investment-knowledge-detail/:postId"
+                element={<InvestmentKnowledgeDetailPage />}
+              />
+              <Route path="/write-post" element={<WritePostPage />} />
+
+              {/* 상품 관련 path */}
               <Route path="/products" element={<ProductsPage />} />
+
+              {/* 관리자 관련 path */}
               <Route
                 path="/admin"
                 element={
@@ -122,20 +169,19 @@ const AppContent: React.FC = () => {
                   </AdminProtectedRoute>
                 }
               />
-              <Route path="/" element={<HomePage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/signup-complete" element={<SignupComplete />} />
 
-              <Route path="/SignupChoicePage" element={<SignupChoicePage />} />
+              {/* 검색 관련 path */}
               <Route path="/search" element={<SearchPage />} />
-              {/* Protected Routes */}
 
-              <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
+              {/* 비디오 상담 관련 path */}
               <Route
-                path="/knowledge-board/:postId"
-                element={<KnowledgeBoardPage />}
+                path="/video-consultation/:consultationId"
+                element={<VideoConsultationPage />}
               />
+
+              {/* 결제 결과 관련 path */}
+              <Route path="/payment/success" element={<PaymentSuccess />} />
+              <Route path="/payment/fail" element={<PaymentFail />} />
 
               <Route
                 path="/products"
@@ -145,9 +191,6 @@ const AppContent: React.FC = () => {
                   </div>
                 }
               />
-              <Route path="/mypage" element={<MyPage />} />
-
-              <Route path="/write-post" element={<WritePostPage />} />
 
               <Route
                 path="/consultations"
@@ -156,15 +199,6 @@ const AppContent: React.FC = () => {
                     <h1>상담 내역</h1>
                   </div>
                 }
-              />
-              <Route path="/expert-detail/:id" element={<ExpertDetailPage />} />
-              <Route
-                path="/expert-registration/:advisorId"
-                element={<ExpertsIntroductionRegistrationPage />}
-              />
-              <Route
-                path="/expert-introduction-update/:advisorId"
-                element={<ExpertIntroductionUpdatePage />}
               />
 
               {/* Sidebar Routes */}
@@ -200,17 +234,6 @@ const AppContent: React.FC = () => {
                   </div>
                 }
               />
-
-              {/* Video Consultation Route */}
-              <Route
-                path="/video-consultation/:consultationId"
-                element={<VideoConsultationPage />}
-              />
-
-              <Route path="/payment/success" element={<PaymentSuccess />} />
-              <Route path="/payment/fail" element={<PaymentFail />} />
-
-              {/* Protected Routes */}
 
               {/* Redirect to home if route not found */}
               <Route path="*" element={<Navigate to="/" replace />} />
