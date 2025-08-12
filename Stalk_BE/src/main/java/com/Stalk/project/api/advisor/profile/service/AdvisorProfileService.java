@@ -217,22 +217,40 @@ public class AdvisorProfileService {
         }
     }
 
-    /**
-     * 프로필 기본 정보 수정
-     */
     private void updateProfileBasicInfo(Long advisorId, AdvisorProfileUpdateRequestDto request) {
-        // 기본 정보 필드 중 하나라도 있으면 업데이트
-        if (request.getProfileImageUrl() != null ||
-            request.getPublicContact() != null ||
-            request.getShortIntro() != null ||
-            request.getLongIntro() != null ||
-            request.getPreferredTradeStyle() != null) {
+        log.info("=== updateProfileBasicInfo 시작 ===");
+        log.info("advisorId: {}", advisorId);
+        log.info("consultationFee: {}", request.getConsultationFee());
 
+        // advisor_detail_info 테이블 업데이트
+        if (request.getProfileImageUrl() != null ||
+                        request.getPublicContact() != null ||
+                        request.getShortIntro() != null ||
+                        request.getLongIntro() != null ||
+                        request.getPreferredTradeStyle() != null) {
+
+            log.info("advisor_detail_info 업데이트 실행");
             int result = advisorProfileMapper.updateAdvisorDetailInfo(advisorId, request);
+            log.info("advisor_detail_info 업데이트 결과: {}", result);
             if (result == 0) {
                 throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_UPDATE_FAILED);
             }
         }
+
+        // advisor 테이블 업데이트 (상담료)
+        if (request.getConsultationFee() != null) {
+            log.info("상담료 업데이트 실행 - advisorId: {}, fee: {}", advisorId, request.getConsultationFee());
+            int result = advisorProfileMapper.updateAdvisorConsultationFee(advisorId, request.getConsultationFee());
+            log.info("상담료 업데이트 결과: {}", result);
+            if (result == 0) {
+                log.error("상담료 업데이트 실패 - 영향받은 행: 0");
+                throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_UPDATE_FAILED);
+            }
+        } else {
+            log.info("consultationFee가 null이므로 상담료 업데이트 건너뜀");
+        }
+
+        log.info("=== updateProfileBasicInfo 완료 ===");
     }
 
     /**
