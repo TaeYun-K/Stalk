@@ -651,6 +651,7 @@ const VideoConsultationPage: React.FC = () => {
     const onChartChange = (e: any) => {
       const info = JSON.parse(e.data) as ChartInfo;
       console.log('[chart] recv:', info);
+      
       setCurrentChart(info);
     };
     session.on('signal:chart:change', onChartChange);
@@ -667,7 +668,7 @@ const VideoConsultationPage: React.FC = () => {
   useEffect(() => {
     if (!session) return;
     const onSyncReq = async () => {
-      if (publisher && currentChart) {
+      if (currentChart) {
         await session.signal({
           type: 'chart:sync_state',
           data: JSON.stringify(currentChart),
@@ -997,23 +998,6 @@ const VideoConsultationPage: React.FC = () => {
       window.removeEventListener("unload", handleUnload);
     };
   }, []); // 의존성 배열을 비워 한 번만 실행되도록 함
-
-  // 시그널 수신
-  useEffect(() => {
-    if (!session) return;
-
-    const handler = (event: any) => {
-      const info: ChartInfo = JSON.parse(event.data);
-      setCurrentChart(info);
-    };
-
-    session.on('signal:chart:change', handler);
-
-    return () => {
-      session.off('signal:chart:change', handler);
-    };
-  }, [session]);
-
 
   return (
     <div className="h-screen w-screen bg-gray-900 text-white flex flex-col overflow-hidden">
@@ -1552,10 +1536,10 @@ const VideoConsultationPage: React.FC = () => {
                         <ChartErrorBoundary>
                           <div style={{ width: '100%', minHeight: '600px', minWidth: 0 }}>
                             <StockChart 
-                              selectedStock={selectedStock} 
+                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: '' } : null)}
                               darkMode={true} 
                               session={session}
-                              chartInfo={currentChart}
+                              chartInfo={currentChart ?? undefined}
                               onChartChange={handleChartChange}
                               isConsultationMode={true}
                               onPeriodChange={handlePeriodChange}
@@ -1564,14 +1548,14 @@ const VideoConsultationPage: React.FC = () => {
                               period={chartPeriod}
                               activeIndicator={activeIndicator as 'volume' | 'rsi' | 'macd' | 'stochastic'}
                               onDataPointsUpdate={setDataPointCount}
-                              key={selectedStock.ticker} // Force re-mount on stock change
+                              key={(selectedStock?.ticker ?? currentChart?.ticker) || 'chart'}
                               />
                           </div>
                         </ChartErrorBoundary>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-full">
-                        <p className="text-gray-400">주식을 선택해주세요</p>
+                        <p className="text-gray-400">주식을 선택하거나, 상대방의 공유 차트를 선택해주세요</p>
                       </div>
                     )}
                   </div>

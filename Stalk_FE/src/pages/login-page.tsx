@@ -85,9 +85,7 @@ const LoginPage = () => {
     <div className="min-h-screen bg-gradient-to-b from-blue-100 to-white">
       <NewNavbar />
       <div className="flex items-center justify-center px-4 ">
-        <div className="w-full max-w-4xl">
-          
-
+        <div className="w-1/2">
           {/* Login Form */}
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-12 shadow-modern border border-white/20">
             {/* Title */}
@@ -95,7 +93,7 @@ const LoginPage = () => {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">로그인</h1>
               <p className="text-gray-600">login</p>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <div className="gap-12">
               {/* Left Column - Fin Talk Login */}
               <div className="space-y-6">
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -156,49 +154,6 @@ const LoginPage = () => {
                     )}
                   </button>
                 </form>
-              </div>
-
-              {/* Right Column - Social Login */}
-              <div className="space-y-6">
-                {/* Social Login Divider */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-200"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white/80 text-gray-500 font-medium">소셜 로그인</span>
-                  </div>
-                </div>
-
-                {/* Social Login Buttons */}
-                <div className="space-y-3">
-                  {/* Kakao Login */}
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-center space-x-3 bg-yellow-400 text-gray-800 font-medium py-3 px-4 rounded-2xl hover:bg-yellow-500 transition-all duration-300 shadow-sm hover:shadow-md"
-                  >
-                    <img src={kakaoIcon} alt="Kakao" className="w-5 h-5" />
-                    <span>카카오 로그인</span>
-                  </button>
-
-                  {/* Naver Login */}
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-center space-x-3 bg-green-500 text-white font-medium py-3 px-4 rounded-2xl hover:bg-green-600 transition-all duration-300 shadow-sm hover:shadow-md"
-                  >
-                    <img src={naverIcon} alt="Naver" className="w-5 h-5" />
-                    <span>네이버 로그인</span>
-                  </button>
-
-                  {/* Google Login */}
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-center space-x-3 bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-2xl hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md"
-                  >
-                    <img src={googleIcon} alt="Google" className="w-5 h-5" />
-                    <span>Google 로그인</span>
-                  </button>
-                </div>
               </div>
             </div>
 

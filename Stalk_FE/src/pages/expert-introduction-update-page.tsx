@@ -7,6 +7,7 @@ import AuthService from '@/services/authService';
 
 interface CareerEntry {
   id: string;
+  apiId?: number;
   startDate: string;
   endDate: string;
   company: string;
@@ -32,6 +33,17 @@ interface AdvisorDetailApi {
   careers: AdvisorCareerApi[];
 }
 
+type PreferredTradeStyle = 'SHORT' | 'MID_SHORT' | 'MID' | 'MID_LONG' | 'LONG';
+
+interface AdvisorProfileUpdatePayload {
+  profileImageUrl?: string;
+  publicContact?: string;
+  shortIntro?: string;
+  longIntro?: string;
+  preferredTradeStyle?: PreferredTradeStyle;
+  careerEntries?: never[];
+}
+
 
 const ExpertIntroductionUpdatePage: React.FC = () => {
   const navigate = useNavigate();
@@ -51,6 +63,13 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
 
   // 경력사항
   const [careerEntries, setCareerEntries] = useState<CareerEntry[]>([]);
+  const [initialCareerMap, setInitialCareerMap] = useState<Record<number, {
+    startDate: string;
+    endDate: string;
+    company: string;
+    position: string;
+  }>>({});
+  const [deletedCareerIds, setDeletedCareerIds] = useState<Set<number>>(new Set());
   const [newCareerEntry, setNewCareerEntry] = useState<Omit<CareerEntry, 'id'>>({
     startDate: '',
     endDate: '',
@@ -172,6 +191,10 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
   };
 
   const deleteCareerEntry = (id: string) => {
+    const entry = careerEntries.find(e => e.id === id);
+    if (entry?.apiId !== undefined) {
+      setDeletedCareerIds(prev => new Set(prev).add(entry.apiId!));
+    }
     setCareerEntries(careerEntries.filter(entry => entry.id !== id));
   };
 
@@ -255,13 +278,27 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
         // setConsultationFee(result.consultation_fee || '');
 
         const mappedCareers: CareerEntry[] = (result.careers || []).map((c: AdvisorCareerApi) => ({
-          id: String(c.id ?? Date.now()),
+          id: `api-${c.id}`,
+          apiId: c.id,
           startDate: toYmdDot(c.started_at),
           endDate: c.ended_at ? toYmdDot(c.ended_at) : '',
           company: c.title || '',
           position: c.description || '',
         }));
         setCareerEntries(mappedCareers);
+
+        const snap: Record<number, { startDate: string; endDate: string; company: string; position: string; }> = {};
+        mappedCareers.forEach(mc => {
+          if (mc.apiId !== undefined) {
+            snap[mc.apiId] = {
+              startDate: mc.startDate,
+              endDate: mc.endDate,
+              company: mc.company,
+              position: mc.position,
+            };
+          }
+        });
+        setInitialCareerMap(snap);
       } catch (e) {
         console.error(e);
       }
@@ -306,21 +343,101 @@ const ExpertIntroductionUpdatePage: React.FC = () => {
         }
       }
 
-      // 2. 프로필 데이터 생성
-      const profileData = {
+      // 거래 스타일 정규화
+      const normalizeTradeStyle = (value: string | undefined): PreferredTradeStyle | undefined => {
+        switch (value) {
+          case 'SHORT':
+            return 'SHORT';
+          case 'MID':
+            return 'MID';
+          case 'MID_SHORT':
+            return 'MID_SHORT';
+          case 'MID_LONG':
+            return 'MID_LONG';
+          case 'LONG':
+            return 'LONG';
+          default:
+            return undefined;
+        }
+      };
+
+      const normalizedStyle = normalizeTradeStyle(preferredTradeStyle || undefined);
+
+      // 경력 변경사항 (CREATE/UPDATE/DELETE)
+      type CareerPayload = {
+        id?: number;
+        action: 'CREATE' | 'UPDATE' | 'DELETE';
+        title?: string;
+        description?: string;
+        startedAt?: string;
+        endedAt?: string | null;
+      };
+
+      const deleteEntries: CareerPayload[] = Array.from(deletedCareerIds).map((apiId) => {
+        const base = initialCareerMap[apiId];
+        return {
+          id: apiId,
+          action: 'DELETE',
+          title: base?.company ?? '',
+          description: base?.position ?? '',
+          startedAt: base?.startDate ? base.startDate.replace(/\./g, '-') : undefined,
+          endedAt: base?.endDate ? base.endDate.replace(/\./g, '-') : null,
+        };
+      });
+
+      const updateEntries: CareerPayload[] = careerEntries
+        .filter(e => e.apiId !== undefined)
+        .filter(e => {
+          const snap = initialCareerMap[e.apiId!];
+          if (!snap) return false;
+          return (
+            snap.startDate !== e.startDate ||
+            snap.endDate !== e.endDate ||
+            snap.company !== e.company ||
+            snap.position !== e.position
+          );
+        })
+        .map(e => ({
+          id: e.apiId,
+          action: 'UPDATE',
+          title: e.company,
+          description: e.position,
+          startedAt: e.startDate.replace(/\./g, '-'),
+          endedAt: e.endDate ? e.endDate.replace(/\./g, '-') : null,
+        }));
+
+      const createEntries: CareerPayload[] = careerEntries
+        .filter(e => e.apiId === undefined)
+        .map(e => ({
+          action: 'CREATE',
+          title: e.company,
+          description: e.position,
+          startedAt: e.startDate.replace(/\./g, '-'),
+          endedAt: e.endDate ? e.endDate.replace(/\./g, '-') : null,
+        }));
+
+      const careerChanges: CareerPayload[] = [
+        ...deleteEntries,
+        ...updateEntries,
+        ...createEntries,
+      ];
+
+      // 2. 프로필 데이터 생성 (선택하지 않은 필드는 제외)
+      const profileData: AdvisorProfileUpdatePayload = {
         profileImageUrl: profileImage ? uploadedImageUrl : profileImageUrl,
         publicContact: expertContact,
-        shortIntro: experTitle.trim(), // experTitle을 shortIntro에 매핑
+        shortIntro: experTitle.trim(),
         longIntro: expertIntroduction,
-        preferredTradeStyle: preferredTradeStyle || 'MID_LONG', // 기본값 설정
-        careerEntries: careerEntries.map(entry => ({
-          action: 'UPDATE',
-          title: entry.company, // company를 title에 매핑
-          description: entry.position, // position을 description에 매핑
-          startedAt: entry.startDate.replace(/\./g, '-'),
-          endedAt: entry.endDate ? entry.endDate.replace(/\./g, '-') : null,
-        })),
       };
+
+      if (normalizedStyle) {
+        profileData.preferredTradeStyle = normalizedStyle;
+      }
+
+      if (careerChanges.length > 0) {
+        // 필드 존재를 선택적으로 추가
+        (profileData as unknown as { careerEntries?: typeof careerChanges }).careerEntries = careerChanges;
+      }
 
       console.log('Submitting profile data:', profileData);
 

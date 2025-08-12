@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import NewNavbar from "@/components/new-navbar";
 import { useAuth } from "@/context/AuthContext";
 import profileDefault from "@/assets/images/profiles/Profile_default.svg";
 import profileCat from "@/assets/images/profiles/Profile_cat.svg";
@@ -12,11 +11,11 @@ import profileRabbit from "@/assets/images/profiles/Profile_rabbit.svg";
 import certificationExample from "@/assets/images/dummy/certification_example.svg";
 import ConsultationService from "@/services/consultationService";
 import AuthService from "@/services/authService";
-import ScheduleService from "@/services/scheduleService";
 import AdvisorService from "@/services/advisorService";
 import ReservationService from "@/services/reservationService";
 import { CancelReservationModal } from "@/components/modals";
 import UserService from "@/services/userService";
+import AdvisorTimeTable from "@/components/AdvisorTimeTable";
 import FavoriteService, {
   FavoriteAdvisorResponseDto,
 } from "@/services/favoriteService";
@@ -312,14 +311,7 @@ const MyPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userInfo]);
 
-  // 스케줄 관리 상태들
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date | null>(
-    null
-  );
-  const [scheduleData, setScheduleData] = useState<{
-    [key: string]: { operating: string[]; isRestDay: boolean };
-  }>({});
+  // 스케줄 관리 상태들 (AdvisorTimeTable 사용으로 로컬 상태 불필요하여 제거)
 
   // 상담일지 관련 상태
   const [selectedConsultation, setSelectedConsultation] =
@@ -349,71 +341,7 @@ const MyPage = () => {
     routeToUpdate();
   }, [activeTab, isExpert, navigate]);
 
-  // 날짜 선택 시 기존 스케줄 데이터 로드
-  useEffect(() => {
-    if (selectedScheduleDate && isExpert) {
-      const loadExistingSchedule = async () => {
-        try {
-          const dateStr = selectedScheduleDate.toISOString().split("T")[0];
-          const blockedTimes = await ScheduleService.getBlockedTimes(dateStr);
-
-          // 차단된 시간을 운영 시간으로 변환 (차단되지 않은 시간 = 운영 시간)
-          const allHours = [
-            "09:00",
-            "10:00",
-            "11:00",
-            "12:00",
-            "13:00",
-            "14:00",
-            "15:00",
-            "16:00",
-            "17:00",
-            "18:00",
-            "19:00",
-            "20:00",
-          ];
-          const operatingHours = allHours.filter(
-            (hour) => !blockedTimes.includes(hour)
-          );
-
-          const dateKey = formatDateKey(selectedScheduleDate);
-          setScheduleData((prev) => ({
-            ...prev,
-            [dateKey]: {
-              operating: operatingHours,
-              isRestDay: false, // 휴무일은 별도 처리 필요
-            },
-          }));
-        } catch (error) {
-          console.error("기존 스케줄 로드 실패:", error);
-          // 에러 시 기본 운영 시간으로 초기화 (9시~20시)
-          const dateKey = formatDateKey(selectedScheduleDate);
-          setScheduleData((prev) => ({
-            ...prev,
-            [dateKey]: {
-              operating: [
-                "09:00",
-                "10:00",
-                "11:00",
-                "12:00",
-                "13:00",
-                "14:00",
-                "15:00",
-                "16:00",
-                "17:00",
-                "18:00",
-                "19:00",
-                "20:00",
-              ],
-              isRestDay: false,
-            },
-          }));
-        }
-      };
-
-      loadExistingSchedule();
-    }
-  }, [selectedScheduleDate, isExpert]);
+  // (삭제) 로컬 스케줄 상태 로드: AdvisorTimeTable가 자체 로직으로 처리
 
   // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -567,6 +495,28 @@ const MyPage = () => {
                 ? 'completed'
                 : 'scheduled';
 
+            // 상담 시작 후 30분 경과 시 자동 완료 처리
+            let effectiveStatus: ConsultationItem['status'] = normalizedStatus;
+            if (normalizedStatus !== 'cancelled') {
+              const dateStr = (reservation.consultationDate || '').trim();
+              const timeStr = (reservation.consultationTime || '').trim();
+              if (dateStr && timeStr) {
+                const consultationDateTime = new Date(`${dateStr} ${timeStr}`);
+                const thirtyMinutesMs = 30 * 60 * 1000;
+                if (!Number.isNaN(consultationDateTime.getTime())) {
+                  const now = new Date();
+                  if (now.getTime() > consultationDateTime.getTime() + thirtyMinutesMs) {
+                    effectiveStatus = 'completed';
+                  }
+                }
+              }
+            }
+
+            // 취소된 상담은 목록에서 제외
+            if (effectiveStatus === 'cancelled') {
+              return;
+            }
+
             const consultationItem: ConsultationItem = {
               id: reservation.reservationId?.toString() || "",
               date: reservation.consultationDate || "",
@@ -577,13 +527,13 @@ const MyPage = () => {
                 reservation.advisorUserId?.toString() ||
                 "전문가",
               videoConsultation:
-                normalizedStatus === "completed" ? "상담 완료" : "상담 입장",
+                effectiveStatus === "completed" ? "상담 완료" : "상담 입장",
               action:
-                normalizedStatus === "completed" ? "상세보기" : normalizedStatus === 'cancelled' ? '취소됨' : "취소 요청",
-              status: normalizedStatus,
+                effectiveStatus === "completed" ? "상세보기" : "취소 요청",
+              status: effectiveStatus,
             };
 
-            if (normalizedStatus === "completed") {
+            if (effectiveStatus === "completed") {
               completedConsultations.push(consultationItem);
             } else {
               scheduledConsultations.push(consultationItem);
@@ -725,13 +675,7 @@ const MyPage = () => {
     });
   };
 
-  // 선택된 프로필 이미지 가져오기
-  const getSelectedProfileImage = () => {
-    const selectedAvatar = avatarOptions.find(
-      (avatar) => avatar.id === profileForm.selectedAvatar
-    );
-    return selectedAvatar ? selectedAvatar.image : profileDefault;
-  };
+  
 
   // 백엔드에서 받은 프로필 이미지 표시
   const getProfileImage = () => {
@@ -760,129 +704,16 @@ const MyPage = () => {
     return avatar ? avatar.image : profileDefault;
   };
 
-  // 스케줄 관리 관련 함수들
-  const operatingHours = [
-    "09:00",
-    "10:00",
-    "11:00",
-    "12:00",
-    "13:00",
-    "14:00",
-    "15:00",
-    "16:00",
-    "17:00",
-    "18:00",
-    "19:00",
-    "20:00",
-  ];
 
-  const formatDateKey = (date: Date) => {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}-${String(date.getDate()).padStart(2, "0")}`;
-  };
+  // (삭제) formatDateKey: 로컬 스케줄 계산 제거
 
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
+  // (삭제됨) getDaysInMonth, getFirstDayOfMonth, isOperatingHourSelected, isRestDay
 
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
+  // (삭제됨) toggleOperatingHour: AdvisorTimeTable 사용으로 대체
 
-  const isOperatingHourSelected = (date: Date, hour: string) => {
-    const dateKey = formatDateKey(date);
-    return scheduleData[dateKey]?.operating?.includes(hour) || false;
-  };
+  // (삭제됨) toggleRestDay: AdvisorTimeTable 사용으로 대체
 
-  const isRestDay = (date: Date) => {
-    const dateKey = formatDateKey(date);
-    return scheduleData[dateKey]?.isRestDay || false;
-  };
-
-  const toggleOperatingHour = (hour: string) => {
-    if (!selectedScheduleDate) return;
-
-    const dateKey = formatDateKey(selectedScheduleDate);
-    const currentData = scheduleData[dateKey] || {
-      operating: [],
-      isRestDay: false,
-    };
-
-    const newOperating = currentData.operating.includes(hour)
-      ? currentData.operating.filter((h) => h !== hour)
-      : [...currentData.operating, hour];
-
-    setScheduleData({
-      ...scheduleData,
-      [dateKey]: {
-        ...currentData,
-        operating: newOperating,
-      },
-    });
-  };
-
-  const toggleRestDay = (date: Date) => {
-    const dateKey = formatDateKey(date);
-    const currentData = scheduleData[dateKey] || {
-      operating: [],
-      isRestDay: false,
-    };
-
-    setScheduleData({
-      ...scheduleData,
-      [dateKey]: {
-        ...currentData,
-        isRestDay: !currentData.isRestDay,
-        operating: !currentData.isRestDay ? [] : currentData.operating, // 휴무일로 설정하면 운영시간 초기화
-      },
-    });
-  };
-
-  const saveSchedule = async () => {
-    if (!selectedScheduleDate) {
-      alert("날짜를 선택해주세요.");
-      return;
-    }
-
-    try {
-      const dateKey = formatDateKey(selectedScheduleDate);
-      const schedule = scheduleData[dateKey];
-
-      if (!schedule) {
-        alert("저장할 스케줄이 없습니다.");
-        return;
-      }
-
-      // 운영 시간을 차단 시간으로 변환 (운영하지 않는 시간 = 차단 시간)
-      const allHours = [
-        "09:00",
-        "10:00",
-        "11:00",
-        "12:00",
-        "13:00",
-        "14:00",
-        "15:00",
-        "16:00",
-        "17:00",
-        "18:00",
-        "19:00",
-        "20:00",
-      ];
-      const blockedTimes = allHours.filter(
-        (hour) => !schedule.operating.includes(hour)
-      );
-
-      const dateStr = selectedScheduleDate.toISOString().split("T")[0];
-      await ScheduleService.updateBlockedTimes(dateStr, blockedTimes);
-
-      alert("스케줄이 저장되었습니다.");
-    } catch (error) {
-      console.error("스케줄 저장 실패:", error);
-      alert("스케줄 저장에 실패했습니다.");
-    }
-  };
+  // (삭제됨) saveSchedule: AdvisorTimeTable 내부 저장 로직 사용
 
   // 상담일지 관련 함수들
   const handleConsultationDiaryClick = async (
@@ -956,83 +787,7 @@ const MyPage = () => {
     }
   };
 
-  const renderScheduleCalendar = () => {
-    const daysInMonth = getDaysInMonth(currentMonth);
-    const firstDay = getFirstDayOfMonth(currentMonth);
-    const days = [];
-
-    // 이전 달의 마지막 날들
-    const prevMonth = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth() - 1
-    );
-    const daysInPrevMonth = getDaysInMonth(prevMonth);
-    for (let i = firstDay - 1; i >= 0; i--) {
-      const date = new Date(
-        prevMonth.getFullYear(),
-        prevMonth.getMonth(),
-        daysInPrevMonth - i
-      );
-      days.push(
-        <div key={`prev-${i}`} className="text-gray-300 text-center py-2">
-          {date.getDate()}
-        </div>
-      );
-    }
-
-    // 현재 달의 날들
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth(),
-        day
-      );
-      const dateKey = formatDateKey(date);
-      const isSelected =
-        selectedScheduleDate && formatDateKey(selectedScheduleDate) === dateKey;
-      const hasSchedule = scheduleData[dateKey];
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
-      days.push(
-        <div
-          key={day}
-          onClick={() => setSelectedScheduleDate(date)}
-          className={`text-center py-2 cursor-pointer relative ${
-            isSelected
-              ? "bg-blue-500 text-white rounded-lg"
-              : isWeekend
-              ? date.getDay() === 0
-                ? "text-red-500"
-                : "text-blue-500"
-              : "text-gray-900"
-          } hover:bg-blue-100 hover:rounded-lg transition-colors`}
-        >
-          {day}
-          {hasSchedule && (
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
-              <div
-                className={`w-1 h-1 rounded-full ${
-                  hasSchedule.isRestDay ? "bg-red-400" : "bg-green-400"
-                }`}
-              ></div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // 다음 달의 첫 날들
-    const remainingDays = 42 - days.length;
-    for (let i = 1; i <= remainingDays; i++) {
-      days.push(
-        <div key={`next-${i}`} className="text-gray-300 text-center py-2">
-          {i}
-        </div>
-      );
-    }
-
-    return days;
-  };
+  // (삭제됨) renderScheduleCalendar: AdvisorTimeTable 사용으로 대체
 
   const [certificates, setCertificates] = useState<ApprovalHistoryResponse[]>(
     []
@@ -1149,13 +904,10 @@ const MyPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <NewNavbar
-        userType={isExpert ? "expert" : "general"}
-        onUserTypeChange={() => {}}
-      />
+    
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 pt-28">
         <div className="flex gap-8">
           {/* Left Sidebar */}
           <div className="w-64 flex-shrink-0">
@@ -1196,10 +948,12 @@ const MyPage = () => {
                       </button>
                       <button
                         onClick={() => {
-                          setEditInfoForm({
-                            name: userProfile?.name || editInfoForm.name || "",
-                            contact: userProfile?.contact || editInfoForm.contact || "",
-                          });
+                          setEditInfoForm((prev) => ({
+                            ...prev,
+                            name: userProfile?.name || prev.name || "",
+                            contact: userProfile?.contact || prev.contact || "",
+                            email: prev.email || "",
+                          }));
                           setShowEditInfoModal(true);
                         }}
                         className="text-blue-600 hover:text-blue-700 font-medium"
@@ -1517,16 +1271,25 @@ const MyPage = () => {
                                 </button>
                               </td>
                               <td className="px-4 py-3">
-                                <button
-                                  onClick={() => handleCancelConsultation(item)}
-                                  className={`${item.status === 'cancelled'
-                                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                                    : 'bg-red-500 text-white hover:bg-red-600'
-                                  } px-3 py-1 rounded-lg text-sm transition-colors`}
-                                  disabled={isCancelling || item.status === 'cancelled'}
-                                >
-                                  {item.action}
-                                </button>
+                                {consultationTab !== "상담 완료" ? (
+                                  <button
+                                    onClick={() => handleCancelConsultation(item)}
+                                    className={`${item.status === 'cancelled'
+                                      ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                                      : 'bg-red-500 text-white hover:bg-red-600'
+                                    } px-3 py-1 rounded-lg text-sm transition-colors`}
+                                    disabled={isCancelling || item.status === 'cancelled'}
+                                  >
+                                    {item.action}
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => navigate(`/expert-detail/${encodeURIComponent(item.expert)}`)}
+                                    className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                                  >
+                                    {item.action}
+                                  </button>
+                                )}
                               </td>
                               {consultationTab === "상담 완료" && (
                                 <td className="px-4 py-3">
@@ -1768,203 +1531,10 @@ const MyPage = () => {
                   상담 영업 스케줄 관리
                 </h1>
 
-                {/* 안내 문구 */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                  <ul className="text-left text-sm text-gray-700 space-y-1">
-                    <li>
-                      • Stalk의 일정관리로 온/오프라인의 모든 일정을 한 곳에서
-                      관리하고 일정을 연동하세요.
-                    </li>
-                    <li>
-                      • 체크하는 요일과 시간 즉시 상담가능한 시간 사업자 설정
-                      시간 및 일정 관리를 설정해주시기 바랍니다.
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* 달력 영역 */}
-                  <div>
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
-                      {/* 월 네비게이션 */}
-                      <div className="flex items-center justify-between mb-4">
-                        <button
-                          onClick={() =>
-                            setCurrentMonth(
-                              new Date(
-                                currentMonth.getFullYear(),
-                                currentMonth.getMonth() - 1
-                              )
-                            )
-                          }
-                          className="p-2 hover:bg-gray-100 rounded-lg"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 19l-7-7 7-7"
-                            />
-                          </svg>
-                        </button>
-
-                        <h3 className="text-lg font-semibold">
-                          {currentMonth.getFullYear()}년{" "}
-                          {String(currentMonth.getMonth() + 1).padStart(2, "0")}
-                          월
-                        </h3>
-
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() =>
-                              setCurrentMonth(
-                                new Date(
-                                  currentMonth.getFullYear(),
-                                  currentMonth.getMonth() + 1
-                                )
-                              )
-                            }
-                            className="p-2 hover:bg-gray-100 rounded-lg"
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5l7 7-7 7"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => {
-                              const today = new Date();
-                              setCurrentMonth(today);
-                              setSelectedScheduleDate(today);
-                            }}
-                            className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-                          >
-                            Today
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 요일 헤더 */}
-                      <div className="grid grid-cols-7 gap-1 mb-2">
-                        {["일", "월", "화", "수", "목", "금", "토"].map(
-                          (day, index) => (
-                            <div
-                              key={day}
-                              className={`text-center text-sm font-medium py-2 ${
-                                index === 0
-                                  ? "text-red-500"
-                                  : index === 6
-                                  ? "text-blue-500"
-                                  : "text-gray-900"
-                              }`}
-                            >
-                              {day}
-                            </div>
-                          )
-                        )}
-                      </div>
-
-                      {/* 달력 그리드 */}
-                      <div className="grid grid-cols-7 gap-1">
-                        {renderScheduleCalendar()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 시간대 선택 영역 */}
-                  <div>
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-semibold">
-                          운영/휴무 설정
-                        </h4>
-                        <div className="text-sm text-gray-600">
-                          {selectedScheduleDate
-                            ? `${
-                                selectedScheduleDate.getMonth() + 1
-                              }월 ${selectedScheduleDate.getDate()}일`
-                            : "날짜를 선택하세요"}
-                        </div>
-                      </div>
-
-                      {selectedScheduleDate && (
-                        <div className="space-y-4">
-                          {/* 운영 시간대 */}
-                          <div>
-                            <h5 className="text-sm font-medium text-gray-700 mb-3">
-                              운영 시간
-                            </h5>
-                            <div className="grid grid-cols-4 gap-2">
-                              {operatingHours.map((hour) => (
-                                <button
-                                  key={hour}
-                                  onClick={() => toggleOperatingHour(hour)}
-                                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                                    isOperatingHourSelected(
-                                      selectedScheduleDate,
-                                      hour
-                                    )
-                                      ? "bg-blue-500 text-white border-blue-500"
-                                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-300"
-                                  }`}
-                                >
-                                  {hour}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* 휴무 설정 */}
-                          <div>
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={isRestDay(selectedScheduleDate)}
-                                onChange={() =>
-                                  toggleRestDay(selectedScheduleDate)
-                                }
-                                className="rounded border-gray-300"
-                              />
-                              <span className="text-sm text-gray-700">
-                                이 날은 휴무일로 설정
-                              </span>
-                            </label>
-                          </div>
-
-                          {/* 저장 버튼 */}
-                          <div className="pt-4">
-                            <button
-                              onClick={saveSchedule}
-                              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-                            >
-                              저장하기
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {!selectedScheduleDate && (
-                        <div className="text-center py-8 text-gray-500">
-                          달력에서 날짜를 선택해주세요
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                
+                {/* 추가: 캘린더 기반 스케줄 관리 컴포넌트 (기존 기능 유지) */}
+                <div className="mt-8">
+                  <AdvisorTimeTable onOperatingHoursChange={(_hasOperatingHours) => {}} />
                 </div>
               </div>
             )}
@@ -2230,114 +1800,7 @@ const MyPage = () => {
                       </div>
                     </div>
 
-                    {/* 상담 내용 분석 (기본 템플릿) */}
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 mb-3">
-                          1. 현재 포트폴리오 상태
-                        </h3>
-                        <ul className="space-y-2 text-gray-700">
-                          <li>
-                            • 주식 투자: 삼성전자 (30%), 투자 (25%), LG전자
-                            (25%)
-                          </li>
-                          <li>
-                            • 주식 투자: 현금성 자산 주요 투자 성향, 투자한동향
-                            입찰하다 중심으로 대정부산 회회사를 중의로 후보들
-                            계속해는 표
-                          </li>
-                          <li>
-                            • 채권 투자: 국고채 위주의 저금리 표평가 중이며,
-                            새로 투자 피상을 고려한 잠시 중다 중동부정리 에이시
-                            후 여러
-                          </li>
-                          <li>
-                            • 향후 새로 투자전자 절약해서 후 에 신지미에 투자
-                            있키 원에의 활용 위안 되물지 특황 공행중로 작동리에
-                            잘된 것로 투처
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 mb-3">
-                          2. 리스크 관리 방안
-                        </h3>
-                        <ul className="space-y-2 text-gray-700">
-                          <li>
-                            • 분산 투자와 분배로 분배된 월간하는 영역을 투자하는
-                            국세 부사무 대리, 영역 수첨현 어능 토형태는 최활하는
-                            반면 형태
-                          </li>
-                          <li>
-                            • 총알 투자법: 과체와 수익한다며 다반짧은 있에
-                            얘기토나타다건 위한 교에 수년간 상기 간여에 대다,
-                            영역 개별 팰건 등인 종기에 준개약
-                          </li>
-                          <li>
-                            • 정기적 실적: 분명현개, 조기에 동한, 상황
-                            선뢰관심한 중 활청 위 신증요여등 투리제거안전리어서
-                            향한다 진회, 상종정화 적들
-                          </li>
-                          <li>
-                            • 의외 조심한 이두: 천공 한 정역 대경을 세상적인
-                            밀청 통적며 토함든 사요되는 해현 전위 위중 위으로한
-                            자국의 요과
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 mb-3">
-                          3. 기타 조언
-                        </h3>
-                        <ul className="space-y-2 text-gray-700">
-                          <li>
-                            • 장기 투자 대상 단장장이 서 인상한정 선구를 하
-                            창제혀 장료해 정 깡의 부대료 구입 개경활뭍 좋중외
-                            신다
-                          </li>
-                          <li>
-                            • 업력 기하로: 예상한다는 소책 사업 태양으려면서
-                            되에마을 양이기능 위한 등 여화장 달런 요 신정의 무영
-                            좋다
-                          </li>
-                          <li>
-                            • 확실하고: 실정 기능대물 실어진부력에서의 시장과
-                            간경잘 변동 위 위안업 업의 보 추 정하등 없 오개 청제
-                            세요
-                          </li>
-                          <li>
-                            • 전문가 조언: 정제한와 채능 내향에 이 경험을 간행
-                            대부조언을 관년한 어보되어 건여여 교과대다, 공검 투
-                            조성 이대에 가요
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 mb-3">
-                          4. 포트폴리오 조정 및 재분석
-                        </h3>
-                        <ul className="space-y-2 text-gray-700">
-                          <li>
-                            • 주식 포트폴리오 분야 의해 보고판과 책한 상황아
-                            진약 계보경 입량 입권 호향한년 용하한 금과한
-                            재무지표
-                          </li>
-                          <li>
-                            • 주가한 투자: 새고한 소지 관례 고터 장대면애신
-                            수준소에 진하전 고대기모니산기 좋보다, 공화 적
-                            무형을 무정히 조기
-                          </li>
-                          <li>
-                            • 정기적 경정조기 투 간계 원으로, 조기 검고주터 맞는
-                            강제고적, 엳회 근앉터의 사회보고기 화기 조기의 대한
-                            기확한 조준
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
+                   
 
                     {/* 영상 분석 결과 */}
                     {videoAnalysisResult && (
@@ -2398,17 +1861,13 @@ const MyPage = () => {
                                         </h4>
                                         <div className="space-y-3">
                                           {summaryData.lecture_content.map(
-                                            (item: any, index: number) => (
+                                            (item: { topic: string; details: string }, index: number) => (
                                               <div
                                                 key={index}
                                                 className="bg-white rounded-lg p-4 border border-gray-200"
                                               >
-                                                <h5 className="font-medium text-blue-600 mb-2">
-                                                  {item.topic}
-                                                </h5>
-                                                <p className="text-gray-700 leading-relaxed">
-                                                  {item.details}
-                                                </p>
+                                                <h5 className="font-medium text-blue-600 mb-2">{item.topic}</h5>
+                                                <p className="text-gray-700 leading-relaxed">{item.details}</p>
                                               </div>
                                             )
                                           )}

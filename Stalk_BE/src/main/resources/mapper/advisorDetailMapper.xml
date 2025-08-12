@@ -87,6 +87,7 @@
     <result property="short_intro" column="short_intro" jdbcType="VARCHAR"/>
     <result property="long_intro" column="long_intro" jdbcType="VARCHAR"/>
     <result property="preferred_trade_style" column="preferred_trade_style" jdbcType="VARCHAR"/>
+    <result property="consultation_fee" column="consultation_fee" jdbcType="INTEGER"/>
     <result property="avg_rating" column="avg_rating" jdbcType="DOUBLE"/>
     <result property="review_count" column="review_count" jdbcType="INTEGER"/>
   </resultMap>
@@ -286,7 +287,8 @@
       a.advisor_id as user_id,
       u.name as name,
       a.profile_image_url as profile_image_url,
-      u.contact as contact,
+      a.public_contact as contact,
+      a.consultation_fee as consultation_fee,
       adi.short_intro as short_intro,
       adi.long_intro as long_intro,
       adi.preferred_trade_style as preferred_trade_style,
@@ -299,7 +301,7 @@
       AND a.is_approved = 1
   </select>
 
-  <!-- 전문가 상담료 조회 -->
+  <!-- 전문가 상담료 조회 (기존 쿼리는 그대로 유지) -->
   <select id="getConsultationFee" resultType="Integer">
     SELECT consultation_fee
     FROM advisor

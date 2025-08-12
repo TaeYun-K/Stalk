@@ -128,6 +128,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [futureDays, setFutureDays] = useState<number>(initialFutureDays);
   const [scrollIndicatorVisible, setScrollIndicatorVisible] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [sharedChart, setSharedChart] = useState<ChartInfo | null>(null);
 
   // Detect sidebar state from body margin
   const [sidebarOffset, setSidebarOffset] = useState(0);
@@ -201,7 +202,9 @@ const StockChart: React.FC<StockChartProps> = ({
   const stochasticChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
 
-  const getCurrentTicker = () => chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+  const getCurrentTicker = () =>
+  sharedChart?.ticker ?? chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+
   const chartKey = { ticker: getCurrentTicker(), period };
 
   // Generate future dates for drawing space
@@ -295,6 +298,42 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   });
 
+  // 기간이 없을 때도 차트 공유 되도록
+  useEffect(() => {
+    if (sharedChart?.period && sharedChart.period !== period) {
+      setPeriod(sharedChart.period);
+    }
+  }, [sharedChart?.period]);
+
+  // ✅ 최초 진입 시 내가 ticker 모르면 최신 차트 요청
+  useEffect(() => {
+    if (!session) return;
+
+    const noLocalChart =
+      !sharedChart?.ticker && !chartInfo?.ticker && !selectedStock?.ticker;
+
+    if (noLocalChart) {
+      session.signal({
+        type: 'chart:sync_request',
+        data: JSON.stringify({ ts: Date.now() }),
+      }).catch(console.error);
+    }
+  }, [session]);
+
+  // ✅ chart:change 수신 시 내 sharedChart 반영
+  useEffect(() => {
+    if (!session) return;
+    const onChartChange = (e: any) => {
+      try {
+        const info = JSON.parse(e.data);
+        if (!info?.ticker || !info?.period) return;
+        setSharedChart(info);
+        setPeriod(info.period);
+      } catch (err) { console.error('chart:change payload error', err); }
+    };
+    session.on('signal:chart:change', onChartChange);
+    return () => {session.off('signal:chart:change', onChartChange)};
+  }, [session]);
 
   // 외부 chartInfo 들어오면 내부 period 동기화
   useEffect(() => {
@@ -326,11 +365,10 @@ const StockChart: React.FC<StockChartProps> = ({
 
     if (chartInfo && period !== chartInfo.period) return;
 
-
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
-  }, [chartInfo?.ticker, selectedStock?.ticker, period]);
+  }, [sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period]);
 
   // Reprocess chart data when futureDays changes
   useEffect(() => {
@@ -385,7 +423,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const id = setInterval(() => fetchChartData(true), REAL_TIME_UPDATE_INTERVAL_MS);
   return () => clearInterval(id);
-  }, [chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
+  }, [sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period, realTimeUpdates]);
 
   // Add native wheel event listener for better scroll prevention
   useEffect(() => {
@@ -504,7 +542,6 @@ const StockChart: React.FC<StockChartProps> = ({
   // 드로잉 시그널 수신 핸들러 등록
   useEffect(() => {
     if (!session) return;
-
 
     // 수신 페이로드 유효성/차트키 체크
     const isForThisChart = (msg: any) =>
@@ -1469,18 +1506,28 @@ const StockChart: React.FC<StockChartProps> = ({
     setIsDrawingMode(!isDrawingMode);
   };
 
+
+  // 내가 period 바꿀 때 브로드 캐스트 보내기
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);
     
-    // Call external handler if provided (for consultation mode)
+    // Call external handler if provided (for consultation mode) - YOUR LOCAL CODE
     externalPeriodChange?.(parseInt(newPeriod));
 
     const ticker = getCurrentTicker();
-    if(ticker) {
-      onChartChange?.({
-        ticker,
-        period: newPeriod
-      });
+
+    if (ticker) {
+      const info = { ticker, period: newPeriod };
+      // 기존 상위 콜백 유지
+      onChartChange?.(info);
+      // ✅ 세션 브로드캐스트 추가 - FROM DEV (for real-time collaboration)
+      session?.signal({
+        type: 'chart:change',
+        data: JSON.stringify(info),
+      }).catch(console.error);
+
+      // 내가 바꾼 걸 sharedChart에도 반영 (내 화면도 일관성 있게)
+      setSharedChart(info);
     }
   };
 
@@ -1593,10 +1640,6 @@ const StockChart: React.FC<StockChartProps> = ({
     animation: {
       duration: 500,
       easing: 'easeInOutQuart' as const,
-    },
-    interaction: {
-      mode: 'index' as const,
-      intersect: false,
     },
     onHover: (event: any, activeElements: any, chart: any) => {
       try {

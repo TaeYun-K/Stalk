@@ -1075,6 +1075,103 @@ const SignupPage = () => {
               </div>
             </div>
 
+            {/* 자격증 정보 (전문가만 표시) */}
+            {userType === "expert" && (
+              <div className="space-y-4 pt-5 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">전문 자격 증명</h3>
+                
+                {/* 자격증 예시 이미지 */}
+                <div className="mb-6">
+                  <img
+                    src={certificationExample}
+                    alt="Certificate Example"
+                    className="w-full max-w-2xl mx-auto"
+                  />
+                </div>
+
+                {/* 자격증 입력 안내 */}
+                <div className="w-full pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
+                  <ul className="text-left text-sm text-gray-700 space-y-3 py-3">
+                    <li>• 위 합격증 원본대조 번호 입력 방식을 보고 아래 창에 입력해주세요.</li>
+                    <li>• 입력 시 하이픈('-') 없이 숫자만 입력하시기 바랍니다.</li>
+                  </ul>
+                </div>
+
+                {/* 자격증 폼 */}
+                <div className="w-full flex flex-row gap-4 mb-6">
+                  {/* 자격증 종류 */}
+                  <div className="w-1/4 flex flex-col gap-3">
+                    <h3 className="text-left pl-5">전문 자격명</h3>
+                    <div className="w-full">
+                      <select
+                        name="certificateName"
+                        value={formData.qualification.certificateName}
+                        onChange={handleSelectChange}
+                        className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        required
+                      >
+                        <option value="">전문 자격을 선택하세요</option>
+                        <option value="financial_advisor">금융투자상담사</option>
+                        <option value="securities_analyst">증권분석사</option>
+                        <option value="cpa">CPA</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 합격증 번호 */}
+                  <div className="w-1/4 flex flex-col gap-3">
+                    <h3 className="text-left pl-5">합격증 번호</h3>
+                    <div className="w-full">
+                      <input
+                        type="text"
+                        name="certificateFileSn"
+                        value={formData.qualification.certificateFileSn}
+                        onChange={(e) => handleQualificationChange(e, "certificateFileSn")}
+                        placeholder="8자리"
+                        maxLength={8}
+                        className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* 생년월일 */}
+                  <div className="w-1/4 flex flex-col gap-3">
+                    <h3 className="text-left pl-5">생년월일</h3>
+                    <div className="w-full">
+                      <input
+                        type="text"
+                        name="birth"
+                        value={formData.qualification.birth}
+                        onChange={(e) => handleQualificationChange(e, "birth")}
+                        placeholder="YYYYMMDD"
+                        maxLength={8}
+                        className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* 발급번호 */}
+                  <div className="w-1/4 flex flex-col gap-3">
+                    <h3 className="text-left pl-5">발급번호</h3>
+                    <div className="w-full">
+                      <input
+                        type="text"
+                        name="certificateFileNumber"
+                        value={formData.qualification.certificateFileNumber}
+                        onChange={(e) => handleQualificationChange(e, "certificateFileNumber")}
+                        placeholder="6자리"
+                        maxLength={6}
+                        className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 pt-5 border-t border-gray-200">
               {/* 개인정보 수집·이용 동의 */}
               <div className="flex items-start space-x-3">
