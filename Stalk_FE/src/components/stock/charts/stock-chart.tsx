@@ -319,6 +319,7 @@ const StockChart: React.FC<StockChartProps> = ({
         if (!info?.ticker || !info?.period) return;
         setSharedChart(info);
         setPeriod(info.period);
+        fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
     };
     session.on('signal:chart:change', onChartChange);
@@ -682,7 +683,7 @@ const StockChart: React.FC<StockChartProps> = ({
   }, [session, chartKey.ticker, chartKey.period]);
 
 
-  const fetchChartData = async (isUpdate = false) => {
+  const fetchChartData = async (isUpdate = false, override?: { ticker: string; period?: string } ) => {
     if (isLoading) {
       return;
     }
@@ -694,7 +695,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
     try {
       // More comprehensive market type detection - same logic as in use-stock-data.ts
-      const ticker = getCurrentTicker();
+      const ticker = override?.ticker ?? getCurrentTicker();
       let marketType: string;
 
       if (ticker.startsWith('9') || ticker.startsWith('3')) {
@@ -707,7 +708,7 @@ const StockChart: React.FC<StockChartProps> = ({
       }
 
       // Ensure period is a number
-      const periodNum = parseInt(period);
+      const periodNum = parseInt(override?.period ?? period);
 
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}&period=${periodNum}&t=${Date.now()}`,
