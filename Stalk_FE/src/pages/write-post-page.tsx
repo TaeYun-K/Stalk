@@ -17,10 +17,8 @@ const WritePostPage: React.FC = () => {
   });
 
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam === 'knowledge' || tabParam === 'news') {
-        setSelectedTab(tabParam);
-    }
+    // 뉴스 탭 제거: 탭은 항상 knowledge로 고정
+    setSelectedTab('knowledge');
 
     // 수정 모드 확인
     const editParam = searchParams.get('edit');
@@ -115,21 +113,6 @@ const WritePostPage: React.FC = () => {
             <h2 className="mb-6 ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
             <nav className="space-y-2">
               <button
-                onClick={() => navigate('/community?tab=news')}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
-                  selectedTab === 'news'
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span>뉴스</span>
-                </div>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-              <button
                 onClick={() => navigate('/community?tab=knowledge')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
                   selectedTab === 'knowledge'
@@ -138,7 +121,7 @@ const WritePostPage: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <span>투자 지식iN</span>
+                  <span>투자지식iN</span>
                 </div>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
