@@ -765,9 +765,6 @@ const ExpertsIntroductionRegistrationPage: React.FC = () => {
                     placeholder="예: 30000"
                     className="w-full px-4 py-3 border border-blue-500 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:bg-blue-50"
                   />
-                  <p className="text-xs text-gray-500">
-                    현재는 표시만 합니다. 추후 API 연결 시 서버에 저장됩니다.
-                  </p>
                 </div>
 
                 {/* 초기 상담 영업 시간 설정 */}
