@@ -118,7 +118,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [futureDays, setFutureDays] = useState<number>(initialFutureDays);
   const [scrollIndicatorVisible, setScrollIndicatorVisible] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const [sharedChart, setSharedChart] = useState<ChartInfo | null>(null);
+  const [sharedChart, setSharedChart] = useState<ChartInfo | null>(null);
 
   // Detect sidebar state from body margin
   const [sidebarOffset, setSidebarOffset] = useState(0);
@@ -309,6 +309,38 @@ const StockChart: React.FC<StockChartProps> = ({
       }).catch(console.error);
     }
   }, [session]);
+
+  // ✅ chart:sync_request 들어오면 현재 차트 info 응답
+  useEffect(() => {
+    if (!session) return;
+
+    const onChartSyncRequest = (e: any) => {
+      try {
+        // 내가 가지고 있는 현재 차트 상태
+        const ticker = getCurrentTicker();
+        const info = { ticker, period };
+
+        // 내가 아직 차트를 안 보고 있으면 응답할 게 없으니 무시
+        if (!info.ticker || !info.period) return;
+
+        // 요청 보낸 상대에게만 회신 (OpenVidu: to 는 Connection 배열)
+        const to = e.from ? [e.from] : undefined;
+
+        session.signal({
+          type: 'chart:change',
+          data: JSON.stringify(info),
+          to
+        }).catch(console.error);
+      } catch (err) {
+        console.error('chart:sync_request handler error', err);
+      }
+    };
+
+    session.on('signal:chart:sync_request', onChartSyncRequest);
+    return () => {
+      session.off('signal:chart:sync_request', onChartSyncRequest);
+    };
+  }, [session, sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period]);
 
   // ✅ chart:change 수신 시 내 sharedChart 반영
   useEffect(() => {
