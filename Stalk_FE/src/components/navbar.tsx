@@ -78,7 +78,7 @@ const Navbar: React.FC = () => {
   // 로그인 상태는 AuthContext에서 관리
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-[60] bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-xl border-b border-gray-200/30 shadow-lg">
+    <nav className="fixed top-0 left-0 right-0 z-[60] bg-white border-b border-gray-200 shadow-md">
       <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16">
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
@@ -138,7 +138,7 @@ const Navbar: React.FC = () => {
                 
                 {/* Community Dropdown Menu */}
                 {showCommunityMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-2xl border border-gray-200/30 shadow-xl py-2 z-50">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
                     {/* Invisible bridge to prevent gap */}
                     <div className="h-4 -mt-4"></div>
                     <button
@@ -170,7 +170,7 @@ const Navbar: React.FC = () => {
           {/* Search Bar and User Actions */}
           <div className="flex items-center space-x-4">
             {/* Search Bar */}
-            <div className="bg-white/40 backdrop-blur-md hover:bg-white/60 border border-white/50 hover:border-blue-300/50 rounded-full px-4 py-2 flex items-center space-x-3 w-80 transition-all duration-300 shadow-lg shadow-gray-200/20 hover:shadow-xl hover:shadow-blue-200/30 group" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+            <div className="bg-gray-50 hover:bg-gray-100 border border-gray-300 hover:border-blue-400 rounded-full px-4 py-2 flex items-center space-x-3 w-80 transition-all duration-300 group" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
               <input
                 type="text"
                 placeholder="원하는 검색어를 입력하세요"
@@ -195,7 +195,7 @@ const Navbar: React.FC = () => {
               <div className="relative">
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm  duration-300"
+                  className="flex items-center space-x-2 bg-white hover:bg-gray-50 duration-300"
                 >
                   {userProfileImage ? (
                     <img
@@ -221,7 +221,7 @@ const Navbar: React.FC = () => {
 
                 {/* Profile Dropdown Menu */}
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-2xl border border-gray-200/30 shadow-xl py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
                     {/* ADMIN이 아닐 때만 표시되는 메뉴들 */}
                     {userRole !== 'ADMIN' && (
                       <button
@@ -311,7 +311,7 @@ const Navbar: React.FC = () => {
             ) : (
               <button
                 onClick={() => navigate('/login')}
-                className="bg-gradient-to-r from-blue-500/90 to-blue-600/90 backdrop-blur-sm hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-6 py-2.5 rounded-2xl text-sm transition-all duration-300 transform hover:scale-105 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 border border-white/20"
+                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2.5 rounded-full text-sm transition-all duration-300 transform hover:scale-105 shadow-md"
               >
                 로그인
               </button>
