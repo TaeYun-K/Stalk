@@ -85,8 +85,9 @@ type ChartType = 'line';
 type ChartInfo = {
   ticker: string;
   period: string;
-  name?: string;
+  name: string;
 };
+
 
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
 
@@ -199,6 +200,12 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const getCurrentTicker = () =>
   sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
+
+  const info: ChartInfo = {
+    ticker: getCurrentTicker(),
+    period: period,
+    name: getCurrentName() || 'Unknown'  // fallback을 빈 문자열 대신 명시적 값으로
+  };
 
   const chartKey = { ticker: getCurrentTicker(), period };
 
