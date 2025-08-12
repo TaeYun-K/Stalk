@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CommunityService from '@/services/communityService';
 import { PostCategory, CommunityPostSummaryDto } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { Listbox, Transition } from '@headlessui/react';
+import { CheckIcon, ChevronUpDownIcon } from '@heroicons/react/20/solid';
 
 const InvestmentKnowledgeListPage = () => {
   const navigate = useNavigate();
   const [knowledgePosts, setKnowledgePosts] = useState<CommunityPostSummaryDto[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<PostCategory>(PostCategory.ALL);
+  const [myOnly, setMyOnly] = useState<boolean>(false);
   const [sortOption, setSortOption] = useState<'latest' | 'views' | 'comments'>('latest');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,15 +19,29 @@ const InvestmentKnowledgeListPage = () => {
   const { isLoggedIn } = useAuth();
 
 
-  const fetchKnowledgePosts = async (nextPageNo: number, category: PostCategory = selectedCategory) => {
+  const fetchKnowledgePosts = async (
+    nextPageNo: number,
+    category: PostCategory = selectedCategory,
+    myPostsOnly: boolean = myOnly
+  ) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await CommunityService.getPostsPaged(category, nextPageNo, 10);
-      const newContent = data.content || [];
-      setKnowledgePosts(prev => nextPageNo === 1 ? newContent : [...prev, ...newContent]);
-      setHasNext(data.hasNext);
-      setPageNo(nextPageNo);
+      if (myPostsOnly) {
+        // 내 글만 보기: 서버 페이징 기반 결과에서 클라이언트 필터된 결과 사용
+        const result = await CommunityService.getMyPosts(category, nextPageNo, 10);
+        const newContent = result.content || [];
+        setKnowledgePosts(prev => nextPageNo === 1 ? newContent : [...prev, ...newContent]);
+        // 간단한 hasNext 추정 (필터로 인해 실제보다 일찍 종료될 수 있음)
+        setHasNext(newContent.length >= 10);
+        setPageNo(nextPageNo);
+      } else {
+        const data = await CommunityService.getPostsPaged(category, nextPageNo, 10);
+        const newContent = data.content || [];
+        setKnowledgePosts(prev => nextPageNo === 1 ? newContent : [...prev, ...newContent]);
+        setHasNext(data.hasNext);
+        setPageNo(nextPageNo);
+      }
     } catch (error) {
       console.error('Error fetching knowledge posts:', error);
       setError('게시글을 불러오는 중 오류가 발생했습니다.');
@@ -37,17 +54,17 @@ const InvestmentKnowledgeListPage = () => {
     // 카테고리가 바뀔 때마다 1페이지부터 다시 로드
     setKnowledgePosts([]);
     setHasNext(true);
-    fetchKnowledgePosts(1, selectedCategory);
+    fetchKnowledgePosts(1, selectedCategory, myOnly);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory]);
+  }, [selectedCategory, myOnly]);
 
   const handleLoadMore = () => {
     if (loading || !hasNext) return;
-    fetchKnowledgePosts(pageNo + 1, selectedCategory);
+    fetchKnowledgePosts(pageNo + 1, selectedCategory, myOnly);
   };
 
   const handlePostClick = (postId: number) => {
-    navigate(`/knowledge-board/${postId}`);
+    navigate(`/investment-knowledge-detail/${postId}`);
   };
 
   const getSortedPosts = (posts: CommunityPostSummaryDto[]) => {
@@ -147,17 +164,56 @@ const InvestmentKnowledgeListPage = () => {
           <div className="pt-16 flex-1">
               <div className="space-y-6">
               <div className="flex items-center justify-between">
-                {/* 왼쪽: 카테고리 드롭다운 */}
-                <div>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value as PostCategory)}
-                    className="border rounded-xl px-4 py-3 text-gray-700 shadow-sm"
+                {/* 왼쪽: 카테고리 드롭다운 + 내가 작성한 글 토글 */}
+                <div className="flex items-center gap-4">
+                  {/* Headless UI Listbox for Category */}
+                  <Listbox value={selectedCategory} by={(a, b) => a === b} onChange={(val: PostCategory) => setSelectedCategory(val)}>
+                    <div className="relative w-36">
+                      <Listbox.Button className="relative w-full cursor-default rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span className="block truncate">
+                          {categoryOptions.find((o) => o.value === selectedCategory)?.label}
+                        </span>
+                        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                          <ChevronUpDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                        </span>
+                      </Listbox.Button>
+                      <Transition as={Fragment} leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
+                        <Listbox.Options className="absolute z-10 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
+                          {categoryOptions.map((opt) => (
+                            <Listbox.Option
+                              key={opt.value}
+                              className={({ active }) =>
+                                `relative cursor-pointer select-none py-2 pl-10 pr-4 ${active ? 'bg-blue-50 text-blue-900' : 'text-gray-900'}`
+                              }
+                              value={opt.value}
+                            >
+                              {({ selected }) => (
+                                <>
+                                  <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                    {opt.label}
+                                  </span>
+                                  {selected ? (
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600">
+                                      <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                                    </span>
+                                  ) : null}
+                                </>
+                              )}
+                            </Listbox.Option>
+                          ))}
+                        </Listbox.Options>
+                      </Transition>
+                    </div>
+                  </Listbox>
+                  <button
+                    type="button"
+                    disabled={!isLoggedIn}
+                    onClick={() => isLoggedIn && setMyOnly(prev => !prev)}
+                    className={`${myOnly ? 'text-gray-800 border-b-2 border-gray-800 pb-0.5' : 'text-gray-500 hover:text-gray-700'} ${!isLoggedIn ? 'cursor-not-allowed text-gray-300' : ''}`}
+                    title={!isLoggedIn ? '로그인 후 이용 가능합니다.' : '내가 작성한 글만 보기'}
                   >
-                    {categoryOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+                    My Posts
+                  </button>
                 </div>
                 {/* 오른쪽: 정렬 버튼 + 글쓰기 */}
                 <div className="flex items-center gap-6">
@@ -178,7 +234,7 @@ const InvestmentKnowledgeListPage = () => {
                       onClick={() => setSortOption('comments')}
                       className={`${sortOption === 'comments' ? 'text-gray-800 border-b-2 border-gray-800 pb-0.5' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                      댓글순
+                      답글순
                     </button>
                   </div>
                   {isLoggedIn ? (

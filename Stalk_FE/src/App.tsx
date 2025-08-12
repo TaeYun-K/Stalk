@@ -61,17 +61,17 @@ const hideNavbarRoutes: string[] = [
   "/signup-complete",
 ];
 
-// Sidebar를 보여줄 페이지 목록 (모든 페이지에 적용)
-const showSidebarRoutes: string[] = [
-  "/", // 홈페이지
+// Sidebar를 보여줄 경로 Prefix 목록
+const sidebarPrefixes: string[] = [
   // 전문가 관련 페이지
   "/advisors-list",
-  "/advisors-detail",
+  "/advisors-detail/", // 동적 파라미터 대응
   "/advisors-introduction-create",
   "/advisors-introduction-update",
-  // 투자 지식 in 관련 페이지
+  // 투자 지식 관련 페이지
   "/investment-knowledge-list",
-  "/investment-knowledge-detail",
+  "/investment-knowledge-detail/", // 동적 파라미터 대응
+  // 기타
   "/products",
   "/mypage",
   "/settings",
@@ -96,9 +96,8 @@ const AppContent: React.FC = () => {
   const location = useLocation();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean =
-    showSidebarRoutes.includes(location.pathname) ||
-    location.pathname.startsWith("/expert-detail/") ||
-    location.pathname.startsWith("/community/post/");
+    location.pathname === "/" ||
+    sidebarPrefixes.some(prefix => location.pathname.startsWith(prefix));
   const showFooter: boolean = !hideFooterRoutes.some(route => location.pathname.startsWith(route));
   const isVideoPage = location.pathname.startsWith("/video-consultation");
 

@@ -34,14 +34,6 @@ interface AdvisorDetailApi {
 
 type PreferredTradeStyle = "SHORT" | "MID_SHORT" | "MID" | "MID_LONG" | "LONG";
 
-interface AdvisorProfileUpdatePayload {
-  profileImageUrl?: string;
-  publicContact?: string;
-  shortIntro?: string;
-  longIntro?: string;
-  preferredTradeStyle?: PreferredTradeStyle;
-  careerEntries?: never[];
-}
 
 const AdvisorsIntroductionUpdatePage: React.FC = () => {
   const navigate = useNavigate();
@@ -296,7 +288,31 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         setExpertContact(formatPhoneNumber(result.contact || ""));
         setExpertTitle(result.short_intro || "");
         setExpertIntroduction(result.long_intro || "");
-        setPreferredTradeStyle(result.preferred_trade_style || "");
+
+        // 거래 스타일 응답값 정규화 (카멜/스네이크 + 한글/영문 대응)
+        const normalizeIncomingTradeStyle = (
+          value?: string
+        ): PreferredTradeStyle | "" => {
+          switch (value) {
+            case "단기":
+              return "SHORT";
+            case "중단기":
+              return "MID_SHORT";
+            case "중기":
+              return "MID";
+            case "중장기":
+              return "MID_LONG";
+            case "장기":
+              return "LONG";
+            default:
+              return "";
+          }
+        };
+
+        const incomingStyleRaw =
+          (result as unknown as { preferredTradeStyle?: string })
+            .preferredTradeStyle ?? result.preferred_trade_style;
+        setPreferredTradeStyle(normalizeIncomingTradeStyle(incomingStyleRaw));
         if (
           result.consultation_fee !== undefined &&
           result.consultation_fee !== null
@@ -388,15 +404,15 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         value: string | undefined
       ): PreferredTradeStyle | undefined => {
         switch (value) {
-          case "SHORT":
+          case "단기":
             return "SHORT";
-          case "MID":
-            return "MID";
-          case "MID_SHORT":
+          case "중단기":
             return "MID_SHORT";
-          case "MID_LONG":
+          case "중기":
+            return "MID";
+          case "중장기":
             return "MID_LONG";
-          case "LONG":
+          case "장기":
             return "LONG";
           default:
             return undefined;
@@ -850,7 +866,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
                                 }
                                 placeholder="0000.00.00"
                                 maxLength={10}
-                                className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-blue-500 ${
                                   newCareerEntry.startDate &&
                                   !isValidDate(newCareerEntry.startDate)
                                     ? "border-red-500"
@@ -874,7 +890,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
                                 }
                                 placeholder="0000.00.00"
                                 maxLength={10}
-                                className={`flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:border-blue-500 ${
+                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-blue-500 ${
                                   newCareerEntry.endDate &&
                                   !isValidDate(newCareerEntry.endDate)
                                     ? "border-red-500"
@@ -1014,7 +1030,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
                       setConsultationFee(onlyNums);
                     }}
                     placeholder="예: 30000"
-                    className="w-full px-4 py-3 border border-blue-500 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:bg-blue-50"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
