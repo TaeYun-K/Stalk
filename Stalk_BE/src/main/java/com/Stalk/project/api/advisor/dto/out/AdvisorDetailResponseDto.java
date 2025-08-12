@@ -39,17 +39,17 @@ public class AdvisorDetailResponseDto {
     private Boolean has_more_reviews;
 
     // 프로필 이미지 URL 변환
-    public String getProfile_image_url() {
-        if (this.profile_image_url != null) {
-            if (this.profile_image_url.startsWith("http://") || this.profile_image_url.startsWith("https://")) {
-                return this.profile_image_url;
-            }
-            if (this.profile_image_url.startsWith("/")) {
-                return "http://localhost:8081" + this.profile_image_url;
-            }
-        }
-        return this.profile_image_url;
-    }
+//    public String getProfile_image_url() {
+//        if (this.profile_image_url != null) {
+//            if (this.profile_image_url.startsWith("http://") || this.profile_image_url.startsWith("https://")) {
+//                return this.profile_image_url;
+//            }
+//            if (this.profile_image_url.startsWith("/")) {
+//                return "http://localhost:8081" + this.profile_image_url;
+//            }
+//        }
+//        return this.profile_image_url;
+//    }
 
     @Data
     @NoArgsConstructor
