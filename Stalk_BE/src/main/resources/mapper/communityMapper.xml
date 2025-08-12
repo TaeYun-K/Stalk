@@ -246,4 +246,12 @@
       AND cp.deleted_at IS NULL
   </select>
 
+  <!-- 조회수 1 증가 -->
+  <update id="incrementViewCount">
+    UPDATE community_posts
+    SET view_count = view_count + 1
+    WHERE id = #{postId}
+      AND deleted_at IS NULL
+  </update>
+
 </mapper>

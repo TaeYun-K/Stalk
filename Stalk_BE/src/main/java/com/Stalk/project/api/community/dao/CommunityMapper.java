@@ -130,4 +130,8 @@ public interface CommunityMapper {
    */
   CommentNotificationInfoDto findCommentNotificationInfo(@Param("postId") Long postId,
       @Param("commentAuthorId") Long commentAuthorId);
+
+  void incrementViewCount(@Param("postId") Long postId);
+
+
 }

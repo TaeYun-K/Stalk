@@ -229,6 +229,8 @@ public class CommunityService {
       throw new BaseException(BaseResponseStatus.COMMUNITY_POST_NOT_FOUND);
     }
 
+    communityMapper.incrementViewCount(postId);
+
     // 2. 댓글 목록 조회 (페이징 적용)
     List<CommunityCommentDto> comments = communityMapper.findCommentsByPostId(
         postId,
