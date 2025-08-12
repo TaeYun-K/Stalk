@@ -201,10 +201,24 @@ const StockChart: React.FC<StockChartProps> = ({
   const getCurrentTicker = () =>
   sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
 
-  const info: ChartInfo = {
-    ticker: getCurrentTicker(),
-    period: period,
-    name: getCurrentName() || 'Unknown'  // fallback을 빈 문자열 대신 명시적 값으로
+  // name을 함께 보내도록 하기 위한 헬퍼
+  const broadcastChartChange = (override?: Partial<ChartInfo>) => {
+    if (!session) return;
+    const info: ChartInfo = {
+      ticker: override?.ticker ?? getCurrentTicker(),
+      period: override?.period ?? period,
+      // 로컬에서 보이는 이름을 ‘무조건’ 포함 (없으면 ticker로 대체)
+      name: (override?.name ?? getCurrentName() ?? '').trim() || getCurrentTicker(),
+    };
+    if (!info.ticker || !info.period) return;
+
+    session.signal({
+      type: 'chart:change',
+      data: JSON.stringify(info),
+    }).catch(console.error);
+
+    // 내 화면의 sharedChart도 동기화 (표시 일관성)
+    setSharedChart(info);
   };
 
   const chartKey = { ticker: getCurrentTicker(), period };
@@ -1512,21 +1526,10 @@ const StockChart: React.FC<StockChartProps> = ({
   // 내가 period 바꿀 때 브로드 캐스트 보내기
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);
-    const ticker = getCurrentTicker();
-
-    if (ticker) {
-      const info = { ticker, period: newPeriod, name: getCurrentName() };
-      // 기존 상위 콜백 유지
-      onChartChange?.(info);
-      // ✅ 세션 브로드캐스트 추가
-      session?.signal({
-        type: 'chart:change',
-        data: JSON.stringify(info),
-      }).catch(console.error);
-
-      // 내가 바꾼 걸 sharedChart에도 반영 (내 화면도 일관성 있게)
-      setSharedChart(info);
-    }
+    // 기존 onChartChange 콜백 유지
+    onChartChange?.({ ticker: getCurrentTicker(), period: newPeriod, name: getCurrentName() || getCurrentTicker() });
+    // ✅ 시그널 전송을 헬퍼로 통일
+    broadcastChartChange({ period: newPeriod });
   };
 
   const handleChartTypeChange = (newType: ChartType) => {
