@@ -224,12 +224,14 @@
       cs.status,
       cs.payment_status as paymentStatus,
       cs.payment_key as paymentKey,
+      cs.order_id as orderId,        -- DTO에 있는 orderId 필드 추가
       cs.amount,
       u1.name as advisorName,
       u2.name as clientName
     FROM consultation_sessions cs
-           INNER JOIN users u1 ON cs.advisor_id = u1.id
-           INNER JOIN users u2 ON cs.user_id = u2.id
+           INNER JOIN advisor a ON cs.advisor_id = a.advisor_id    -- 중간 단계 추가
+           INNER JOIN users u1 ON a.advisor_id = u1.id            -- 전문가 정보 (advisor 테이블 경유)
+           INNER JOIN users u2 ON cs.user_id = u2.id              -- 클라이언트 정보 (직접 연결)
     WHERE cs.id = #{reservationId}
   </select>
 
