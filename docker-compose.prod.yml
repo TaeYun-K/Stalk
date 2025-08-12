@@ -9,6 +9,7 @@ services:
     volumes:
       - ./stalk_BE/src:/app/src
       - ./keys:/keys  
+      - /home/ubuntu/app/uploads:/app/uploads
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - GCP_KEY_FILE=/keys/stalkaiproject-812b3a8660a4.json
