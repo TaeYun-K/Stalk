@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthService from '../services/authService';
 import { useAuth } from '../context/AuthContext';
-import { Helmet } from 'react-helmet';
 
 // API 응답 인터페이스 정의
 interface ApiReservation {
@@ -351,19 +350,6 @@ const HomePage: React.FC = () => {
       <div className="relative pt-10 pr-20">
         <main className="px-20 sm:px-6 lg:px-36 py-8 pt-1">
           
-
-          {/* 주목할만한 뉴스 */}
-          <section className="max-w-7xl mx-auto mb-16">
-            <div className="py-3 px-7 bg-green-50 transition-all duration-300 bg-white rounded-full border">
-              <div className="flex items-center gap-10">
-                <span className="text-green-600 text-md font-bold">Today's News</span>
-                <p className="text-gray-700 text-sm font-light">
-                  미국-일본 무역 협정 체결로 아시아 자동차 제조사 주가 급등; 도요타 16% 상승
-                </p>
-              </div>
-            </div>
-          </section>
-
           {/* 최근 상담글 */}
           <section className="max-w-7xl mx-auto mb-16">
             <div>
