@@ -403,6 +403,17 @@ const StockChart: React.FC<StockChartProps> = ({
         setScrollIndicatorVisible(true);
         scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
 
+        // Broadcast future space change to other participants
+        if (session && newValue !== prev) {
+          session.signal({
+            type: 'futureSpace:update',
+            data: JSON.stringify({
+              chart: chartKey,
+              futureDays: newValue
+            })
+          }).catch(console.error);
+        }
+
         return newValue;
       });
     };
@@ -568,6 +579,7 @@ const StockChart: React.FC<StockChartProps> = ({
         type: 'sync-response',
         chart: chartKey,
         shapes,
+        futureDays, // Include current future days in sync
         version: undefined // 훅에서 관리 중이면 필요 시 버전도 포함 가능
       };
       session.signal({ type: 'drawing:sync-response', data: JSON.stringify(response) }).catch(console.error);
@@ -578,6 +590,10 @@ const StockChart: React.FC<StockChartProps> = ({
       const msg = JSON.parse(e.data);
       if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
       applySnapshot(msg.shapes, msg.version);
+      // Also sync future days if provided in sync response
+      if (typeof msg.futureDays === 'number') {
+        setFutureDays(msg.futureDays);
+      }
     };
 
     // 리스너 등록
@@ -589,7 +605,7 @@ const StockChart: React.FC<StockChartProps> = ({
       session.off('signal:drawing:sync-request', onSyncReq);
       session.off('signal:drawing:sync-response', onSyncRes);
     };
-  }, [session, chartKey.ticker, chartKey.period, getAllShapes, applySnapshot]);
+  }, [session, chartKey.ticker, chartKey.period, getAllShapes, applySnapshot, futureDays]);
 
   // 드로잉 모드 켰을 때 또는 차트 변경 시 동기화 요청
   useEffect(() => {
@@ -598,6 +614,37 @@ const StockChart: React.FC<StockChartProps> = ({
       requestSync();
     }
   }, [session, isDrawingMode, chartKey.ticker, chartKey.period]);
+
+  // Future space sync listener
+  useEffect(() => {
+    if (!session) return;
+
+    // Listen for future space updates from other participants
+    const onFutureSpaceUpdate = (e: any) => {
+      const msg = JSON.parse(e.data);
+      // Check if update is for current chart
+      if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
+      
+      // Update local future days
+      if (typeof msg.futureDays === 'number') {
+        setFutureDays(msg.futureDays);
+        // Show indicator briefly when receiving update
+        setScrollIndicatorVisible(true);
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = setTimeout(() => setScrollIndicatorVisible(false), 1500);
+      }
+    };
+
+    // Register listener
+    session.on('signal:futureSpace:update', onFutureSpaceUpdate);
+
+    // Cleanup
+    return () => {
+      session.off('signal:futureSpace:update', onFutureSpaceUpdate);
+    };
+  }, [session, chartKey.ticker, chartKey.period]);
 
 
   const fetchChartData = async (isUpdate = false) => {
@@ -2455,10 +2502,16 @@ const StockChart: React.FC<StockChartProps> = ({
                     {/* Relocated Future Space Indicator - Top left corner, more subtle */}
                     {enableFutureSpace && futureDays > 0 && (
                       <div
-                        className="absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/10 backdrop-blur-sm transition-all duration-500"
+                        className={`absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md backdrop-blur-sm transition-all duration-500 ${
+                          darkMode 
+                            ? 'bg-white/10 border border-white/20' 
+                            : 'bg-black/10'
+                        }`}
                         style={{ opacity: scrollIndicatorVisible ? 0.7 : 0.4 }}
                       >
-                        <span className="text-[10px] text-black/60 font-medium">
+                        <span className={`text-[10px] font-medium ${
+                          darkMode ? 'text-white/70' : 'text-black/60'
+                        }`}>
                           미래 {futureDays}일
                         </span>
                       </div>
