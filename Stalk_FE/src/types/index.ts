@@ -217,6 +217,7 @@ export interface CommunityPostDetailDto {
   content: string;
   authorName: string;
   authorRole: string;
+  authorProfileImage?: string;
   category: string;
   categoryDisplayName: string;
   viewCount: number;
@@ -242,6 +243,7 @@ export interface CommunityCommentDto {
   content: string;
   authorName: string;
   authorRole: string;
+  authorProfileImage?: string;
   createdAt: string;
 }
 

@@ -6,7 +6,8 @@ import { PostCategory, CommunityPostCreateRequestDto, CommunityPostUpdateRequest
 const WritePostPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [selectedTab, setSelectedTab] = useState('knowledge');
+  // 탭은 항상 knowledge로 고정 (미사용 경고 방지)
+  const [/*selectedTab*/, /*setSelectedTab*/] = useState('knowledge');
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPostId, setEditPostId] = useState<number | null>(null);
@@ -18,7 +19,7 @@ const WritePostPage: React.FC = () => {
 
   useEffect(() => {
     // 뉴스 탭 제거: 탭은 항상 knowledge로 고정
-    setSelectedTab('knowledge');
+    // 탭은 항상 knowledge로 고정
 
     // 수정 모드 확인
     const editParam = searchParams.get('edit');
@@ -41,7 +42,7 @@ const WritePostPage: React.FC = () => {
     } catch (error) {
       console.error('Error fetching post for edit:', error);
       alert('게시글을 불러오는 중 오류가 발생했습니다.');
-      navigate('/community');
+      navigate('/investment-knowledge-list');
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ const WritePostPage: React.FC = () => {
         };
         
         await CommunityService.updatePost(editPostId, updateData);
-        alert('게시글이 수정되었습니다.');
+        navigate(`/investment-knowledge-detail/${editPostId}`);
       } else {
         // 새 글 작성 모드
         const createData: CommunityPostCreateRequestDto = {
@@ -91,11 +92,17 @@ const WritePostPage: React.FC = () => {
           content: formData.content.trim()
         };
         
-        await CommunityService.createPost(createData);
-        alert('게시글이 작성되었습니다.');
+        const created = await CommunityService.createPost(createData);
+        // 다양한 응답 형태에 대응하여 postId 추출
+        const newPostId = created?.result?.postId ?? created?.result?.id ?? created?.postId ?? created?.id;
+        
+        if (typeof newPostId === 'number' || (typeof newPostId === 'string' && newPostId)) {
+          navigate(`/investment-knowledge-detail/${newPostId}`);
+        } else {
+          // ID를 찾지 못하면 목록으로 폴백
+          navigate('/investment-knowledge-list');
+        }
       }
-      
-      navigate('/community?tab=knowledge');
     } catch (error) {
       console.error('Error saving post:', error);
       alert('게시글 저장 중 오류가 발생했습니다.');
@@ -108,27 +115,6 @@ const WritePostPage: React.FC = () => {
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex gap-8">
-          {/* Left Sidebar */}
-          <div className="pt-16 w-64">
-            <h2 className="mb-6 ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
-            <nav className="space-y-2">
-              <button
-                onClick={() => navigate('/community?tab=knowledge')}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
-                  selectedTab === 'knowledge'
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span>투자지식iN</span>
-                </div>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </nav>
-          </div>
 
           {/* Right Content */}
           <div className="pt-16 flex-1">
@@ -241,7 +227,7 @@ const WritePostPage: React.FC = () => {
                 <div className="flex justify-end space-x-2">
                   <button
                     type="button"
-                    onClick={() => navigate('/community?tab=knowledge')}
+                    onClick={() => navigate('/investment-knowledge-list')}
                     className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-2xl hover:bg-gray-50 transition-colors"
                     disabled={loading}
                   >

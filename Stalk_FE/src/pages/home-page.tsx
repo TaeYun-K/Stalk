@@ -515,7 +515,7 @@ const HomePage: React.FC = () => {
             </div>
             <div className='flex justify-center pt-5'>
               <button 
-                onClick={() => navigate('/community?tab=투자 지식iN')}
+                onClick={() => navigate('/investment-knowledge-list')}
                 className='flex justify-center border border-gray-300 w-fit py-3 px-4 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer'
               >
                 최근 상담글(투자 지식iN) 더보기
@@ -665,7 +665,7 @@ const HomePage: React.FC = () => {
             
             <div className='flex justify-center pt-5'>
               <button 
-                onClick={() => navigate('/experts')}
+                onClick={() => navigate('/advisors-list')}
                 className='flex justify-center border border-gray-300 w-fit py-3 px-4 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer'
               >
                 Stalk 컨설턴트 더보기

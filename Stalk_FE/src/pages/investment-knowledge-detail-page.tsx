@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import CommunityService from '@/services/communityService';
 import AuthService from '@/services/authService';
 import { PostCategory, CommunityPostDetailDto, CommunityCommentDto } from '@/types';
+import { Dialog, Transition } from '@headlessui/react';
 
 const KnowledgeBoardPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { postId } = useParams<{ postId: string }>();
-  const [selectedTab, setSelectedTab] = useState('knowledge');
+  // 탭은 항상 knowledge로 고정 (미사용 변수 제거)
+  useState('knowledge');
   const [commentInput, setCommentInput] = useState('');
   const [postDetail, setPostDetail] = useState<CommunityPostDetailDto | null>(null);
   const [comments, setComments] = useState<CommunityCommentDto[]>([]);
@@ -18,11 +20,12 @@ const KnowledgeBoardPage = () => {
   // 댓글 수정 상태
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState<string>('');
+  // 삭제 확인 모달 상태
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<number | null>(null);
 
-  useEffect(() => {
-    // 뉴스 탭 제거로 인해 항상 knowledge로 고정
-    setSelectedTab('knowledge');
-  }, [searchParams]);
+  // 뉴스 탭 제거로 인해 항상 knowledge로 고정
+  useEffect(() => {}, [searchParams]);
 
   // 게시글 상세 정보 로드
   useEffect(() => {
@@ -68,17 +71,17 @@ const KnowledgeBoardPage = () => {
   };
 
 
-  const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
+  const handleDeletePost = (_postId: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    setIsDeleteModalOpen(true);
+  };
 
-    if (!window.confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
-      return;
-    }
-
+  const confirmDeletePost = async () => {
+    if (!postDetail) return;
     try {
-      await CommunityService.deletePost(postId);
-      alert('게시글이 삭제되었습니다.');
-      navigate('/community?tab=knowledge');
+      await CommunityService.deletePost(postDetail.postId);
+      setIsDeleteModalOpen(false);
+      navigate('/investment-knowledge-list');
     } catch (error) {
       console.error('Error deleting post:', error);
       alert('게시글 삭제 중 오류가 발생했습니다.');
@@ -124,14 +127,18 @@ const KnowledgeBoardPage = () => {
     }
   };
 
-  const handleCommentDelete = async (commentId: number) => {
-    if (!window.confirm('정말로 이 댓글을 삭제하시겠습니까?')) {
-      return;
-    }
+  const handleCommentDelete = (commentId: number) => {
+    setPendingDeleteCommentId(commentId);
+    setIsDeleteModalOpen(true);
+  };
 
+  const confirmDeleteComment = async () => {
+    if (pendingDeleteCommentId == null) return;
     try {
-      await CommunityService.deleteComment(commentId);
-      loadComments(); // 댓글 목록 새로고침
+      await CommunityService.deleteComment(pendingDeleteCommentId);
+      setPendingDeleteCommentId(null);
+      setIsDeleteModalOpen(false);
+      loadComments();
     } catch (error) {
       console.error('Error deleting comment:', error);
       alert('댓글 삭제 중 오류가 발생했습니다.');
@@ -170,6 +177,45 @@ const KnowledgeBoardPage = () => {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleCommentSubmit();
+    }
+  };
+
+  // 댓글 작성자(전문가)의 프로필 이미지 클릭 시 전문가 상세 페이지로 이동
+  const handleCommentAuthorImageClick = async (comment: CommunityCommentDto) => {
+    if (comment.authorRole !== 'ADVISOR') return;
+    try {
+      // 여러 명일 수 있어 첫 페이지 다건 조회 후 이름 일치 탐색 (규모가 크면 개선 필요)
+      const response = await AuthService.publicRequest(`/api/advisors?pageNo=1&pageSize=100`);
+      if (!response.ok) {
+        navigate('/advisors-list');
+        return;
+      }
+      const data = await response.json();
+      const advisors = data?.result?.content ?? [];
+      const matched = advisors.find((a: any) => a?.name === comment.authorName);
+      if (matched?.id) {
+        navigate(`/advisors-detail/${matched.id}`);
+      } else {
+        navigate('/advisors-list');
+      }
+    } catch (e) {
+      navigate('/advisors-list');
+    }
+  };
+
+  // 리스트 페이지와 동일한 카테고리 색상 배지 클래스 매핑
+  const getCategoryBadgeClass = (category: string) => {
+    switch (category) {
+      case PostCategory.QUESTION:
+        return 'text-red-500 bg-red-50'; // 질문
+      case PostCategory.STOCK_DISCUSSION:
+        return 'text-orange-500 bg-orange-50'; // 종목토론
+      case PostCategory.TRADE_RECORD:
+        return 'text-green-600 bg-green-50'; // 매매기록
+      case PostCategory.MARKET_ANALYSIS:
+        return 'text-blue-600 bg-blue-50'; // 시황분석
+      default:
+        return 'text-gray-600 bg-gray-100';
     }
   };
 
@@ -223,34 +269,14 @@ const KnowledgeBoardPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-20 py-8">
         <div className="flex gap-8">
-          {/* Left Sidebar: 뉴스 탭 제거, 투자지식iN만 노출 */}
-          <div className="pt-16 w-64">
-            <h2 className="mb-6 ml-4 text-left text-xl font-semibold text-gray-900">커뮤니티</h2>
-            <nav className="space-y-2">
-              <button
-                onClick={() => navigate('/community?tab=knowledge')}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between ${
-                  selectedTab === 'knowledge'
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span>투자지식iN</span>
-                </div>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </nav>
-          </div>
+          
 
           {/* Right Content */}
-          <div className="pt-16 flex-1">
+          <div className="pt-24 flex-1">
             <div className="mb-6 flex flex-col justify-start gap-3">
-              <span className="text-left w-fit text-sm text-blue-500 rounded-full px-4 py-1 bg-blue-50">
+              <span className={`text-left w-fit text-sm rounded-full px-4 py-1 ${getCategoryBadgeClass(postDetail.category)}`}>
                 #{getCategoryLabel(postDetail.category)}
               </span>
               <h2 className="text-left text-2xl font-semibold text-gray-900">{postDetail.title}</h2>
@@ -259,11 +285,19 @@ const KnowledgeBoardPage = () => {
                 {/* 작성자 프로필 */}
                 <div className='flex items-center gap-2'>
                   {/* 작성자 프로필 이미지 */}
-                  <div className='w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center'>
-                    <span className='text-sm font-semibold text-gray-600'>
-                      {postDetail.authorName.charAt(0)}
-                    </span>
-                  </div>
+                  {postDetail.authorProfileImage ? (
+                    <img
+                      src={postDetail.authorProfileImage}
+                      alt={`${postDetail.authorName} 프로필 이미지`}
+                      className='w-10 h-10 rounded-full object-cover'
+                    />
+                  ) : (
+                    <div className='w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center'>
+                      <span className='text-sm font-semibold text-gray-600'>
+                        {postDetail.authorName.charAt(0)}
+                      </span>
+                    </div>
+                  )}
                   {/* 작성자 닉네임 및 작성일자 */}
                   <div className='flex flex-col items-start ml-2'>
                     <span className='text-sm font-semibold'>{postDetail.authorName}</span>
@@ -343,11 +377,26 @@ const KnowledgeBoardPage = () => {
                     <div className='flex flex-row items-center justify-between w-full'>
                   {/* 댓글 작성자 이미지 & 프로필 */}
                       <div className='flex flex-row gap-3 items-center'>
-                        <div className='w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center'>
-                          <span className='text-sm font-semibold text-gray-600'>
-                            {comment.authorName.charAt(0)}
-                          </span>
-                        </div>
+                      <button
+                        type='button'
+                        onClick={() => handleCommentAuthorImageClick(comment)}
+                        className='w-10 h-10 rounded-full overflow-hidden focus:outline-none'
+                        title='전문가 상세 보기'
+                      >
+                        {comment.authorRole === 'ADVISOR' && comment.authorProfileImage ? (
+                          <img
+                            src={comment.authorProfileImage}
+                            alt={`${comment.authorName} 프로필 이미지`}
+                            className='w-full h-full object-cover'
+                          />
+                        ) : (
+                          <div className='w-full h-full bg-gray-200 flex items-center justify-center'>
+                            <span className='text-sm font-semibold text-gray-600'>
+                              {comment.authorName.charAt(0)}
+                            </span>
+                          </div>
+                        )}
+                      </button>
                         <div className='flex flex-col items-start ml-2'>
                           <span className='text-sm font-semibold'>{comment.authorName}</span>
                           <span className='text-sm text-gray-500'>{formatDate(comment.createdAt)}</span>
@@ -412,6 +461,53 @@ const KnowledgeBoardPage = () => {
           </div>
         </div>
       </div>
+      {/* Delete Confirm Modal (Post/Comment 공용) */}
+      <Transition appear show={isDeleteModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsDeleteModalOpen(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100"
+            leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black/30" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-200" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+                leave="ease-in duration-150" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl">
+                  <Dialog.Title className="text-lg font-semibold text-gray-900">
+                    {pendingDeleteCommentId != null ? '정말로 이 댓글을 삭제하시겠습니까?' : '정말로 이 게시글을 삭제하시겠습니까?'}
+                  </Dialog.Title>
+                  <div className="mt-2 text-sm text-gray-600">
+                    삭제 후에는 되돌릴 수 없습니다.
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      onClick={() => setIsDeleteModalOpen(false)}
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => (pendingDeleteCommentId != null ? confirmDeleteComment() : confirmDeletePost())}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </div>
   );
 };
