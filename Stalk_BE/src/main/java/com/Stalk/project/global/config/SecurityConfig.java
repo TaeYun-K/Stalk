@@ -181,8 +181,9 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/api/advisors/certificate-approval").permitAll()
 
             // 커뮤니티
-            .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/community/posts").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/community/posts/*").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/community/posts/*/comments").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/community/posts/*/comments")
             .hasAnyRole("ADVISOR")
             .requestMatchers(HttpMethod.PUT, "/api/community/**").authenticated()
