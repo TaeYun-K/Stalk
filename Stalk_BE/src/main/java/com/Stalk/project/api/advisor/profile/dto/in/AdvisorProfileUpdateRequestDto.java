@@ -3,10 +3,13 @@ package com.Stalk.project.api.advisor.profile.dto.in;
 import com.Stalk.project.api.advisor.dto.in.PreferredTradeStyle;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
-import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.List;
 
 @Getter
 @Setter
@@ -29,6 +32,11 @@ public class AdvisorProfileUpdateRequestDto {
     @Schema(description = "선호 투자 스타일", example = "LONG",
         allowableValues = {"SHORT", "MID_SHORT", "MID", "MID_LONG", "LONG"})
     private PreferredTradeStyle preferredTradeStyle;
+
+    @Min(value = 10000, message = "상담료는 1만원 이상 100만원 이하여야 합니다.")
+    @Max(value = 1000000, message = "상담료는 1만원 이상 100만원 이하여야 합니다.")
+    @Schema(description = "상담료 (원 단위)", example = "80000", minimum = "10000", maximum = "1000000")
+    private Integer consultationFee;
 
     @Valid
     @Schema(description = "경력 정보 변경 사항 (CREATE/UPDATE/DELETE 액션 포함)")
@@ -67,6 +75,7 @@ public class AdvisorProfileUpdateRequestDto {
             shortIntro != null ||
             longIntro != null ||
             preferredTradeStyle != null ||
+            consultationFee != null ||
             hasCareerChanges();
     }
 }
