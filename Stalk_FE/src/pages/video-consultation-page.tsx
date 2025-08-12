@@ -592,8 +592,8 @@ const VideoConsultationPage: React.FC = () => {
     const onChartChange = (e: any) => {
       const info = JSON.parse(e.data) as ChartInfo;
       console.log('[chart] recv:', info);
-      setCurrentChart(info);
       setShowStockChart(true);
+      setCurrentChart(info);
     };
     session.on('signal:chart:change', onChartChange);
     return () => { session.off('signal:chart:change', onChartChange); };
@@ -1173,7 +1173,7 @@ const VideoConsultationPage: React.FC = () => {
               <div className="flex-1 p-4 min-h-0 min-w-0">
                 <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
                   <div className="flex-1 overflow-hidden relative">
-                    {selectedStock ? (
+                    {selectedStock || currentChart ? (
                       <div 
                         style={{ 
                           position: 'relative', 
