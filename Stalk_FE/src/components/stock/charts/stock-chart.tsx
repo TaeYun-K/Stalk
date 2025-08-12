@@ -109,7 +109,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [macdChartData, setMacdChartData] = useState<any>(null);
   const [stochChartData, setStochChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>('line');
-  const [period, setPeriod] = useState<string>(chartInfo?.period ?? propPeriod.toString());
+  const [period, setPeriod] = useState<string>(chartInfo?.period || propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
@@ -193,7 +193,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const konvaStage = useRef<Konva.Stage | null>(null);
 
   const getCurrentTicker = () =>
-  sharedChart?.ticker ?? chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+  sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
 
   const chartKey = { ticker: getCurrentTicker(), period };
 
@@ -2134,7 +2134,7 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const ticker = getCurrentTicker();
-  if (!ticker) {
+  if (!ticker && !chartData) {
     return (
       <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg`}>
         <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} text-base py-16`}>
