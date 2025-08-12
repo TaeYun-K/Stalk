@@ -119,7 +119,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [macdChartData, setMacdChartData] = useState<any>(null);
   const [stochChartData, setStochChartData] = useState<any>(null);
   const [chartType, setChartType] = useState<ChartType>('line');
-  const [period, setPeriod] = useState<string>(chartInfo?.period ?? propPeriod.toString());
+  const [period, setPeriod] = useState<string>(chartInfo?.period || propPeriod.toString());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(propDrawingMode);
@@ -128,7 +128,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const [futureDays, setFutureDays] = useState<number>(initialFutureDays);
   const [scrollIndicatorVisible, setScrollIndicatorVisible] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const [sharedChart, setSharedChart] = useState<ChartInfo | null>(null);
+  const [sharedChart, setSharedChart] = useState<ChartInfo | null>(null);
 
   // Detect sidebar state from body margin
   const [sidebarOffset, setSidebarOffset] = useState(0);
@@ -203,7 +203,7 @@ const StockChart: React.FC<StockChartProps> = ({
   const konvaStage = useRef<Konva.Stage | null>(null);
 
   const getCurrentTicker = () =>
-  sharedChart?.ticker ?? chartInfo?.ticker ?? selectedStock?.ticker ?? '';
+  sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
 
   const chartKey = { ticker: getCurrentTicker(), period };
 
@@ -320,6 +320,38 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [session]);
 
+  // ✅ chart:sync_request 들어오면 현재 차트 info 응답
+  useEffect(() => {
+    if (!session) return;
+
+    const onChartSyncRequest = (e: any) => {
+      try {
+        // 내가 가지고 있는 현재 차트 상태
+        const ticker = getCurrentTicker();
+        const info = { ticker, period };
+
+        // 내가 아직 차트를 안 보고 있으면 응답할 게 없으니 무시
+        if (!info.ticker || !info.period) return;
+
+        // 요청 보낸 상대에게만 회신 (OpenVidu: to 는 Connection 배열)
+        const to = e.from ? [e.from] : undefined;
+
+        session.signal({
+          type: 'chart:change',
+          data: JSON.stringify(info),
+          to
+        }).catch(console.error);
+      } catch (err) {
+        console.error('chart:sync_request handler error', err);
+      }
+    };
+
+    session.on('signal:chart:sync_request', onChartSyncRequest);
+    return () => {
+      session.off('signal:chart:sync_request', onChartSyncRequest);
+    };
+  }, [session, sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker, period]);
+
   // ✅ chart:change 수신 시 내 sharedChart 반영
   useEffect(() => {
     if (!session) return;
@@ -329,6 +361,7 @@ const StockChart: React.FC<StockChartProps> = ({
         if (!info?.ticker || !info?.period) return;
         setSharedChart(info);
         setPeriod(info.period);
+        fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
     };
     session.on('signal:chart:change', onChartChange);
@@ -362,9 +395,7 @@ const StockChart: React.FC<StockChartProps> = ({
   // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
-
-    if (chartInfo && period !== chartInfo.period) return;
-
+    
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
@@ -732,7 +763,7 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [propPeriod, isConsultationMode]);
 
-  const fetchChartData = async (isUpdate = false) => {
+  const fetchChartData = async (isUpdate = false, override?: { ticker: string; period?: string } ) => {
     if (isLoading) {
       return;
     }
@@ -744,7 +775,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
     try {
       // More comprehensive market type detection - same logic as in use-stock-data.ts
-      const ticker = getCurrentTicker();
+      const ticker = override?.ticker ?? getCurrentTicker();
       let marketType: string;
 
       if (ticker.startsWith('9') || ticker.startsWith('3')) {
@@ -757,7 +788,7 @@ const StockChart: React.FC<StockChartProps> = ({
       }
 
       // Ensure period is a number
-      const periodNum = parseInt(period);
+      const periodNum = parseInt(override?.period ?? period);
 
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}&period=${periodNum}&t=${Date.now()}`,
@@ -2249,7 +2280,7 @@ const StockChart: React.FC<StockChartProps> = ({
   };
 
   const ticker = getCurrentTicker();
-  if (!ticker) {
+  if (!ticker && !chartData) {
     return (
       <div className={`h-full ${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl p-6 shadow-lg`}>
         <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} text-base py-16`}>
