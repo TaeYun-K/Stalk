@@ -24,34 +24,35 @@
 
   <!-- 전문가 상세 정보 등록 -->
   <insert id="insertAdvisorDetailInfo">
-    <!-- advisor_detail_info 테이블에 상세 정보 삽입 -->
     INSERT INTO advisor_detail_info (
-    advisor_id,
-    profile_image_url,
-    public_contact,
-    short_intro,
-    long_intro,
-    preferred_trade_style,
-    created_at,
-    updated_at
+      advisor_id,
+      profile_image_url,
+      public_contact,
+      short_intro,
+      long_intro,
+      preferred_trade_style,
+      created_at,
+      updated_at
     ) VALUES (
-    #{advisorId},
-    #{request.profileImageUrl},
-    #{request.publicContact},
-    #{request.shortIntro},
-    #{request.longIntro},
-    #{request.preferredTradeStyle},
-    NOW(),
-    NOW()
-    );
-
-    <!-- advisor 테이블에 상담료 업데이트 및 프로필 완성 상태 변경 -->
-    UPDATE advisor
-    SET consultation_fee = #{request.consultationFee},
-    is_profile_completed = 1,
-    updated_at = NOW()
-    WHERE advisor_id = #{advisorId};
+               #{advisorId},
+               #{request.profileImageUrl},
+               #{request.publicContact},
+               #{request.shortIntro},
+               #{request.longIntro},
+               #{request.preferredTradeStyle},
+               NOW(),
+               NOW()
+             )
   </insert>
+
+  <!-- 전문가 프로필 완성 상태 업데이트 -->
+  <update id="updateAdvisorProfileCompletion">
+    UPDATE advisor
+    SET consultation_fee = #{consultationFee},
+        is_profile_completed = 1,
+        updated_at = NOW()
+    WHERE advisor_id = #{advisorId}
+  </update>
 
   <!-- 전문가 상세 정보 수정 -->
   <update id="updateAdvisorDetailInfo">
@@ -151,6 +152,7 @@
       certificate_file_sn,
       birth,
       certificate_file_number,
+      certificate_name,
       status,
       requested_at,
       created_at
@@ -163,6 +165,7 @@
       #{request.certificateFileSn},
       #{request.birth},
       #{request.certificateFileNumber},
+      #{request.certificateName},
       'PENDING',
       NOW(),
       NOW()

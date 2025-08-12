@@ -10,6 +10,10 @@ public enum NotificationType {
     RESERVATION_CANCELED("RESERVATION_CANCELED", "상담 예약이 취소되었습니다", null),
     RESERVATION_APPROVED("RESERVATION_APPROVED", "상담 예약이 승인되었습니다", null),
 
+    // 전문가 승인 관련 알람 (추가)
+    ADVISOR_APPROVAL("ADVISOR_APPROVAL", "전문가 승인이 완료되었습니다", "축하합니다! 전문가 승인이 완료되어 상담 서비스를 시작할 수 있습니다."),
+    ADVISOR_REJECTION("ADVISOR_REJECTION", "전문가 승인이 거절되었습니다", "전문가 승인이 거절되었습니다. 자세한 사유는 관리자에게 문의하세요."),
+
     // 커뮤니티 관련 알람
     COMMENT_CREATED("COMMENT_CREATED", "새로운 댓글이 달렸습니다",
         "{commentAuthor}님이 '{postTitle}' 글에 댓글을 남겼습니다."),

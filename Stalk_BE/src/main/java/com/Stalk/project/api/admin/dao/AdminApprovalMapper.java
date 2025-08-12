@@ -18,6 +18,21 @@ public interface AdminApprovalMapper {
             @Param("status") ApprovalStatus status,
             @Param("pageRequest") ApprovalRequestListDto pageRequest
     );
+
+    /**
+     * 자격증 정보 추가 (중복 확인 후)
+     */
+    int insertCertificateIfNotExists(@Param("approvalRequest") AdvisorApprovalRequestDto approvalRequest);
+
+    /**
+     * 기존 자격증 존재 여부 확인
+     */
+    int countExistingCertificate(
+        @Param("advisorId") Long advisorId,
+        @Param("certificateFileSn") String certificateFileSn,
+        @Param("birth") String birth,
+        @Param("certificateFileNumber") String certificateFileNumber
+    );
     
     /**
      * 특정 인증 요청 조회

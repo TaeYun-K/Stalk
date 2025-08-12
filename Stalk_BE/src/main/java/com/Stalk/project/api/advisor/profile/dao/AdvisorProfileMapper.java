@@ -28,12 +28,12 @@ public interface AdvisorProfileMapper {
     Boolean hasAdvisorDetailInfo(@Param("advisorId") Long advisorId);
 
     // ===== 프로필 관리 =====
-    
-    /**
-     * 전문가 상세 정보 등록
-     */
-    int insertAdvisorDetailInfo(@Param("advisorId") Long advisorId, 
-                               @Param("request") AdvisorProfileCreateRequestDto request);
+
+    void insertAdvisorDetailInfo(@Param("advisorId") Long advisorId,
+        @Param("request") AdvisorProfileCreateRequestDto request);
+
+    void updateAdvisorProfileCompletion(@Param("advisorId") Long advisorId,
+        @Param("consultationFee") int consultationFee);
     
     /**
      * 전문가 상세 정보 수정
