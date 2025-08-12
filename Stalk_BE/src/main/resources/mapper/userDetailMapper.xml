@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.api.user.dao.UserProfileMapper">
+
+  <!-- 사용자 프로필 조회 -->
+  <select id="findUserProfileById"
+    resultType="com.Stalk.project.api.user.dto.out.UserProfileResponseDto">
+    SELECT id,                    <!-- 👈 새로 추가: 숫자 기본키 -->
+    user_id as userId,
+    name,
+    nickname,              <!-- 👈 새로 추가: 커뮤니티 닉네임 -->
+    contact,
+    email,
+    image as profileImage,
+    role
+    FROM users
+    WHERE id = #{userId}
+    AND is_active = 1
+    AND deleted_at IS NULL
+  </select>
+
+  <!-- ID로 사용자 정보 조회 -->
+  <select id="findUserById" resultType="com.Stalk.project.api.signup.entity.User">
+    SELECT id,
+           name,
+           user_id,
+           email,
+           password,
+           contact,
+           nickname,
+           role,
+           image,
+           is_verified,
+           terms_agreed,
+           is_active,
+           deleted_at,
+           last_login_at,
+           created_at,
+           updated_at,
+           login_type
+    FROM users
+    WHERE id = #{userId}
+  </select>
+
+  <select id="findByNickname" resultType="com.Stalk.project.api.signup.entity.User">
+    SELECT *
+    FROM users
+    WHERE nickname = #{nickname}
+      AND is_active = 1
+  </select>
+
+  <!-- 사용자 정보 업데이트 쿼리 -->
+  <update id="updateUserProfile">
+    UPDATE users
+    <set>
+      <if test="updateDto.name != null and updateDto.name != ''">
+        name = #{updateDto.name},
+      </if>
+      <if test="updateDto.contact != null and updateDto.contact != ''">
+        contact = #{updateDto.contact},
+      </if>
+    </set>
+    WHERE id = #{userId} AND is_active = 1 AND deleted_at IS NULL
+  </update>
+
+  <update id="updatePassword">
+    UPDATE users
+    SET password = #{encodedPassword}
+    WHERE id = #{userId}
+  </update>
+
+
+  <!-- 사용자 비활성화 (Soft Delete) -->
+  <update id="deactivateUser">
+    UPDATE users
+    SET is_active  = 0,
+        deleted_at = NOW(),
+        user_id    = CONCAT('deactivated_', user_id, '_', UNIX_TIMESTAMP()),
+        nickname   = CONCAT('탈퇴한사용자_', id),
+        email      = CONCAT('deactivated_', id, '@deleted.com'),
+        contact    = NULL, -- 연락처 정보 삭제
+        password   = NULL  -- 비밀번호 정보 삭제
+    WHERE id = #{userId}
+      AND is_active = 1
+  </update>
+
+  <!-- 프로필 수정을 위한 UPDATE 쿼리 -->
+  <update id="updateProfile" parameterType="com.Stalk.project.api.signup.entity.User">
+    UPDATE users
+    <set>
+      <if test="nickname != null and nickname != ''">
+        nickname = #{nickname},
+      </if>
+      <if test="image != null and image != ''">
+        image = #{image},
+      </if>
+      updated_at = CURRENT_TIMESTAMP
+    </set>
+    WHERE id = #{id}
+  </update>
+
+</mapper>

@@ -18,7 +18,7 @@ const SearchPage: React.FC = () => {
 
   useEffect(() => {
     if (query) {
-      console.log('검색어:', query);
+  
       // 실제로는 API 호출을 통해 검색 결과를 가져옵니다
       simulateSearch(query);
     }
@@ -33,14 +33,14 @@ const SearchPage: React.FC = () => {
     setTimeout(() => {
       const results: SearchResult[] = [];
       
-      console.log('검색어 분석:', lowerSearchTerm);
+  
       
       // 검색어에 따라 다른 결과 제공 (더 유연한 매칭)
       if (lowerSearchTerm.includes('투자') || lowerSearchTerm.includes('전문가') || 
           lowerSearchTerm.includes('상담') || lowerSearchTerm.includes('도움') ||
           lowerSearchTerm.includes('조언') || lowerSearchTerm.includes('가이드') ||
           lowerSearchTerm.includes('전문')) {
-        console.log('전문가 상담 결과 추가');
+        
         results.push({
           type: 'expert',
           title: '투자 전문가 상담',
@@ -54,7 +54,7 @@ const SearchPage: React.FC = () => {
           lowerSearchTerm.includes('투자상품') || lowerSearchTerm.includes('금융상품') ||
           lowerSearchTerm.includes('상품조회') || lowerSearchTerm.includes('상품비교') ||
           lowerSearchTerm.includes('조회')) {
-        console.log('상품 조회 결과 추가');
+        
         results.push({
           type: 'product',
           title: '투자 상품 조회',
@@ -68,7 +68,7 @@ const SearchPage: React.FC = () => {
           lowerSearchTerm.includes('정보공유') || lowerSearchTerm.includes('의견') ||
           lowerSearchTerm.includes('후기') || lowerSearchTerm.includes('리뷰') ||
           lowerSearchTerm.includes('글') || lowerSearchTerm.includes('포스트')) {
-        console.log('커뮤니티 결과 추가');
+        
         results.push({
           type: 'community',
           title: '투자 커뮤니티',
@@ -81,7 +81,7 @@ const SearchPage: React.FC = () => {
       if (lowerSearchTerm.includes('마이페이지') || lowerSearchTerm.includes('마이') || 
           lowerSearchTerm.includes('내정보') || lowerSearchTerm.includes('프로필') ||
           lowerSearchTerm.includes('계정')) {
-        console.log('마이페이지 결과 추가');
+        
         results.push({
           type: 'mypage',
           title: '마이페이지',
@@ -92,7 +92,7 @@ const SearchPage: React.FC = () => {
       
       if (lowerSearchTerm.includes('설정') || lowerSearchTerm.includes('환경설정') || 
           lowerSearchTerm.includes('옵션') || lowerSearchTerm.includes('프로필설정')) {
-        console.log('설정 결과 추가');
+        
         results.push({
           type: 'settings',
           title: '설정',
@@ -103,7 +103,7 @@ const SearchPage: React.FC = () => {
       
       if (lowerSearchTerm.includes('글쓰기') || lowerSearchTerm.includes('작성') || 
           lowerSearchTerm.includes('포스트') || lowerSearchTerm.includes('게시글')) {
-        console.log('글쓰기 결과 추가');
+        
         results.push({
           type: 'write',
           title: '글쓰기',
@@ -114,7 +114,7 @@ const SearchPage: React.FC = () => {
       
       if (lowerSearchTerm.includes('상담') || lowerSearchTerm.includes('예약') || 
           lowerSearchTerm.includes('문의') || lowerSearchTerm.includes('1:1')) {
-        console.log('상담 예약 결과 추가');
+        
         results.push({
           type: 'consultation',
           title: '상담 예약',
@@ -125,7 +125,7 @@ const SearchPage: React.FC = () => {
       
       if (lowerSearchTerm.includes('즐겨찾기') || lowerSearchTerm.includes('북마크') || 
           lowerSearchTerm.includes('저장') || lowerSearchTerm.includes('관심')) {
-        console.log('즐겨찾기 결과 추가');
+        
         results.push({
           type: 'favorites',
           title: '즐겨찾기',
@@ -136,7 +136,7 @@ const SearchPage: React.FC = () => {
       
       // 기본 결과 (검색어가 명확하지 않을 때)
       if (results.length === 0) {
-        console.log('기본 결과 추가');
+        
         results.push(
           {
             type: 'expert',
@@ -171,7 +171,7 @@ const SearchPage: React.FC = () => {
         );
       }
       
-      console.log('최종 결과:', results);
+      
       setSearchResults(results);
       setIsLoading(false);
     }, 500);

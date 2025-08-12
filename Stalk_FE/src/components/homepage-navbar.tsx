@@ -1,34 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
-import newsIcon from '@/assets/images/icons/news_icon.png';
-import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
-  const { isLoggedIn, logout } = useAuth();
+  const { isLoggedIn, logout, userInfo, userRole, isLoggingOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [communityMenuTimeout, setCommunityMenuTimeout] = useState<number | null>(null);
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   const [isNavBarScrolled, setIsNavBarScrolled] = useState<boolean>(false); // 스크롤 상태 관리
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
+  const [rightGap, setRightGap] = useState<number>(64); // 사이드바와 겹침 방지를 위한 우측 여백(px)
+  
+  // 관리자 권한 확인
+  const isAdmin = userInfo?.role === 'ADMIN';
 
   // 사용자 프로필 이미지 가져오기
   const fetchUserProfileImage = async () => {
     try {
-      // 실제 API 호출 (임시로 localStorage에서 user_id를 가져온다고 가정)
-      const userId = localStorage.getItem('userId') || '1'; // 임시 user_id
-      
-      // API 호출 예시 (실제 엔드포인트로 수정 필요)
-      const response = await fetch(`/api/user_community_images?user_id=${userId}`);
+      // AuthService를 사용하여 인증된 요청으로 프로필 이미지 가져오기
+      const response = await AuthService.authenticatedRequest('/api/users/me');
       const data = await response.json();
       
-      if (data.image_path) {
-        setUserProfileImage(data.image_path);
+      if (data.result?.profileImage) {
+        setUserProfileImage(data.result.profileImage);
       } else {
         setUserProfileImage(profileDefault);
       }
@@ -57,6 +55,38 @@ const HomePageNavbar: React.FC = () => {
     };
   }, []);
 
+  // 사이드바 상태에 따라 우측 여백 동기화 (홈 전용 네비)
+  useEffect(() => {
+    const computeRightGap = () => {
+      // 확장 패널 존재 여부 확인 (right-20, w-80)
+      const expandedPanel = document.querySelector(
+        '.sidebar-container.fixed.right-20'
+      );
+      // 사이드바 자체는 항상 우측 w-20 고정
+      // 기존 앱 전반 로직과 일치시키기 위해 collapsed=64px, expanded=384px 사용
+      setRightGap(expandedPanel ? 384 : 64);
+    };
+
+    // 초기 계산
+    computeRightGap();
+
+    // 클릭/리사이즈시 재계산 (사이드바 토글, 반응형 대비)
+    const handleClick = () => computeRightGap();
+    const handleResize = () => computeRightGap();
+    window.addEventListener('click', handleClick, true);
+    window.addEventListener('resize', handleResize);
+
+    // DOM 변경 감지 (사이드바 패널 mount/unmount)
+    const observer = new MutationObserver(computeRightGap);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      window.removeEventListener('click', handleClick, true);
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
+    };
+  }, []);
+
   // 검색 함수
   const handleSearch = (): void => {
     if (searchQuery.trim()) {
@@ -82,9 +112,6 @@ const HomePageNavbar: React.FC = () => {
     setIsInputActive(false); // 입력창에서 마우스가 빠져나갔을 때 비활성화
   };
 
-  // AuthContext에서 로그인 상태를 가져오므로 별도의 로그인 상태 관리 제거
-
-
 
   // 로그인 상태가 변경될 때 프로필 이미지 가져오기
   useEffect(() => {
@@ -96,8 +123,9 @@ const HomePageNavbar: React.FC = () => {
   }, [isLoggedIn]);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-10 ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
-      <div className="sm:px-10 lg:px-16">
+    <nav className={`fixed top-0 left-0 right-0 z-[60] ${isNavBarScrolled ? 'text-gray-900 bg-white' : 'text-white'}`}>
+      {/* 사이드바와 겹치지 않도록 우측 여백을 동적으로 부여 */}
+      <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16" style={{ marginRight: rightGap }}>
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
@@ -112,7 +140,7 @@ const HomePageNavbar: React.FC = () => {
           {/* Navigation Menu */}
           <div className="hidden md:flex items-center space-x-10">
             <button 
-              onClick={() => navigate('/experts')}
+              onClick={() => navigate('/advisors-list')}
               className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
             >
               투자 전문가
@@ -125,55 +153,13 @@ const HomePageNavbar: React.FC = () => {
               상품 조회
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
             </button>
-            <div 
-              className="relative group"
-              onMouseEnter={() => {
-                if (communityMenuTimeout) {
-                  window.clearTimeout(communityMenuTimeout);
-                  setCommunityMenuTimeout(null);
-                }
-                setShowCommunityMenu(true);
-              }}
-              onMouseLeave={() => {
-                const timeout = window.setTimeout(() => {
-                  setShowCommunityMenu(false);
-                }, 200);
-                setCommunityMenuTimeout(timeout);
-              }}
-            >
-              <button 
-                onClick={() => navigate('/community')}
-                className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative flex items-center space-x-1"
+            <button 
+              onClick={() => navigate('/investment-knowledge-list')}
+              className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
               >
-                <span>커뮤니티</span>
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
-              </button>
-              {/* Community Dropdown Menu */}
-              {showCommunityMenu && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
-                  <button
-                    onClick={() => {
-                      navigate('/community?tab=news');
-                      setShowCommunityMenu(false);
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
-                  >
-                    <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
-                    <span>뉴스</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/community?tab=free');
-                      setShowCommunityMenu(false);
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
-                  >
-                    <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
-                    <span>투자 지식iN</span>
-                  </button>
-                </div>
-              )}
-            </div>
+              <span>투자 지식 iN</span>
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
+            </button>
           </div>
 
           {/* Search Bar and User Actions */}
@@ -197,8 +183,8 @@ const HomePageNavbar: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
-              
             </div>
+
             {/* User Actions */}
             {isLoggedIn ? (
               <div className="relative">
@@ -206,22 +192,33 @@ const HomePageNavbar: React.FC = () => {
                   onClick={() => setShowProfileMenu(!showProfileMenu)} 
                   className="w-11 h-11 rounded-full overflow-hidden hover:shadow-modern transition-all duration-300 hover:scale-105"
                 >
-                  <img 
-                    src={userProfileImage || profileDefault} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = profileDefault;
-                    }}
-                  />
+                  {userProfileImage ? (
+                    <img
+                      src={userProfileImage}
+                      alt="프로필"
+                      className="w-12 h-12 rounded-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = profileDefault;
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={profileDefault}
+                      alt="프로필"
+                      className="w-12 h-12 rounded-full object-cover"
+                      onError={(_e) => {
+                      }}
+                    />
+                  )}
                 </button>
 
                 {/* Profile Dropdown Menu */}
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
+                    
                     <button
                       onClick={() => {
-                        navigate('/mypage');
+                        navigate('/mypage?tab=내 정보');
                         setShowProfileMenu(false);
                       }}
                       className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
@@ -231,30 +228,51 @@ const HomePageNavbar: React.FC = () => {
                       </svg>
                       <span>마이페이지</span>
                     </button>
+                    {userRole !== 'ADMIN' && (
+                      <button
+                        onClick={() => {
+                          navigate('/mypage?tab=내 상담 내역');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span>상담 내역</span>
+                      </button>
+                    )}
+                    {/* (ADMIN만 보이는 관리자 페이지 버튼) */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          navigate('/admin');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-blue-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a1 1 0 001 1h16a1 1 0 001-1V7M3 7l9-4 9 4" />
+                        </svg>
+                        <span>관리자 페이지</span>
+                      </button>
+                    )}
+                    {userRole !== 'ADMIN' && userRole !== 'ADVISOR' && (
                     <button
-                      onClick={() => {
-                        navigate('/consultations');
-                        setShowProfileMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <span>상담 내역</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/favorites');
-                        setShowProfileMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
-                    >
+                        onClick={() => {
+                          navigate('/mypage?tab=찜한 전문가');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
-                      <span>찜한 전문가</span>
-                    </button>
+                        <span>
+                          찜한 전문가
+                        </span>
+                      </button>
+                    )}
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
                       onClick={async () => {
@@ -267,7 +285,8 @@ const HomePageNavbar: React.FC = () => {
                           console.error('로그아웃 실패:', error);
                         }
                       }}
-                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3"
+                      disabled={isLoggingOut}
+                      className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path

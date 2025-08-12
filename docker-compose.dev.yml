@@ -8,8 +8,11 @@ services:
       - "8082:8081" # 외부:내부 포트
     volumes:
       - ./stalk_BE/src:/app/src
+      - ./keys:/keys  
+      - /home/ubuntu/app/uploads:/app/uploads
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - GCP_KEY_FILE=/keys/stalkaiproject-812b3a8660a4.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
@@ -38,6 +41,7 @@ services:
     volumes:
       - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf
       - /etc/letsencrypt:/etc/letsencrypt
+      - /home/ubuntu/app/uploads:/home/ubuntu/app/uploads:ro
     depends_on:
       - stalk-fe
     networks:

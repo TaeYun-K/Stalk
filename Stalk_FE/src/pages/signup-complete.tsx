@@ -1,10 +1,13 @@
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import NewNavbar from '@/components/new-navbar';
 
 
 const SignupComplete = () => {
   const navigate = useNavigate();
+  const location = useLocation() as { state?: { name?: string; userType?: 'general' | 'expert' } };
+  const displayName = location.state?.name || '회원';
+  const suffix = location.state?.userType === 'expert' ? '전문가님!' : '님!';
 
   return (
     <div className="relative flex flex-col min-h-screen bg-gradient-to-b from-blue-100 to-white">
@@ -26,7 +29,7 @@ const SignupComplete = () => {
 
             {/* Welcome Message */}
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              환영합니다. 김싸피 전문가님!
+              환영합니다. {displayName} {suffix}
             </h1>
 
             {/* Instructions */}
@@ -35,7 +38,7 @@ const SignupComplete = () => {
                 투자자에게 신뢰와 가치를 전하는 여정이 지금 시작됩니다.
               </p>
               <p className="text-gray-600">
-                전문가 승인 여부는 "마이페이지 - 내 정보 - 전문가 승인 여부"를 통해 확인하시기 바랍니다.
+              투자지식iN에서 질문하고 마음에 드는 전문가를 즐겨찾기하세요. 준비되면 1:1 화상 상담으로 더 깊이 이야기해보세요.
               </p>
             </div>
 
@@ -47,12 +50,8 @@ const SignupComplete = () => {
               >
                 Stalk 이용하기(홈페이지)
               </button>
-              <button
-                onClick={() => navigate('/mypage')}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300"
-              >
-                전문가 승인 여부 확인하러 가기
-              </button>
+              
+              
             </div>
 
             {/* Additional Info */}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.Stalk.project.api.favorite.stock.dao.FavoriteStockMapper">
+
+  <select id="findTickersByUserId" parameterType="long" resultType="string">
+    SELECT
+      stock_ticker
+    FROM
+      favorite_stocks
+    WHERE
+      user_id = #{userId}
+    ORDER BY
+      created_at ASC
+  </select>
+
+  <select id="exists" resultType="int">
+    SELECT COUNT(*)
+    FROM favorite_stocks
+    WHERE user_id = #{userId} AND stock_ticker = #{stockTicker}
+  </select>
+
+  <insert id="addFavorite">
+    INSERT INTO favorite_stocks (user_id, stock_ticker)
+    VALUES (#{userId}, #{stockTicker})
+  </insert>
+
+  <delete id="deleteFavorite">
+    DELETE FROM favorite_stocks
+    WHERE user_id = #{userId} AND stock_ticker = #{stockTicker}
+  </delete>
+</mapper>

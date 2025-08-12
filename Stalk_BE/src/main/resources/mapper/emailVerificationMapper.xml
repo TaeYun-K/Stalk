@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.api.auth.email.dao.EmailVerificationMapper">
+
+    <select id="findByEmail" resultType="com.Stalk.project.api.auth.email.entity.EmailVerification">
+        SELECT * FROM email_verification WHERE email = #{email}
+    </select>
+
+    <insert id="insert" parameterType="com.Stalk.project.api.auth.email.entity.EmailVerification">
+        INSERT INTO email_verification (email, code, expires_at, verified)
+        VALUES (#{email}, #{code}, #{expiresAt}, false)
+    </insert>
+
+    <update id="updateCode" parameterType="com.Stalk.project.api.auth.email.entity.EmailVerification">
+        UPDATE email_verification
+        SET code = #{code}, expires_at = #{expiresAt}, verified = false
+        WHERE email = #{email}
+    </update>
+
+    <update id="markVerified">
+        UPDATE email_verification
+        SET verified = true
+        WHERE email = #{email}
+    </update>
+
+</mapper>
+

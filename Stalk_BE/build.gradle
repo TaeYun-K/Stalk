@@ -25,13 +25,15 @@ repositories {
 }
 
 dependencies {
-    // Web + Security + WebSocket
+    // --- 기본 Spring 의존성 ---
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
 
     // MyBatis
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.4'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -47,23 +49,24 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'com.sun.mail:jakarta.mail:2.0.1'
 
-    // JWT, redis
+    // JWT, Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5' // JSON parser (jackson)
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 
     // OpenAPI (Swagger)
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
 
     // openVidu
-    implementation "io.openvidu:openvidu-java-client:2.29.0"
+    implementation "io.openvidu:openvidu-java-client:2.30.0"
 
     // Validation
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    
+
     // WebFlux for WebClient
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework:spring-webflux'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -72,7 +75,15 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation 'commons-fileupload:commons-fileupload:1.4'
+
+    // --- Google Cloud BOM + Vertex AI ---
+    implementation platform('com.google.cloud:libraries-bom:26.43.0')
+    implementation 'com.google.cloud:google-cloud-vertexai'
+    implementation 'com.google.cloud:google-cloud-storage'
+    implementation 'com.google.protobuf:protobuf-java:4.28.2'
+    runtimeOnly 'com.h2database:h2'
 }
+
 
 tasks.named('test') {
     useJUnitPlatform()

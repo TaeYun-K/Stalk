@@ -20,9 +20,10 @@ pipeline {
             def isProd = BRANCH_NAME == 'master'
             def COMPOSE_FILE = isProd ? 'docker-compose.prod.yml' : 'docker-compose.dev.yml'
             def CONTAINER    = isProd ? 'stalk-fe-prod'            : 'stalk-fe-dev'
+            def ENV_ID = isProd ? 'frontend-env-prod' : 'frontend-env-dev'
 
               // ─── 시크릿 .env 파일 주입 ───
-            withCredentials([file(credentialsId: 'frontend-env', variable: 'ENV_FILE')]) {
+            withCredentials([file(credentialsId: ENV_ID, variable: 'ENV_FILE')]) {
               dir('Stalk_FE') {
                 sh """
                   echo "🔒 .env 파일 복사 중..."
@@ -43,24 +44,6 @@ pipeline {
         }
       }
     }
-    
-    //nginx 컨테이너 수정이 필요할 때만 사용 
-    stage('Deploy nginx') {   
-      steps {
-        script {
-          def isProd = BRANCH_NAME == 'master'
-          def COMPOSE_FILE = isProd ? 'docker-compose.prod.yml' : 'docker-compose.dev.yml'
-          def CONTAINER    = isProd ? 'nginx-prod'              : 'nginx-dev'
 
-          sh """
-            echo "🗑️ 기존 nginx 컨테이너 직접 삭제 (${CONTAINER})..."
-            docker rm -f ${CONTAINER} || true
-
-            echo "🛡️ nginx docker-compose 실행 중 (${COMPOSE_FILE})..."
-            docker compose -f ${COMPOSE_FILE} up -d --no-deps nginx
-          """
-        }
-      }
-    }
   }
 }

@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.Stalk.project.api.advisor.dao.AdvisorMapper">
+
+  <!-- 전문가 승인 여부 확인 -->
+  <select id="isApprovedAdvisor" resultType="Boolean">
+    SELECT is_approved
+    FROM advisor
+    WHERE advisor_id = #{advisorId}
+  </select>
+
+  <!-- ReviewDto를 위한 ResultMap 정의 -->
+  <resultMap id="ReviewResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
+    <result property="review_id" column="review_id" jdbcType="BIGINT"/>
+    <result property="nickname" column="nickname" jdbcType="VARCHAR"/>
+    <result property="rating" column="rating" jdbcType="INTEGER"/>
+    <result property="content" column="content" jdbcType="VARCHAR"/>
+    <result property="profile_image" column="profile_image" jdbcType="VARCHAR"/>
+    <result property="created_at" column="created_at" jdbcType="TIMESTAMP"/>
+  </resultMap>
+
+  <!-- 전문가의 특정 날짜 차단 시간 삭제 -->
+  <delete id="deleteBlockedTimesByDate">
+    DELETE
+    FROM advisor_blocked_times
+    WHERE advisor_id = #{advisorId}
+      AND date = #{date}
+  </delete>
+
+  <!-- 전문가의 차단 시간 일괄 추가 -->
+  <insert id="insertBlockedTimes">
+    INSERT INTO advisor_blocked_times (advisor_id, date, start_time, end_time)
+    VALUES
+    <foreach collection="blockedTimes" item="time" separator=",">
+      (#{advisorId}, #{date}, #{time}, ADDTIME(#{time}, '01:00:00'))
+    </foreach>
+  </insert>
+
+  <!-- 어드바이저 목록 조회 -->
+  <select id="findAllAdvisorsSummary" resultType="com.Stalk.project.api.advisor.dto.out.AdvisorResponseDto">
+    SELECT
+    a.advisor_id as id,
+    u.name,
+    a.profile_image_url as profileImageUrl,
+    adi.preferred_trade_style as preferredStyle,
+    adi.short_intro as shortIntro,
+    COALESCE(adi.avg_rating, 0.0) as averageRating,
+    COALESCE(adi.review_counting, 0) as reviewCount,
+    a.consultation_fee as consultationFee,
+    a.is_approved as isApproved,
+    a.created_at as createdAt
+    FROM advisor a
+    INNER JOIN users u ON a.advisor_id = u.id
+    LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+    WHERE a.is_approved = 1
+    AND a.is_profile_completed = 1
+    <if test="preferredTradeStyle != null and preferredTradeStyle.size() > 0">
+      AND adi.preferred_trade_style IN
+      <foreach item="style" collection="preferredTradeStyle" open="(" separator="," close=")">
+        #{style}
+      </foreach>
+    </if>
+    <if test="cursor != null and cursor > 0">
+      AND a.advisor_id > #{cursor}
+    </if>
+    ORDER BY
+    <choose>
+      <when test="sortBy != null and sortBy.name() == 'RATING'">
+        adi.avg_rating DESC, a.advisor_id ASC
+      </when>
+      <otherwise>
+        adi.review_counting DESC, a.advisor_id ASC
+      </otherwise>
+    </choose>
+    LIMIT #{limitPlusOne}
+  </select>
+
+  <!-- ResultMap 정의 - snake_case 필드명에 맞게 수정 -->
+  <resultMap id="AdvisorDetailResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto">
+    <result property="user_id" column="user_id" jdbcType="BIGINT"/>
+    <result property="name" column="name" jdbcType="VARCHAR"/>
+    <result property="profile_image_url" column="profile_image_url" jdbcType="VARCHAR"/>
+    <result property="contact" column="contact" jdbcType="VARCHAR"/>
+    <result property="short_intro" column="short_intro" jdbcType="VARCHAR"/>
+    <result property="long_intro" column="long_intro" jdbcType="VARCHAR"/>
+    <result property="preferred_trade_style" column="preferred_trade_style" jdbcType="VARCHAR"/>
+    <result property="consultation_fee" column="consultation_fee" jdbcType="INTEGER"/>
+    <result property="avg_rating" column="avg_rating" jdbcType="DOUBLE"/>
+    <result property="review_count" column="review_count" jdbcType="INTEGER"/>
+  </resultMap>
+
+  <!-- 어드바이저의 최신 리뷰 조회 -->
+  <select id="findLatestReviewsByAdvisorId"
+          resultType="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$ReviewDto">
+    SELECT ar.id                                           as reviewId,
+           u.nickname                                      as nickname,
+           ar.rating                                       as rating,
+           ar.content                                      as content,
+           DATE_FORMAT(ar.created_at, '%Y-%m-%dT%H:%i:%s') as createdAt
+    FROM advisor_reviews ar
+           INNER JOIN users u ON ar.user_id = u.id
+    WHERE ar.advisor_id = #{advisorId}
+      AND ar.is_deleted = false
+    ORDER BY ar.created_at DESC
+      LIMIT #{limit}
+  </select>
+
+  <!-- 어드바이저의 전체 리뷰 수 조회 -->
+  <select id="countReviewsByAdvisorId" resultType="int">
+    SELECT COUNT(*)
+    FROM advisor_reviews
+    WHERE advisor_id = #{advisorId}
+      AND is_deleted = false
+  </select>
+
+  <!-- 특정 날짜의 전문가 차단 시간 조회 (예약 가능 시간 API용) -->
+  <select id="getBlockedTimes" resultType="com.Stalk.project.api.advisor.dto.out.BlockedTimeDto">
+    SELECT start_time as startTime,
+           end_time   as endTime
+    FROM advisor_blocked_times
+    WHERE advisor_id = #{advisorId}
+      AND date = #{date}
+    ORDER BY start_time
+  </select>
+
+  <!-- 특정 날짜의 전문가 예약 시간 조회 (예약 가능 시간 API용) -->
+  <select id="getReservedTimes" resultType="com.Stalk.project.api.advisor.dto.out.ReservedTimeDto">
+    SELECT start_time as startTime,
+           end_time   as endTime
+    FROM consultation_sessions
+    WHERE advisor_id = #{advisorId}
+      AND date = #{date}
+      AND status != 'CANCELLED'
+    ORDER BY start_time
+  </select>
+
+  <!-- 전문가의 특정 날짜 차단 시간 조회 (차단 관리 API용) -->
+  <select id="getAdvisorBlockedTimes" resultType="String">
+    SELECT TIME_FORMAT(start_time, '%H:%i') as timeSlot
+    FROM advisor_blocked_times
+    WHERE advisor_id = #{advisorId}
+      AND date = #{date}
+    ORDER BY start_time
+  </select>
+
+  <!-- 특정 날짜에 예약된 시간 조회 (차단 관리 API용) -->
+  <select id="getReservedTimesForDate" resultType="String">
+    SELECT TIME_FORMAT(start_time, '%H:%i') as timeSlot
+    FROM consultation_sessions
+    WHERE advisor_id = #{advisorId}
+      AND date = #{date}
+      AND status IN ('PENDING'
+        , 'APPROVED')
+    ORDER BY start_time
+  </select>
+
+  <!-- 전문가 존재 및 승인 여부 확인 -->
+  <select id="isAdvisorExistsAndApproved" resultType="boolean">
+    SELECT COUNT(*) > 0
+    FROM advisor
+    WHERE advisor_id = #{advisorId}
+      AND is_approved = 1
+  </select>
+
+  <!-- CareerDto를 위한 ResultMap 정의 -->
+  <resultMap id="CareerResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$CareerDto">
+    <result property="id" column="id" jdbcType="BIGINT"/>
+    <result property="title" column="title" jdbcType="VARCHAR"/>
+    <result property="description" column="description" jdbcType="VARCHAR"/>
+    <result property="started_at" column="started_at" jdbcType="DATE"/>
+    <result property="ended_at" column="ended_at" jdbcType="DATE"/>
+    <result property="created_at" column="created_at" jdbcType="TIMESTAMP"/>
+  </resultMap>
+
+  <!-- 어드바이저 경력사항 조회 - ResultMap 사용 -->
+  <select id="findAdvisorCareers" resultMap="CareerResultMap">
+    SELECT
+      id,
+      title,
+      description,
+      started_at,
+      ended_at,
+      created_at
+    FROM advisor_career_entries
+    WHERE advisor_id = #{advisorId}
+    ORDER BY started_at DESC
+  </select>
+
+  <!-- CertificationDto를 위한 ResultMap 정의 -->
+  <resultMap id="CertificationResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorDetailResponseDto$CertificationDto">
+    <result property="id" column="id" jdbcType="BIGINT"/>
+    <result property="certificate_file_sn" column="certificate_file_sn" jdbcType="VARCHAR"/>
+    <result property="birth" column="birth" jdbcType="VARCHAR"/>
+    <result property="certificate_file_number" column="certificate_file_number" jdbcType="VARCHAR"/>
+    <result property="certificate_name" column="certificate_name" jdbcType="VARCHAR"/>
+    <result property="issued_by" column="issued_by" jdbcType="VARCHAR"/>
+    <result property="issued_at" column="issued_at" jdbcType="DATE"/>
+    <result property="expires_at" column="expires_at" jdbcType="DATE"/>
+    <result property="certificate_url" column="certificate_url" jdbcType="VARCHAR"/>
+    <result property="created_at" column="created_at" jdbcType="TIMESTAMP"/>
+  </resultMap>
+
+  <!-- 어드바이저 자격증 조회 - 명시적 alias 추가 -->
+  <select id="findAdvisorCertificates" resultMap="CertificationResultMap">
+    SELECT
+      id as id,
+      certificate_file_sn as certificate_file_sn,
+      birth as birth,
+      certificate_file_number as certificate_file_number,
+      certificate_name as certificate_name,
+      issued_by as issued_by,
+      issued_at as issued_at,
+      expires_at as expires_at,
+      certificate_url as certificate_url,
+      created_at as created_at
+    FROM advisor_certificates
+    WHERE advisor_id = #{advisorId}
+    ORDER BY issued_at DESC
+  </select>
+
+  <!-- CertificateDto를 위한 ResultMap 정의 -->
+  <resultMap id="CertificateResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorResponseDto$CertificateDto">
+    <result property="certificateName" column="certificate_name" jdbcType="VARCHAR"/>
+    <result property="issuedBy" column="issued_by" jdbcType="VARCHAR"/>
+  </resultMap>
+
+  <!-- 단일 전문가의 자격증 정보 조회 (목록 조회용) -->
+  <select id="findCertificatesByAdvisorId" resultMap="CertificateResultMap">
+    SELECT
+      certificate_name,
+      issued_by
+    FROM advisor_certificates
+    WHERE advisor_id = #{advisorId}
+    ORDER BY issued_at DESC
+  </select>
+
+  <!-- 자격증 정보 + advisor_id를 위한 ResultMap 정의 -->
+  <resultMap id="CertificateWithAdvisorIdResultMap" type="com.Stalk.project.api.advisor.dto.out.AdvisorResponseDto$CertificateDto">
+    <result property="advisorId" column="advisor_id" jdbcType="BIGINT"/>
+    <result property="certificateName" column="certificate_name" jdbcType="VARCHAR"/>
+    <result property="issuedBy" column="issued_by" jdbcType="VARCHAR"/>
+  </resultMap>
+
+  <!-- 여러 전문가의 자격증 정보 조회 (목록 조회용) - advisor_id 포함 -->
+  <select id="findCertificatesByAdvisorIds" resultMap="CertificateWithAdvisorIdResultMap">
+    SELECT
+    advisor_id,
+    certificate_name,
+    issued_by
+    FROM advisor_certificates
+    WHERE advisor_id IN
+    <foreach collection="advisorIds" item="advisorId" open="(" separator="," close=")">
+      #{advisorId}
+    </foreach>
+    ORDER BY advisor_id, issued_at DESC
+  </select>
+
+  <!-- 어드바이저 리뷰 조회 (커뮤니티 프로필 이미지 포함) - ResultMap 사용 -->
+  <select id="findAdvisorReviewsWithProfile" resultMap="ReviewResultMap">
+    SELECT
+      ar.id as review_id,
+      u.nickname as nickname,
+      ar.rating as rating,
+      ar.content as content,
+      CASE
+        WHEN uci.image_path IS NOT NULL AND uci.image_path != ''
+                THEN uci.image_path
+        ELSE '/images/default_profile.png'
+        END as profile_image,
+      ar.created_at as created_at
+    FROM advisor_reviews ar
+           INNER JOIN users u ON ar.user_id = u.id
+           LEFT JOIN user_community_images uci ON u.id = uci.user_id
+    WHERE ar.advisor_id = #{advisorId}
+      AND ar.is_deleted = 0
+    ORDER BY ar.created_at DESC
+      LIMIT 10
+  </select>
+
+
+  <!-- 기존 findAdvisorDetailById 쿼리 - ResultMap 사용 -->
+  <select id="findAdvisorDetailById" resultMap="AdvisorDetailResultMap">
+    SELECT
+      a.advisor_id as user_id,
+      u.name as name,
+      a.profile_image_url as profile_image_url,
+      a.public_contact as contact,
+      a.consultation_fee as consultation_fee,
+      adi.short_intro as short_intro,
+      adi.long_intro as long_intro,
+      adi.preferred_trade_style as preferred_trade_style,
+      adi.avg_rating as avg_rating,
+      adi.review_counting as review_count
+    FROM advisor a
+           INNER JOIN users u ON a.advisor_id = u.id
+           LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+    WHERE a.advisor_id = #{advisorId}
+      AND a.is_approved = 1
+  </select>
+
+  <!-- 전문가 상담료 조회 (기존 쿼리는 그대로 유지) -->
+  <select id="getConsultationFee" resultType="Integer">
+    SELECT consultation_fee
+    FROM advisor
+    WHERE advisor_id = #{advisorUserId} AND is_approved = 1
+  </select>
+
+</mapper>

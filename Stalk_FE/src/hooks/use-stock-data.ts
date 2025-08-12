@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 
 interface StockInfo {
   ticker: string;
@@ -28,8 +27,6 @@ interface UseStockDataOptions {
   refreshInterval?: number;
 }
 
-const API_BASE_URL = "https://i13e205.p.ssafy.io:8443/api";
-
 export const useStockData = (
   ticker: string | null,
   options: UseStockDataOptions = {}
@@ -47,106 +44,84 @@ export const useStockData = (
     setError(null);
 
     try {
-      // Try to get data from KRX API first (more comprehensive)
-      try {
-        // Determine market type - default to STK for KOSPI, can be enhanced with lookup
-        const marketType = ticker.startsWith('900') || ticker.startsWith('300') ? 'KSQ' : 'STK';
-        const response = await axios.get(`${API_BASE_URL}/krx/stock/${ticker}?market=${marketType}`);
+      // More comprehensive market type detection
+      // KOSDAQ: A000000-A999999 format (6 digits starting with A prefix removed, so 0-9 range)
+      // Common KOSDAQ patterns: 000xxx-099xxx, 100xxx-199xxx, 200xxx-299xxx, 300xxx-399xxx, 900xxx-999xxx
+      // KOSPI: 000000-099999, 100000-199999 (but many exceptions)
+      // Dev Sisters (194480) is KOSDAQ despite starting with 1
+      
+      // For now, let's use a more accurate detection or default to trying both
+      // First, try the original logic but with better KOSDAQ detection
+      let marketType: string;
+      
+      if (ticker.startsWith('9') || ticker.startsWith('3')) {
+        marketType = 'KOSDAQ';
+      } else if (ticker.startsWith('00')) {
+        marketType = 'KOSPI'; 
+      } else {
+        // For ambiguous cases like 194480, we need a different approach
+        // Let's default to KOSDAQ for 1xxxxx range as many tech companies are there
+        marketType = ticker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
+      }
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}`
+      );
 
-        if (response.data) {
-          const stockInfo = response.data;
-          const price = parseFloat(stockInfo.closePrice) || 0;
-          const change = parseFloat(stockInfo.priceChange) || 0;
-          const changeRate = parseFloat(stockInfo.changeRate) || 0;
-
-          setData({
-            ticker: stockInfo.ticker,
-            name: stockInfo.name,
-            marketType: marketType === 'STK' ? 'KOSPI' : 'KOSDAQ',
-            price: price,
-            change: change,
-            changeRate: changeRate,
-            volume: stockInfo.volume || '0',
-            marketCap: stockInfo.marketCap || '0',
-            high: price + Math.abs(change), // Estimate
-            low: price - Math.abs(change),  // Estimate
-            open: price - change,
-            prevClose: price - change,
-            lastUpdated: new Date()
-          });
-          return;
-        }
-      } catch (krxErr) {
-        console.warn('KRX API not available, falling back to basic search:', krxErr);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '주식 데이터 로드 실패');
       }
 
-      // Fallback to basic search if KRX API fails
-      const searchResponse = await axios.get(`${API_BASE_URL}/stock/search/${ticker}`);
-
-      if (searchResponse.data.success && searchResponse.data.data.length > 0) {
-        const stockInfo = searchResponse.data.data[0];
-
-        // Try to get daily chart data for recent prices
-        try {
-          const chartResponse = await axios.get(`${API_BASE_URL}/stock/daily/${ticker}?period=1`);
-          if (chartResponse.data.success && chartResponse.data.data.length > 0) {
-            const latestData = chartResponse.data.data[0];
-            const prevData = chartResponse.data.data[1] || latestData;
-
-            const price = latestData.close;
-            const prevClose = prevData.close;
-            const change = price - prevClose;
-            const changeRate = ((change / prevClose) * 100);
-
-            setData({
-              ticker: stockInfo.ticker,
-              name: stockInfo.name,
-              marketType: stockInfo.marketType || 'KOSPI',
-              price: price,
-              change: change,
-              changeRate: changeRate,
-              volume: `${(latestData.volume / 1000000).toFixed(1)}M`,
-              marketCap: stockInfo.marketCap || '0',
-              high: price * 1.02, // Estimate
-              low: price * 0.98,  // Estimate
-              open: price,
-              prevClose: prevClose,
-              lastUpdated: new Date()
-            });
-          } else {
-            // Fallback with basic info only
-            setData({
-              ticker: stockInfo.ticker,
-              name: stockInfo.name,
-              marketType: stockInfo.marketType || 'KOSPI',
-              price: 0,
-              change: 0,
-              changeRate: 0,
-              volume: '0',
-              marketCap: '0',
-              lastUpdated: new Date()
-            });
-          }
-        } catch (priceErr) {
-          console.warn('Price data not available:', priceErr);
-          setData({
-            ticker: stockInfo.ticker,
-            name: stockInfo.name,
-            marketType: stockInfo.marketType || 'KOSPI',
-            price: 0,
-            change: 0,
-            changeRate: 0,
-            volume: '0',
-            marketCap: '0',
-            lastUpdated: new Date()
-          });
+      const responseData = await response.json();
+      
+      // Handle both wrapped {success, data} format and direct object format
+      let stockInfo;
+      if (responseData.success !== undefined) {
+        // Wrapped format
+        if (!responseData.success) {
+          throw new Error(responseData.message || '주식 데이터 로드 실패');
         }
+        stockInfo = responseData.data;
+      } else if (responseData.ISU_SRT_CD || responseData.ticker) {
+        // Direct KrxStockInfo object format
+        stockInfo = responseData;
+      }
+      
+      if (stockInfo) {
+        // Handle both field naming conventions
+        const closePrice = stockInfo.closePrice || stockInfo.TDD_CLSPRC || stockInfo.ISU_CLSPRC || '0';
+        const priceChange = stockInfo.priceChange || stockInfo.CMPPREVDD_PRC || '0';
+        const changeRateStr = stockInfo.changeRate || stockInfo.FLUC_RT || '0';
+        const volumeStr = stockInfo.volume || stockInfo.ACC_TRDVOL || '0';
+        const marketCapStr = stockInfo.marketCap || stockInfo.MKTCAP || '0';
+        const stockName = stockInfo.name || stockInfo.ISU_ABBRV || '';
+        const stockTicker = stockInfo.ticker || stockInfo.ISU_SRT_CD || ticker;
+        
+        const price = parseFloat(closePrice.toString().replace(/,/g, '')) || 0;
+        const change = parseFloat(priceChange.toString().replace(/,/g, '')) || 0;
+        const changeRate = parseFloat(changeRateStr.toString().replace(/,/g, '')) || 0;
+
+        setData({
+          ticker: stockTicker,
+          name: stockName,
+          marketType: marketType, // Use the computed marketType from above
+          price: price,
+          change: change,
+          changeRate: changeRate,
+          volume: volumeStr,
+          marketCap: marketCapStr,
+          high: price + Math.abs(change),
+          low: price - Math.abs(change),
+          open: price - change,
+          prevClose: price - change,
+          lastUpdated: new Date()
+        });
       } else {
-        setError('주식 정보를 찾을 수 없습니다.');
+        throw new Error('주식 데이터를 찾을 수 없습니다.');
       }
     } catch (err) {
       console.error('Error fetching stock data:', err);
-      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : '주식 데이터를 불러올 수 없습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -156,7 +131,7 @@ export const useStockData = (
     if (ticker) {
       fetchStockData();
     }
-  }, [ticker, fetchStockData]);
+  }, [ticker]);
 
   useEffect(() => {
     if (!autoRefresh || !ticker) return;
@@ -165,430 +140,279 @@ export const useStockData = (
     return () => clearInterval(interval);
   }, [autoRefresh, refreshInterval, ticker, fetchStockData]);
 
+  const refresh = useCallback(() => {
+    return fetchStockData();
+  }, [fetchStockData]);
+
   return {
     data,
     isLoading,
     error,
-    refetch: fetchStockData
+    refresh
   };
 };
 
-// Simple cache for stock data
-const stockDataCache: { [key: string]: { data: StockData[], timestamp: number } } = {};
-const CACHE_DURATION = 30000; // 30 seconds cache
+// Simple cache for ranking data (5 minute TTL)
+const rankingCache = new Map<string, {data: any[], timestamp: number}>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export const useStockList = (
-  rankingType: 'volume' | 'rising' | 'falling' = 'volume',
-  marketType: '전체' | 'kospi' | 'kosdaq' = '전체'
-) => {
-  const [stocks, setStocks] = useState<StockData[]>([]);
+export const useStockList = (category?: 'gainers' | 'losers' | 'volume' | 'marketCap' | 'tradeValue', marketType?: string) => {
+  const [stocks, setStocks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStockList = useCallback(async () => {
-    const cacheKey = `${marketType}-${rankingType}`;
-    const cached = stockDataCache[cacheKey];
-
-    // If we have cached data, show it immediately while loading new data
-    if (cached) {
+  const fetchStocks = useCallback(async () => {
+    // Check cache first
+    const cacheKey = `${category}-${marketType || 'all'}`;
+    const cached = rankingCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      console.log(`💰 Using cached data for ${cacheKey}`);
       setStocks(cached.data);
-
-      // If cache is still fresh, don't fetch new data
-      if (Date.now() - cached.timestamp < CACHE_DURATION) {
-        setIsLoading(false);
-        return;
-      }
+      return;
     }
 
     setIsLoading(true);
     setError(null);
 
     try {
-      let combinedData: any[] = [];
+      let allStocks: any[] = [];
 
-      if (marketType === '전체') {
-        // For 전체 mode behavior:
-        // - Volume/Value rankings: Show KOSPI only (like TossInvest major market focus)
-        // - Rising/Falling rankings: Combine KOSPI+KOSDAQ (like TossInvest percentage rankings)
+      // PERFORMANCE OPTIMIZATION: Try to use combined endpoints first (if available)
+      // If not available, fall back to the current multi-call approach
+      
+      // First, try the optimized single-call approach
+      const categoryMap = {
+        'volume': 'volume-ranking',
+        'gainers': 'price-increase-ranking', 
+        'losers': 'price-decrease-ranking',
+        'marketCap': 'market-cap-ranking',
+        'tradeValue': 'trade-value-ranking'
+      };
+      
+      const endpoint = categoryMap[category || 'volume'];
+      const marketFilter = marketType && marketType !== '전체' ? `&market=${marketType.toLowerCase()}` : '';
+      const optimizedUrl = `${import.meta.env.VITE_API_URL}/api/krx/ranking/${endpoint}?limit=50${marketFilter}`;
+      
+      try {
+        // Try the optimized combined endpoint
+        const optimizedResponse = await fetch(optimizedUrl);
+        
+        if (optimizedResponse.ok) {
+          const responseData = await optimizedResponse.json();
+          if (responseData.success && responseData.data) {
+            allStocks = responseData.data;
+            console.log(`✅ Used optimized endpoint: ${optimizedUrl}`);
+          }
+        } else if (optimizedResponse.status !== 404) {
+          // If it's not a 404 (endpoint doesn't exist), log the error
+          console.warn(`Optimized endpoint failed with status ${optimizedResponse.status}, falling back to legacy approach`);
+        }
+      } catch (optimizedError) {
+        console.warn('Optimized endpoint failed, using legacy multi-call approach:', optimizedError);
+      }
+      
+      // If optimized endpoint didn't work, use the legacy multi-call approach
+      if (allStocks.length === 0) {
+        console.log('📡 Using legacy multi-call approach...');
+        
+        if (category === 'volume') {
+          // Fetch volume rankings from both KOSPI and KOSDAQ
+          const [kospiResponse, kosdaqResponse] = await Promise.all([
+            fetch(`${import.meta.env.VITE_API_URL}/api/krx/kospi/volume-ranking?limit=25`),
+            fetch(`${import.meta.env.VITE_API_URL}/api/krx/kosdaq/volume-ranking?limit=25`)
+          ]);
+          
+          if (!kospiResponse.ok || !kosdaqResponse.ok) {
+            throw new Error('거래량 순위 로드 실패');
+          }
 
-        if (rankingType === 'rising' || rankingType === 'falling') {
-          // For percentage-based rankings, combine both markets like TossInvest
-          const kospiEndpoint = getStockEndpoint('kospi', rankingType);
-          const kosdaqEndpoint = getStockEndpoint('kosdaq', rankingType);
-          const etfEndpoint = `${API_BASE_URL}/krx/etf/daily-trading`;
-
-          const [kospiResponse, kosdaqResponse, etfResponse] = await Promise.allSettled([
-            axios.get(`${kospiEndpoint}?limit=50`),
-            axios.get(`${kosdaqEndpoint}?limit=50`),
-            axios.get(etfEndpoint)
+          const [kospiData, kosdaqData] = await Promise.all([
+            kospiResponse.json(),
+            kosdaqResponse.json()
           ]);
 
-          console.log('ETF API Response:', etfResponse);
-
-          // Combine KOSPI and KOSDAQ data
-          if (kospiResponse.status === 'fulfilled' && kospiResponse.value.data && Array.isArray(kospiResponse.value.data)) {
-            const kospiStocks = kospiResponse.value.data.map((stock: any) => ({
-              ticker: stock.ticker,
-              name: stock.name,
-              price: stock.price,
-              change: stock.change,
-              changeRate: stock.changeRate,
-              volume: stock.volume,
-              tradeValue: stock.tradeValue,
-              marketCap: stock.marketCap,
-              type: 'stock',
-              market: 'KOSPI'
-            }));
-            combinedData = [...combinedData, ...kospiStocks];
-          }
-
-          if (kosdaqResponse.status === 'fulfilled' && kosdaqResponse.value.data && Array.isArray(kosdaqResponse.value.data)) {
-            const kosdaqStocks = kosdaqResponse.value.data.map((stock: any) => ({
-              ticker: stock.ticker,
-              name: stock.name,
-              price: stock.price,
-              change: stock.change,
-              changeRate: stock.changeRate,
-              volume: stock.volume,
-              tradeValue: stock.tradeValue,
-              marketCap: stock.marketCap,
-              type: 'stock',
-              market: 'KOSDAQ'
-            }));
-            combinedData = [...combinedData, ...kosdaqStocks];
-          }
-
-          // Add ETF data for rising/falling rankings
-          console.log('ETF Response status:', etfResponse.status);
-          console.log('ETF Response data:', etfResponse.status === 'fulfilled' ? etfResponse.value.data : 'No data');
-
-          if (etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) && etfResponse.value.data.length > 0) {
-            console.log('Processing', etfResponse.value.data.length, 'ETFs');
-            const etfData = etfResponse.value.data.map((etf: any) => ({
-              ticker: etf.ticker,
-              name: `${etf.name} (ETF)`,
-              price: etf.price,
-              change: etf.change,
-              changeRate: etf.changeRate,
-              volume: etf.volume,
-              tradeValue: etf.tradeValue,
-              marketCap: etf.marketCap,
-              type: 'etf',
-              market: 'ETF'
-            }));
-            combinedData = [...combinedData, ...etfData];
-            console.log('Added', etfData.length, 'ETFs to combined data');
-          } else {
-            console.log('No ETF data to add - check failed:', {
-              status: etfResponse.status,
-              hasData: etfResponse.status === 'fulfilled' ? !!etfResponse.value.data : false,
-              isArray: etfResponse.status === 'fulfilled' && etfResponse.value.data ? Array.isArray(etfResponse.value.data) : false,
-              length: etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) ? etfResponse.value.data.length : 0
-            });
-          }
-
-          // Re-sort combined data for percentage rankings
-          combinedData = sortCombinedData(combinedData, rankingType);
-
+          // Combine both arrays
+          allStocks = [...kospiData, ...kosdaqData];
+          
+          // Sort by volume and re-rank
+          allStocks.sort((a, b) => {
+            const volA = parseInt((a.volume || '0').toString().replace(/,/g, ''));
+            const volB = parseInt((b.volume || '0').toString().replace(/,/g, ''));
+            return volB - volA;
+          });
+          
+          // Update rankings and limit to top 50
+          allStocks = allStocks.slice(0, 50).map((stock, index) => ({
+            ...stock,
+            rank: index + 1
+          }));
         } else {
-          // For volume/value rankings, show KOSPI only with ETF integration
-          const kospiEndpoint = getStockEndpoint('kospi', rankingType);
-          const etfEndpoint = `${API_BASE_URL}/krx/etf/daily-trading`;
+          // For gainers and losers, fetch from both KOSPI and KOSDAQ
+          const kospiEndpoint = category === 'gainers' 
+            ? `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-increase-ranking`
+            : `${import.meta.env.VITE_API_URL}/api/krx/kospi/price-decrease-ranking`;
+          
+          const kosdaqEndpoint = category === 'gainers'
+            ? `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-increase-ranking` 
+            : `${import.meta.env.VITE_API_URL}/api/krx/kosdaq/price-decrease-ranking`;
 
-          const [kospiResponse, etfResponse] = await Promise.allSettled([
-            axios.get(`${kospiEndpoint}?limit=40`),
-            axios.get(etfEndpoint)
+          // Fetch both markets concurrently
+          const [kospiResponse, kosdaqResponse] = await Promise.all([
+            fetch(kospiEndpoint),
+            fetch(kosdaqEndpoint)
           ]);
 
-          console.log('Volume ranking - ETF API Response:', etfResponse);
-
-          // Process KOSPI data with preserved ranking
-          if (kospiResponse.status === 'fulfilled' && kospiResponse.value.data && Array.isArray(kospiResponse.value.data)) {
-            const kospiStocks = kospiResponse.value.data.map((stock: any, index: number) => ({
-              rank: index + 1,
-              ticker: stock.ticker,
-              name: stock.name,
-              price: stock.price,
-              change: stock.change,
-              changeRate: stock.changeRate,
-              volume: stock.volume,
-              tradeValue: stock.tradeValue,
-              marketCap: stock.marketCap,
-              type: 'stock',
-              market: 'KOSPI'
-            }));
-            combinedData = [...kospiStocks];
+          if (!kospiResponse.ok || !kosdaqResponse.ok) {
+            throw new Error('상승/하락률 순위 로드 실패');
           }
 
-          // Process ETF data and integrate with KOSPI rankings
-          console.log('Volume - ETF Response status:', etfResponse.status);
-          console.log('Volume - ETF Response data:', etfResponse.status === 'fulfilled' ? etfResponse.value.data : 'No data');
+          const [kospiData, kosdaqData] = await Promise.all([
+            kospiResponse.json(),
+            kosdaqResponse.json()
+          ]);
 
-          if (etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) && etfResponse.value.data.length > 0) {
-            console.log('Volume - Processing', etfResponse.value.data.length, 'ETFs');
-            const etfData = etfResponse.value.data.map((etf: any) => ({
-              ticker: etf.ticker,
-              name: `${etf.name} (ETF)`,
-              price: etf.price,
-              change: etf.change,
-              changeRate: etf.changeRate,
-              volume: etf.volume,
-              tradeValue: etf.tradeValue,
-              marketCap: etf.marketCap,
-              type: 'etf',
-              market: 'ETF'
-            }));
+          // Combine both arrays
+          allStocks = [...kospiData, ...kosdaqData];
 
-            // Integrate ETFs by their actual ranking value
-            etfData.forEach(etf => {
-              const etfValue = parseVolumeValue(etf[getRankingField(rankingType)]);
-              let insertIndex = combinedData.findIndex(stock => {
-                const stockValue = parseVolumeValue(stock[getRankingField(rankingType)]);
-                return rankingType === 'falling' ? etfValue < stockValue : etfValue > stockValue;
-              });
+          // Sort by change rate and re-rank
+          allStocks.sort((a, b) => {
+            const aRate = Math.abs(parseFloat(a.changeRate) || 0);
+            const bRate = Math.abs(parseFloat(b.changeRate) || 0);
+            return bRate - aRate;
+          });
 
-              if (insertIndex === -1) insertIndex = combinedData.length;
-              combinedData.splice(insertIndex, 0, etf);
-            });
-          } else {
-            console.log('ETF API integration pending - showing KOSPI rankings only');
-          }
-        }
-
-      } else {
-        // Fetch single market data (KOSPI or KOSDAQ)
-        const stockEndpoint = getStockEndpoint(marketType, rankingType);
-        const etfEndpoint = `${API_BASE_URL}/krx/etf/daily-trading`;
-
-        const [stockResponse, etfResponse] = await Promise.allSettled([
-          axios.get(`${stockEndpoint}?limit=40`),
-          axios.get(etfEndpoint)
-        ]);
-
-        // Process single market stock data
-        if (stockResponse.status === 'fulfilled' && stockResponse.value.data && Array.isArray(stockResponse.value.data)) {
-          const rankedStocks = stockResponse.value.data.map((stock: any, index: number) => ({
-            rank: index + 1,
-            ticker: stock.ticker,
-            name: stock.name,
-            price: stock.price,
-            change: stock.change,
-            changeRate: stock.changeRate,
-            volume: stock.volume,
-            tradeValue: stock.tradeValue,
-            marketCap: stock.marketCap,
-            type: 'stock',
-            market: marketType.toUpperCase()
+          // Update rankings and limit to top 50
+          allStocks = allStocks.slice(0, 50).map((stock, index) => ({
+            ...stock,
+            rank: index + 1
           }));
-          combinedData = [...rankedStocks];
         }
+        
+        // Apply market filtering if specified (only for legacy approach)
+        if (marketType && marketType !== '전체') {
+          allStocks = allStocks.filter((stock: any) => {
+            const ticker = stock.ticker || '';
+            
+            // Use the same improved logic as other places
+            if (marketType === 'kospi') {
+              // KOSPI logic - more accurate detection
+              if (ticker.startsWith('00') || (!ticker.startsWith('9') && !ticker.startsWith('3') && !ticker.startsWith('1'))) {
+                return true;
+              }
+              return false;
+            } else if (marketType === 'kosdaq') {
+              // KOSDAQ logic - include tickers starting with 1, 3, 9
+              return ticker.startsWith('9') || ticker.startsWith('3') || ticker.startsWith('1');
+            }
+            return true;
+          });
 
-        // Process ETF data for single market view
-        if (etfResponse.status === 'fulfilled' && etfResponse.value.data && Array.isArray(etfResponse.value.data) && etfResponse.value.data.length > 0) {
-          const etfData = etfResponse.value.data.map((etf: any) => ({
-            ticker: etf.ticker,
-            name: `${etf.name} (ETF)`,
-            price: etf.price,
-            change: etf.change,
-            changeRate: etf.changeRate,
-            volume: etf.volume,
-            tradeValue: etf.tradeValue,
-            marketCap: etf.marketCap,
-            type: 'etf',
-            market: 'ETF'
+          // Re-rank after filtering
+          allStocks = allStocks.map((stock, index) => ({
+            ...stock,
+            rank: index + 1
           }));
-
-          combinedData = [...combinedData, ...etfData];
-        } else {
-          console.log('ETF API integration pending - showing stocks only');
         }
       }
-
-      // Assign final rankings based on mode and ranking type
-      const finalData = combinedData.slice(0, 20).map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }));
-
-      console.log('Final data:', finalData);
-      console.log('ETFs in final data:', finalData.filter(item => item.type === 'etf').length);
-
-      setStocks(finalData);
-
-      // Update cache
-      const cacheKey = `${marketType}-${rankingType}`;
-      stockDataCache[cacheKey] = { data: finalData, timestamp: Date.now() };
-
-    } catch (err: any) {
-      console.error('Error fetching combined stock and ETF data:', err);
-      if (err.message?.includes('Network Error') || err.code === 'ERR_NETWORK') {
-        setError('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
-      } else {
-        setError('순위 데이터를 가져올 수 없습니다.');
-      }
-      setStocks([]);
+      
+      // Cache the results
+      rankingCache.set(cacheKey, {
+        data: allStocks,
+        timestamp: now
+      });
+      
+      setStocks(allStocks);
+    } catch (err) {
+      console.error('Error fetching stock list:', err);
+      setError(err instanceof Error ? err.message : '주식 목록을 불러올 수 없습니다.');
     } finally {
       setIsLoading(false);
     }
-  }, [rankingType, marketType]);
+  }, [category, marketType]);
 
   useEffect(() => {
-    fetchStockList();
-  }, [fetchStockList]);
+    fetchStocks();
+  }, [category, marketType]);
 
   return {
     stocks,
     isLoading,
     error,
-    refetch: fetchStockList
+    refresh: fetchStocks
   };
 };
-
-// Helper function to get stock endpoint
-function getStockEndpoint(marketType: string, rankingType: string): string {
-  const baseUrl = API_BASE_URL;
-
-  if (marketType === 'kosdaq') {
-    switch (rankingType) {
-      case 'volume':
-        return `${baseUrl}/krx/kosdaq/volume-ranking`;
-      case 'rising':
-        return `${baseUrl}/krx/kosdaq/price-increase-ranking`;
-      case 'falling':
-        return `${baseUrl}/krx/kosdaq/price-decrease-ranking`;
-      default:
-        return `${baseUrl}/krx/kosdaq/volume-ranking`;
-    }
-  } else if (marketType === 'kospi') {
-    switch (rankingType) {
-      case 'volume':
-        return `${baseUrl}/krx/kospi/volume-ranking`;
-      case 'rising':
-        return `${baseUrl}/krx/kospi/price-increase-ranking`;
-      case 'falling':
-        return `${baseUrl}/krx/kospi/price-decrease-ranking`;
-      default:
-        return `${baseUrl}/krx/kospi/volume-ranking`;
-    }
-  } else {
-    // Default to KOSPI for 전체 or other cases
-    switch (rankingType) {
-      case 'volume':
-        return `${baseUrl}/krx/kospi/volume-ranking`;
-      case 'rising':
-        return `${baseUrl}/krx/kospi/price-increase-ranking`;
-      case 'falling':
-        return `${baseUrl}/krx/kospi/price-decrease-ranking`;
-      default:
-        return `${baseUrl}/krx/kospi/volume-ranking`;
-    }
-  }
-}
-
-// Helper function to sort combined data
-function sortCombinedData(data: any[], rankingType: string): any[] {
-  switch (rankingType) {
-    case 'volume':
-      return data.sort((a, b) => parseVolumeValue(b.volume) - parseVolumeValue(a.volume));
-    case 'rising':
-      return data.sort((a, b) => (b.changeRate || 0) - (a.changeRate || 0));
-    case 'falling':
-      return data.sort((a, b) => (a.changeRate || 0) - (b.changeRate || 0));
-    default:
-      return data;
-  }
-}
-
-// Helper function to parse volume values (handles M, K suffixes)
-function parseVolumeValue(value: string | number): number {
-  if (typeof value === 'number') return value;
-  if (!value || typeof value !== 'string') return 0;
-
-  const numStr = value.replace(/,/g, '');
-  if (numStr.includes('M') || numStr.includes('m')) {
-    return parseFloat(numStr.replace(/[Mm]/g, '')) * 1000000;
-  }
-  if (numStr.includes('K') || numStr.includes('k')) {
-    return parseFloat(numStr.replace(/[Kk]/g, '')) * 1000;
-  }
-  if (numStr.includes('B') || numStr.includes('b')) {
-    return parseFloat(numStr.replace(/[Bb]/g, '')) * 1000000000;
-  }
-  return parseFloat(numStr) || 0;
-}
-
-// Helper function to get the field name for ranking comparison
-function getRankingField(rankingType: string): string {
-  switch (rankingType) {
-    case 'volume':
-      return 'volume';
-    case 'rising':
-    case 'falling':
-      return 'changeRate';
-    default:
-      return 'volume';
-  }
-}
-
 
 export const useMarketIndices = () => {
   const [indices, setIndices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMarketIndices = useCallback(async () => {
+  const fetchIndices = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // TODO: Implement real market indices API call
-      // For now, return empty array until real API is implemented
-      setIndices([]);
-      setError('시장 지수 API가 아직 구현되지 않았습니다.');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/krx/indices`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '지수 데이터 로드 실패');
+      }
+
+      const responseData = await response.json();
+      
+      if (responseData.success && responseData.data) {
+        setIndices(responseData.data);
+      }
     } catch (err) {
       console.error('Error fetching market indices:', err);
-      setError('시장 지수를 불러오는 중 오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : '지수 데이터를 불러올 수 없습니다.');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchMarketIndices();
-  }, [fetchMarketIndices]);
+    fetchIndices();
+  }, []);
 
   return {
     indices,
     isLoading,
     error,
-    refetch: fetchMarketIndices
+    refresh: fetchIndices
   };
 };
 
-export const useInvestorTrends = (ticker: string | null) => {
-  const [data, setData] = useState<any>(null);
+export const useStockBasicInfo = (ticker: string | null) => {
+  const [info, setInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchInvestorTrends = useCallback(async () => {
+  const fetchInfo = useCallback(async () => {
     if (!ticker) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/stock/investor-trends/${ticker}`);
+      const response = await fetch(`/api/stalk/info/${ticker}`);
 
-      if (response.data.success && response.data.data) {
-        setData(response.data.data);
-      } else {
-        setError('투자자 동향 데이터를 찾을 수 없습니다.');
-        setData(null);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '종목 정보 로드 실패');
+      }
+
+      const responseData = await response.json();
+      
+      if (responseData.success && responseData.data) {
+        setInfo(responseData.data);
       }
     } catch (err) {
-      console.error('Error fetching investor trends:', err);
-      setError('투자자 동향 데이터를 불러오는 중 오류가 발생했습니다.');
-      setData(null);
+      console.error('Error fetching stock info:', err);
+      setError(err instanceof Error ? err.message : '종목 정보를 불러올 수 없습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -596,62 +420,14 @@ export const useInvestorTrends = (ticker: string | null) => {
 
   useEffect(() => {
     if (ticker) {
-      fetchInvestorTrends();
+      fetchInfo();
     }
-  }, [ticker, fetchInvestorTrends]);
+  }, [ticker]);
 
   return {
-    data,
+    info,
     isLoading,
     error,
-    refetch: fetchInvestorTrends
-  };
-};
-
-
-// Hook for comprehensive stock basic info using your granted APIs
-export const useStockBasicInfo = (ticker: string | null, marketType: 'STK' | 'KSQ' = 'STK') => {
-  const [basicInfo, setBasicInfo] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchBasicInfo = useCallback(async () => {
-    if (!ticker) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Use your granted "유가증권 종목기본정보" or "코스닥 종목기본정보" APIs
-      const endpoint = marketType === 'STK'
-        ? `${API_BASE_URL}/krx/securities/basic-info/${ticker}`
-        : `${API_BASE_URL}/krx/kosdaq/basic-info/${ticker}`;
-
-      const response = await axios.get(endpoint);
-
-      if (response.data) {
-        setBasicInfo(response.data);
-      } else {
-        setError('종목 기본정보를 가져올 수 없습니다.');
-      }
-    } catch (err) {
-      console.error('Error fetching basic stock info:', err);
-      setError('종목 기본정보를 불러오는 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [ticker, marketType]);
-
-  useEffect(() => {
-    if (ticker) {
-      fetchBasicInfo();
-    }
-  }, [ticker, fetchBasicInfo]);
-
-  return {
-    basicInfo,
-    isLoading,
-    error,
-    refetch: fetchBasicInfo
+    refresh: fetchInfo
   };
 };
