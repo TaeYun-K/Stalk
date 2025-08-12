@@ -24,33 +24,38 @@
 
   <!-- 전문가 상세 정보 등록 -->
   <insert id="insertAdvisorDetailInfo">
+    <!-- advisor_detail_info 테이블에 상세 정보 삽입 -->
     INSERT INTO advisor_detail_info (
-      advisor_id,
-      profile_image_url,
-      public_contact,
-      short_intro,
-      long_intro,
-      preferred_trade_style,
-      created_at,
-      updated_at
+    advisor_id,
+    profile_image_url,
+    public_contact,
+    short_intro,
+    long_intro,
+    preferred_trade_style,
+    created_at,
+    updated_at
     ) VALUES (
-               #{advisorId},
-               #{request.profileImageUrl},
-               #{request.publicContact},
-               #{request.shortIntro},
-               #{request.longIntro},
-               #{request.preferredTradeStyle},
-               NOW(),
-               NOW()
-             );
+    #{advisorId},
+    #{request.profileImageUrl},
+    #{request.publicContact},
+    #{request.shortIntro},
+    #{request.longIntro},
+    #{request.preferredTradeStyle},
+    NOW(),
+    NOW()
+    );
 
+    <!-- advisor 테이블에 상담료 업데이트 및 프로필 완성 상태 변경 -->
     UPDATE advisor
-    SET is_profile_completed = 1
+    SET consultation_fee = #{request.consultationFee},
+    is_profile_completed = 1,
+    updated_at = NOW()
     WHERE advisor_id = #{advisorId};
   </insert>
 
   <!-- 전문가 상세 정보 수정 -->
   <update id="updateAdvisorDetailInfo">
+    <!-- advisor_detail_info 테이블 업데이트 -->
     UPDATE advisor_detail_info
     SET updated_at = NOW()
     <if test="request.profileImageUrl != null">
@@ -68,7 +73,15 @@
     <if test="request.preferredTradeStyle != null">
       , preferred_trade_style = #{request.preferredTradeStyle}
     </if>
-    WHERE advisor_id = #{advisorId}
+    WHERE advisor_id = #{advisorId};
+
+    <!-- advisor 테이블의 상담료 업데이트 (필요한 경우) -->
+    <if test="request.consultationFee != null">
+      UPDATE advisor
+      SET consultation_fee = #{request.consultationFee},
+      updated_at = NOW()
+      WHERE advisor_id = #{advisorId};
+    </if>
   </update>
 
   <!-- ===== 경력 정보 관리 ===== -->
