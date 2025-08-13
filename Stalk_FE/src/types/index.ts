@@ -121,7 +121,7 @@ export interface ConsultationItem {
   expert: string;
   videoConsultation: string;
   action: string;
-  status: "scheduled" | "completed" | "cancelled";
+  status?: "scheduled" | "completed" | "cancelled";
 }
 
 // 전문가 자격증 정보

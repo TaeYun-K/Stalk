@@ -3,10 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
-import newsIcon from '@/assets/images/icons/news_icon.png';
-import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
-import profileDefault from '@/assets/images/profiles/Profile_default.svg';
-
 
 
 const Navbar: React.FC = () => {
@@ -14,9 +10,9 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
+  // const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  // const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   
@@ -35,12 +31,11 @@ const Navbar: React.FC = () => {
       if (data.result?.profileImage) {
         setUserProfileImage(data.result.profileImage);
       } else {
-        
-        setUserProfileImage(profileDefault);
+        setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
       }
     } catch (error) {
       console.error('프로필 이미지 로드 실패:', error);
-      setUserProfileImage(profileDefault);
+      setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
     }
   };
 
@@ -168,12 +163,12 @@ const Navbar: React.FC = () => {
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.src = profileDefault;
+                        e.currentTarget.src = `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
                       }}
                     />
                   ) : (
                     <img
-                      src={profileDefault}
+                      src={`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`}
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(_e) => {

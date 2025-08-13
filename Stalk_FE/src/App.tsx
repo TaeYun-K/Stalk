@@ -140,11 +140,6 @@ const AppContent: React.FC = () => {
                 path="/advisors-introduction-update/:advisorId"
                 element={<AdvisorsIntroductionUpdatePage />}
               />
-              {/* Alias route for expert-introduction-update to point to the same page */}
-              <Route
-                path="/expert-introduction-update/:advisorId"
-                element={<AdvisorsIntroductionUpdatePage />}
-              />
 
               {/* 투자 지식 in 관련 path */}
               <Route
