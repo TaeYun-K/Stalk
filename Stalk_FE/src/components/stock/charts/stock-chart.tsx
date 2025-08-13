@@ -417,14 +417,14 @@ const StockChart: React.FC<StockChartProps> = ({
     }
     if (propDrawingMode !== isDrawingMode) {
       setIsDrawingMode(propDrawingMode);
-      
+
       // When drawing mode is activated, automatically add future space
       if (propDrawingMode && !isDrawingMode) {
         // Only set initial future space if user hasn't manually scrolled
         if (futureDays === 0) {
           // Add 30 days of future space when entering drawing mode
           setFutureDays(30);
-          
+
           // Show scroll indicator briefly
           setScrollIndicatorVisible(true);
           if (scrollTimeoutRef.current) {
@@ -434,7 +434,7 @@ const StockChart: React.FC<StockChartProps> = ({
             setScrollIndicatorVisible(false);
           }, 2000);
         }
-        
+
         // Small delay to ensure chart is rendered with future space
         setTimeout(() => {
           const chartContainer = document.querySelector('.chart-container');
@@ -459,7 +459,7 @@ const StockChart: React.FC<StockChartProps> = ({
   // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
-    
+
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
@@ -525,7 +525,7 @@ const StockChart: React.FC<StockChartProps> = ({
     const handleNativeWheel = (e: WheelEvent) => {
       // Only handle vertical scroll, not horizontal
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      
+
       // Prevent default scrolling
       e.preventDefault();
       e.stopPropagation();
@@ -765,7 +765,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const msg = JSON.parse(e.data);
         // Check if update is for current chart
         if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
-        
+
         // Update local future days
         if (typeof msg.futureDays === 'number') {
           setFutureDays(msg.futureDays);
@@ -802,7 +802,7 @@ const StockChart: React.FC<StockChartProps> = ({
         macd: { ...prev.macd, enabled: activeIndicator === 'macd' },
         stochastic: { ...prev.stochastic, enabled: activeIndicator === 'stochastic' }
       }));
-      
+
       // Only set active tab if there's an indicator, otherwise keep current tab
       if (activeIndicator) {
         setActiveIndicatorTab(activeIndicator);
@@ -840,7 +840,7 @@ const StockChart: React.FC<StockChartProps> = ({
       console.log('[fetch] start', {
         ticker: override?.ticker ?? getCurrentTicker(),
         period: override?.period ?? period
-      }); 
+      });
 
       // More comprehensive market type detection - same logic as in use-stock-data.ts
       const ticker = override?.ticker ?? getCurrentTicker();
@@ -987,7 +987,7 @@ const StockChart: React.FC<StockChartProps> = ({
         }
 
         setRawData(sortedData); // Store only real data for indicator calculations
-        
+
         // Notify parent component about data point count
         if (onDataPointsUpdate) {
           onDataPointsUpdate(sortedData.length);
@@ -1015,7 +1015,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const realOpens = sortedData.map(item => item.open || item.close);
         const realHighs = sortedData.map(item => item.high || item.close);
         const realLows = sortedData.map(item => item.low || item.close);
-        
+
         // Create arrays with correct length including future padding
         const futureCount = Math.max(0, finalData.length - sortedData.length);
         // Use NaN for future padding - Chart.js will skip these points with spanGaps: false
@@ -1025,7 +1025,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const opens = [...realOpens, ...futurePadding];
         const highs = [...realHighs, ...futurePadding];
         const lows = [...realLows, ...futurePadding];
-        
+
         // Critical debug - check if data aligns correctly
         console.log('CHART DATA ALIGNMENT CHECK:', {
           futureDays,
@@ -1042,7 +1042,7 @@ const StockChart: React.FC<StockChartProps> = ({
             prices: prices.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2)
           }
         });
-        
+
 
 
         // Simplified line chart configuration
@@ -1682,7 +1682,7 @@ const StockChart: React.FC<StockChartProps> = ({
       [indicator]: config
     };
     setIndicatorSettings(newSettings);
-    
+
     // Call external handler if provided (for consultation mode)
     externalIndicatorChange?.(newSettings);
   };
@@ -1700,7 +1700,7 @@ const StockChart: React.FC<StockChartProps> = ({
     if (selectedIndicator === 'stochastic' && !canShowStochastic) {
       console.warn(`Stochastic requires at least 14 data points. Current: ${rawData?.length || 0}`);
     }
-    
+
     setIndicatorSettings(prev => ({
       ...prev,
       volume: { ...prev.volume, enabled: selectedIndicator === 'volume' },
@@ -1782,7 +1782,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // Enhanced safety checks to prevent sync errors
         if (!chart?.scales?.x || !chart?.data?.labels || !chart?.data?.datasets) return;
-        
+
         let index = -1;
 
         // Get index from active elements (most reliable)
@@ -2063,7 +2063,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // Enhanced safety checks to prevent sync errors
         if (!chart?.scales?.x || !chart?.data?.labels || !chart?.data?.datasets) return;
-        
+
         let index = -1;
 
         // Get index from active elements (most reliable)
@@ -2228,7 +2228,7 @@ const StockChart: React.FC<StockChartProps> = ({
             if (chartData && index >= chartData.actualDataLength) {
               return null;
             }
-            
+
             const value = context.parsed.y;
             const datasetLabel = context.dataset.label || '';
 
@@ -2415,10 +2415,10 @@ const StockChart: React.FC<StockChartProps> = ({
   return (
     <>
     <div className={`h-full w-full flex ${
-      isConsultationMode && darkMode 
-        ? 'bg-gray-900' 
-        : darkMode 
-          ? 'bg-gray-950' 
+      isConsultationMode && darkMode
+        ? 'bg-gray-900'
+        : darkMode
+          ? 'bg-gray-950'
           : 'bg-gray-50'
     } relative`}>
       {/* Enhanced Glassmorphism Left Sidebar */}
@@ -2426,8 +2426,8 @@ const StockChart: React.FC<StockChartProps> = ({
         className={`w-52 flex-shrink-0 ${
           isConsultationMode && darkMode
             ? 'bg-gray-800/95 backdrop-blur-xl border-r border-gray-600/30'
-            : darkMode 
-              ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40' 
+            : darkMode
+              ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40'
               : 'bg-gradient-to-b from-white/90 via-gray-50/90 to-white/90 backdrop-blur-2xl border-r border-gray-200/40'
         } flex flex-col h-full relative z-20 overflow-hidden`}
       >
@@ -2818,9 +2818,9 @@ const StockChart: React.FC<StockChartProps> = ({
         <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} shadow-xl border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col min-h-0`}>
 
             {/* Main Price Chart Section - Dynamic height based on indicator */}
-            <div className="relative chart-container" style={{ 
-              minHeight: '300px', 
-              height: 'auto', 
+            <div className="relative chart-container" style={{
+              minHeight: '300px',
+              height: 'auto',
               overflowX: isDrawingMode && futureDays > 0 ? 'auto' : 'hidden',
               overflowY: 'hidden'
             }}>
@@ -2872,11 +2872,11 @@ const StockChart: React.FC<StockChartProps> = ({
                       <div
                         className={`absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md backdrop-blur-sm transition-all duration-500 ${
                           isDrawingMode
-                            ? darkMode 
-                              ? 'bg-purple-600/20 border border-purple-500/30' 
+                            ? darkMode
+                              ? 'bg-purple-600/20 border border-purple-500/30'
                               : 'bg-purple-100/80 border border-purple-300'
-                            : darkMode 
-                              ? 'bg-white/10 border border-white/20' 
+                            : darkMode
+                              ? 'bg-white/10 border border-white/20'
                               : 'bg-black/10'
                         }`}
                         style={{ opacity: isDrawingMode || scrollIndicatorVisible ? 0.9 : 0.4 }}
@@ -2890,7 +2890,7 @@ const StockChart: React.FC<StockChartProps> = ({
                         </span>
                       </div>
                     )}
-                    
+
 
                   </div>
                 )}
@@ -2968,7 +2968,7 @@ const StockChart: React.FC<StockChartProps> = ({
           </div>
         </div>
       </div>
-    
+
     {/* Indicator Help Tooltip - Moved outside main container */}
     {hoveredIndicatorHelp && createPortal(
       <div
