@@ -44,7 +44,7 @@
     SELECT
     a.advisor_id as id,
     u.name,
-    a.profile_image_url as profileImageUrl,
+    adi.profile_image_url as profileImageUrl,
     adi.preferred_trade_style as preferredStyle,
     adi.short_intro as shortIntro,
     COALESCE(adi.avg_rating, 0.0) as averageRating,
@@ -286,7 +286,7 @@
     SELECT
     a.advisor_id as user_id,
     u.name as name,
-    a.profile_image_url as profile_image_url,
+    adi.profile_image_url as profile_image_url,
     adi.public_contact as contact,  <!-- 이 부분을 advisor_detail_info에서 가져오도록 수정 -->
     a.consultation_fee as consultation_fee,
     adi.short_intro as short_intro,
