@@ -44,7 +44,7 @@ public class VideoRecordingController {
     @PostMapping("/sessions/{sessionId}/connections/screen")
     public ResponseEntity<BaseResponse<Map<String, String>>> createScreenShareToken(
         @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
-        @PathVariable Long userId, @RequestParam String name
+        @RequestParam Long userId, @RequestParam String name
     ) {
         try {
             // 세션 존재 확인 (없으면 404)
