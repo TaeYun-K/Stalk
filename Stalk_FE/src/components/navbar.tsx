@@ -3,7 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
+<<<<<<<<< Temporary merge branch 1
+=========
+// import newsIcon from '@/assets/images/icons/news_icon.png';
+// import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
+import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 
+>>>>>>>>> Temporary merge branch 2
 
 
 const Navbar: React.FC = () => {
@@ -11,9 +17,10 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-
+<<<<<<<<< Temporary merge branch 1
   // const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
-
+=========
+>>>>>>>>> Temporary merge branch 2
   const [searchQuery, setSearchQuery] = useState<string>('');
   // const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
