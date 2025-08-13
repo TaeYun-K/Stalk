@@ -72,6 +72,12 @@ public interface AdvisorProfileMapper {
     Boolean isCareerEntryOwner(@Param("advisorId") Long advisorId, 
                               @Param("careerId") Long careerId);
 
+    /**
+     * 전문가 상담료 업데이트
+     */
+    int updateAdvisorConsultationFee(@Param("advisorId") Long advisorId,
+                    @Param("consultationFee") Integer consultationFee);
+
     // ===== 자격증 승인 요청 =====
     
     /**

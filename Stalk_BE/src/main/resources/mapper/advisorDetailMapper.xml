@@ -44,7 +44,7 @@
     SELECT
     a.advisor_id as id,
     u.name,
-    a.profile_image_url as profileImageUrl,
+    adi.profile_image_url as profileImageUrl,
     adi.preferred_trade_style as preferredStyle,
     adi.short_intro as shortIntro,
     COALESCE(adi.avg_rating, 0.0) as averageRating,
@@ -258,7 +258,7 @@
     ORDER BY advisor_id, issued_at DESC
   </select>
 
-  <!-- 어드바이저 리뷰 조회 (커뮤니티 프로필 이미지 포함) - ResultMap 사용 -->
+  <!-- 어드바이저 리뷰 조회 (users.image 사용) -->
   <select id="findAdvisorReviewsWithProfile" resultMap="ReviewResultMap">
     SELECT
       ar.id as review_id,
@@ -266,14 +266,13 @@
       ar.rating as rating,
       ar.content as content,
       CASE
-        WHEN uci.image_path IS NOT NULL AND uci.image_path != ''
-                THEN uci.image_path
+        WHEN u.image IS NOT NULL AND u.image != ''
+              THEN u.image
         ELSE '/images/default_profile.png'
         END as profile_image,
       ar.created_at as created_at
     FROM advisor_reviews ar
            INNER JOIN users u ON ar.user_id = u.id
-           LEFT JOIN user_community_images uci ON u.id = uci.user_id
     WHERE ar.advisor_id = #{advisorId}
       AND ar.is_deleted = 0
     ORDER BY ar.created_at DESC
@@ -281,24 +280,24 @@
   </select>
 
 
-  <!-- 기존 findAdvisorDetailById 쿼리 - ResultMap 사용 -->
+  <!-- 수정된 findAdvisorDetailById 쿼리 -->
   <select id="findAdvisorDetailById" resultMap="AdvisorDetailResultMap">
     SELECT
-      a.advisor_id as user_id,
-      u.name as name,
-      a.profile_image_url as profile_image_url,
-      a.public_contact as contact,
-      a.consultation_fee as consultation_fee,
-      adi.short_intro as short_intro,
-      adi.long_intro as long_intro,
-      adi.preferred_trade_style as preferred_trade_style,
-      adi.avg_rating as avg_rating,
-      adi.review_counting as review_count
+    a.advisor_id as user_id,
+    u.name as name,
+    adi.profile_image_url as profile_image_url,
+    adi.public_contact as contact,  <!-- 이 부분을 advisor_detail_info에서 가져오도록 수정 -->
+    a.consultation_fee as consultation_fee,
+    adi.short_intro as short_intro,
+    adi.long_intro as long_intro,
+    adi.preferred_trade_style as preferred_trade_style,
+    adi.avg_rating as avg_rating,
+    adi.review_counting as review_count
     FROM advisor a
-           INNER JOIN users u ON a.advisor_id = u.id
-           LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
+    INNER JOIN users u ON a.advisor_id = u.id
+    LEFT JOIN advisor_detail_info adi ON a.advisor_id = adi.advisor_id
     WHERE a.advisor_id = #{advisorId}
-      AND a.is_approved = 1
+    AND a.is_approved = 1
   </select>
 
   <!-- 전문가 상담료 조회 (기존 쿼리는 그대로 유지) -->

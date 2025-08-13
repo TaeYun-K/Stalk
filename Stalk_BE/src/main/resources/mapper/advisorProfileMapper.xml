@@ -53,38 +53,6 @@
         updated_at = NOW()
     WHERE advisor_id = #{advisorId}
   </update>
-
-  <!-- 전문가 상세 정보 수정 -->
-  <update id="updateAdvisorDetailInfo">
-    <!-- advisor_detail_info 테이블 업데이트 -->
-    UPDATE advisor_detail_info
-    SET updated_at = NOW()
-    <if test="request.profileImageUrl != null">
-      , profile_image_url = #{request.profileImageUrl}
-    </if>
-    <if test="request.publicContact != null">
-      , public_contact = #{request.publicContact}
-    </if>
-    <if test="request.shortIntro != null">
-      , short_intro = #{request.shortIntro}
-    </if>
-    <if test="request.longIntro != null">
-      , long_intro = #{request.longIntro}
-    </if>
-    <if test="request.preferredTradeStyle != null">
-      , preferred_trade_style = #{request.preferredTradeStyle}
-    </if>
-    WHERE advisor_id = #{advisorId};
-
-    <!-- advisor 테이블의 상담료 업데이트 (필요한 경우) -->
-    <if test="request.consultationFee != null">
-      UPDATE advisor
-      SET consultation_fee = #{request.consultationFee},
-      updated_at = NOW()
-      WHERE advisor_id = #{advisorId};
-    </if>
-  </update>
-
   <!-- ===== 경력 정보 관리 ===== -->
 
   <!-- 경력 정보 등록 -->
@@ -192,8 +160,8 @@
   <select id="findApprovalHistory" resultType="java.util.LinkedHashMap">
     SELECT
       aal.id as requestId,
-      -- 자격증명은 advisor 테이블의 certificate_name을 사용 (회원가입시 입력한 자격증명)
-      a.certificate_name as certificateName,
+      -- 자격증명은 advisor_certificates 테이블에서 조회
+      ac.certificate_name as certificateName,
       aal.certificate_file_sn as certificateFileSn,
       aal.certificate_file_number as certificateFileNumber,
       aal.status,
@@ -202,11 +170,47 @@
       aal.reason as rejectionReason,
       au.name as processedByAdminName
     FROM advisor_approval_logs aal
-           INNER JOIN advisor a ON aal.advisor_id = a.advisor_id
+           -- advisor_certificates와 조인 (certificate_file_sn과 birth로 매칭)
+           LEFT JOIN advisor_certificates ac ON (
+      aal.advisor_id = ac.advisor_id
+        AND aal.certificate_file_sn = ac.certificate_file_sn
+        AND aal.birth = ac.birth
+        AND aal.certificate_file_number = ac.certificate_file_number
+      )
            LEFT JOIN users au ON aal.admin_id = au.id
     WHERE aal.advisor_id = #{advisorId}
     ORDER BY aal.created_at DESC
       LIMIT #{pageRequest.limitPlusOne} OFFSET #{pageRequest.offset}
   </select>
+
+  <!-- 전문가 상세 정보 수정 (advisor_detail_info 테이블만) -->
+  <update id="updateAdvisorDetailInfo">
+    UPDATE advisor_detail_info
+    SET updated_at = NOW()
+    <if test="request.profileImageUrl != null">
+      , profile_image_url = #{request.profileImageUrl}
+    </if>
+    <if test="request.publicContact != null">
+      , public_contact = #{request.publicContact}
+    </if>
+    <if test="request.shortIntro != null">
+      , short_intro = #{request.shortIntro}
+    </if>
+    <if test="request.longIntro != null">
+      , long_intro = #{request.longIntro}
+    </if>
+    <if test="request.preferredTradeStyle != null">
+      , preferred_trade_style = #{request.preferredTradeStyle}
+    </if>
+    WHERE advisor_id = #{advisorId}
+  </update>
+
+  <update id="updateAdvisorConsultationFee">
+    UPDATE advisor
+    SET consultation_fee = #{consultationFee},
+        updated_at = NOW()
+    WHERE advisor_id = #{advisorId}
+      AND is_approved = 1
+  </update>
 
 </mapper>

@@ -1,8 +1,10 @@
 package com.Stalk.project.api.advisor.profile.controller;
 
+import com.Stalk.project.api.advisor.dto.in.PreferredTradeStyle;
 import com.Stalk.project.api.advisor.profile.dto.in.AdvisorCertificateApprovalRequestDto;
 import com.Stalk.project.api.advisor.profile.dto.in.AdvisorProfileCreateRequestDto;
 import com.Stalk.project.api.advisor.profile.dto.in.AdvisorProfileUpdateRequestDto;
+import com.Stalk.project.api.advisor.profile.dto.in.CareerEntryDto;
 import com.Stalk.project.api.advisor.profile.dto.out.AdvisorProfileResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.ApprovalHistoryResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.CertificateApprovalResponseDto;
@@ -21,9 +23,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
@@ -34,39 +39,34 @@ public class AdvisorProfileController {
 
     private final AdvisorProfileService advisorProfileService;
 
-    // ===== 전문가 상세 정보 등록 =====
-
-    @PostMapping("/profile")
-    @Operation(
-        summary = "전문가 상세 정보 등록",
-        description = "승인된 전문가가 상세 프로필 정보를 등록합니다. 경력 정보는 최소 1개 이상 필수입니다."
-    )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "프로필 등록 성공"),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청 (경력 정보 누락 등)"),
-        @ApiResponse(responseCode = "403", description = "권한 없음 (미승인 전문가 등)"),
-        @ApiResponse(responseCode = "409", description = "이미 등록된 프로필이 존재"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
-    })
+    @PostMapping(value = "/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<AdvisorProfileResponseDto> createAdvisorProfile(
-        @Valid @RequestBody AdvisorProfileCreateRequestDto request) {
-
-        log.info("POST /api/advisors/profile - Creating advisor profile");
-
-        // 1. JWT 토큰에서 현재 사용자 정보 추출
-        Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
-
-        // 2. 전문가 권한 확인
+        @RequestPart(value = "profileImage", required = false) MultipartFile profileImage,
+        @RequestPart("publicContact") String publicContact,
+        @RequestPart("shortIntro") String shortIntro,
+        @RequestPart("longIntro") String longIntro,
+        @RequestPart("preferredTradeStyle") String preferredTradeStyle,
+        @RequestPart(value = "consultationFee", required = false) String consultationFee,
+        @RequestPart("careerEntries") List<CareerEntryDto> careerEntries
+    ) {
+        Long advisorId = SecurityUtil.getCurrentUserPrimaryId();
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
         }
 
-        // 3. 서비스 호출
-        AdvisorProfileResponseDto result = advisorProfileService.createAdvisorProfile(
-            currentUserId, request);
+        AdvisorProfileCreateRequestDto req = new AdvisorProfileCreateRequestDto();
+        req.setProfileImage(profileImage);
+        req.setPublicContact(publicContact);
+        req.setShortIntro(shortIntro);
+        req.setLongIntro(longIntro);
+        req.setPreferredTradeStyle(PreferredTradeStyle.valueOf(preferredTradeStyle));
+        req.setConsultationFee(Integer.valueOf(consultationFee));
+        req.setCareerEntries(careerEntries);
 
+        AdvisorProfileResponseDto result = advisorProfileService.createAdvisorProfile(advisorId, req);
         return new BaseResponse<>(result);
     }
+
 
     // ===== 전문가 상세 정보 수정 =====
 
@@ -83,7 +83,7 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<AdvisorProfileResponseDto> updateAdvisorProfile(
-        @Valid @RequestBody AdvisorProfileUpdateRequestDto request) {
+        @Valid @ModelAttribute AdvisorProfileUpdateRequestDto request) {
 
         log.info("PUT /api/advisors/profile - Updating advisor profile");
 

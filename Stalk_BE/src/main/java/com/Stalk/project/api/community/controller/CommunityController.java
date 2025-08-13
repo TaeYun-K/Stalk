@@ -90,7 +90,6 @@ public class CommunityController {
     @Operation(summary = "커뮤니티 글 작성", description = "새로운 커뮤니티 글을 작성합니다.")
     public BaseResponse<CommunityPostCreateResponseDto> createCommunityPost(
         @Valid @RequestBody CommunityPostCreateRequestDto requestDto) {
-
         log.info("커뮤니티 글 작성 요청: {}", requestDto);
 
         // JWT에서 현재 사용자 ID와 역할 추출

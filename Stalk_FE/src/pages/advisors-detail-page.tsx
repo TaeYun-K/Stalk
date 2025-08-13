@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ExpertProfileImage from "@/assets/expert_profile_image.png";
 import AuthService from "@/services/authService";
-import ProfileDefaultImage from "@/assets/images/profiles/Profile_default.svg";
 import FavoriteService from "@/services/favoriteService";
 
 // 전문가 정보 API Response Interfaces
@@ -310,7 +309,7 @@ const AdvisorsDetailPage: React.FC = () => {
   const reviews: Review[] = expertData
     ? expertData.reviews.map((review) => ({
         id: review.review_id,
-        avatar: review.profile_image || ProfileDefaultImage,
+        avatar: review.profile_image || `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`,
         username: review.nickname,
         rating: review.rating,
         date: new Date(review.created_at)
@@ -334,7 +333,7 @@ const AdvisorsDetailPage: React.FC = () => {
   };
 
   const formatConsultationFee = (fee?: number) =>
-    fee != null ? `${fee.toLocaleString()}원` : '미설정';
+    fee != null ? `${fee.toLocaleString()}원` : "미설정";
 
   const formatDate = (date: Date) => {
     // 로컬 시간대 기준으로 YYYY-MM-DD 형식 생성 (UTC 변환 문제 방지)
@@ -715,7 +714,6 @@ const AdvisorsDetailPage: React.FC = () => {
 
       // 성공 시에는 곧바로 리다이렉트되어 아래 코드는 실행 안 됨
     } catch (error: unknown) {
-      const code = (error as { code?: string })?.code;
 
       // 2) 명시적 실패에만 취소 (catch에서만)
       // Toss에서 reject되는 케이스 = 사용자 취소/카드오류 등 "실패" 상황
@@ -743,7 +741,6 @@ const AdvisorsDetailPage: React.FC = () => {
   const handleLoadMoreReviews = () => {
     setDisplayedReviews((prev) => prev + 3);
   };
-
 
   // 달력 렌더링
   const renderCalendar = () => {
@@ -1054,6 +1051,15 @@ const AdvisorsDetailPage: React.FC = () => {
                   더보기
                 </button>
               )}
+              {/* 전문가 리뷰 상세 페이지 이동 버튼 */}
+              {id && (
+                <button
+                  onClick={() => navigate(`/advisors/${parseInt(id)}/reviews`)}
+                  className="mt-4 ml-3 text-blue-600 bg-blue-50 py-3 px-6 rounded-full hover:bg-blue-100 hover:text-blue-700 font-medium transition-colors"
+                >
+                  리뷰 전체 보기
+                </button>
+              )}
             </section>
           </div>
 
@@ -1090,7 +1096,10 @@ const AdvisorsDetailPage: React.FC = () => {
                   상담요금
                 </div>
                 <p className="text-left text-md text-gray-700 px-7 py-3">
-                  시간당 <span className="font-bold">{formatConsultationFee(expert.consultationFee)}</span>
+                  시간당{" "}
+                  <span className="font-bold">
+                    {formatConsultationFee(expert.consultationFee)}
+                  </span>
                 </p>
               </div>
 
@@ -1164,7 +1173,7 @@ const AdvisorsDetailPage: React.FC = () => {
                         {/* 전문가 본인인 경우 수정/삭제 버튼 */}
                         <button
                           onClick={() =>
-                            navigate(`/advisors-introduction-update/${advisorId}`)
+                            id && navigate(`/advisors-introduction-update/${parseInt(id)}`)
                           }
                           className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
                         >

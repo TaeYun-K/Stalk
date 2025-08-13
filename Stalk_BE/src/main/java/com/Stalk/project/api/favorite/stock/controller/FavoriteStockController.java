@@ -3,15 +3,13 @@ package com.Stalk.project.api.favorite.stock.controller;
 import com.Stalk.project.api.favorite.stock.dto.in.FavoriteStockRequestDto;
 import com.Stalk.project.api.favorite.stock.dto.out.FavoriteStockResponseDto;
 import com.Stalk.project.api.favorite.stock.service.FavoriteStockService;
-import com.Stalk.project.api.login.service.MyUserDetails;
-import com.Stalk.project.api.signup.entity.User;
+import com.Stalk.project.global.util.SecurityUtil; // SecurityUtil import 추가
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,9 +31,8 @@ public class FavoriteStockController {
     // --- [조회] ---
     @GetMapping
     @Operation(summary = "관심 종목 목록 조회", description = "로그인된 사용자의 관심 종목 목록과 각 종목의 현재 시세를 조회합니다.")
-    public ResponseEntity<List<FavoriteStockResponseDto>> getFavorites(@AuthenticationPrincipal MyUserDetails myUserDetails) {
-        User currentUser = myUserDetails.getUser();
-        Long currentUserId = currentUser.getId();
+    public ResponseEntity<List<FavoriteStockResponseDto>> getFavorites() {
+        Long currentUserId = SecurityUtil.getCurrentUserPrimaryIdRequired();
         List<FavoriteStockResponseDto> favorites = favoriteStockService.getFavorites(currentUserId);
         return ResponseEntity.ok(favorites);
     }
@@ -44,10 +41,8 @@ public class FavoriteStockController {
     @PostMapping
     @Operation(summary = "관심 종목 추가", description = "로그인된 사용자의 관심 종목 목록에 새로운 종목을 추가합니다.")
     public ResponseEntity<Void> addFavorite(
-        @AuthenticationPrincipal MyUserDetails myUserDetails,
         @Valid @RequestBody FavoriteStockRequestDto requestDto) {
-
-        Long currentUserId = myUserDetails.getUser().getId();
+        Long currentUserId = SecurityUtil.getCurrentUserPrimaryIdRequired();
         favoriteStockService.addFavorite(currentUserId, requestDto.getTicker());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
@@ -55,11 +50,8 @@ public class FavoriteStockController {
     // --- [삭제] ---
     @DeleteMapping("/{ticker}")
     @Operation(summary = "관심 종목 삭제", description = "로그인된 사용자의 관심 종목 목록에서 특정 종목을 삭제합니다.")
-    public ResponseEntity<Void> deleteFavorite(
-        @AuthenticationPrincipal MyUserDetails myUserDetails,
-        @PathVariable String ticker) {
-
-        Long currentUserId = myUserDetails.getUser().getId();
+    public ResponseEntity<Void> deleteFavorite(@PathVariable String ticker) {
+        Long currentUserId = SecurityUtil.getCurrentUserPrimaryIdRequired();
         favoriteStockService.deleteFavorite(currentUserId, ticker);
         return ResponseEntity.noContent().build();
     }

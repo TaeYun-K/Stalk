@@ -1,13 +1,16 @@
 import axios from "axios";
-import React, { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { StockDetailHeader, StockRankingTable, StockSearch, StockChart } from "../components/stock";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
-  useMarketIndices,
-  useStockBasicInfo,
-  useStockData,
-  useStockList,
-} from "../hooks/use-stock-data";
+  StockDetailHeader,
+  StockRankingTable,
+  StockSearch,
+  StockChart,
+} from "../components/stock";
+import { useStockData, useStockList } from "../hooks/use-stock-data";
+import { useWatchlist } from "@/context/WatchlistContext";
+import { WatchlistItem } from "@/types";
+import FavoriteStockService from "@/services/favoriteStockService";
 
 interface StockData {
   ticker: string;
@@ -28,79 +31,114 @@ interface RankingStock {
   price: number;
   change: number;
   changeRate: number;
-  marketCap: string;
+  marketCap?: string;
   volume: string;
   tradeValue?: string;
   logo?: string;
 }
 
-interface MarketIndex {
-  name: string;
-  value: number;
-  change: number;
-  changeRate: number;
-}
+// removed unused MarketIndex
 
 type ViewMode = "detail" | "ranking";
 type TimeRange = "1w" | "1m" | "3m" | "6m" | "1y";
 type RankingType = "volume" | "gainers" | "losers" | "marketCap" | "tradeValue";
 type MarketType = "전체" | "kospi" | "kosdaq";
 
+// Common headers for API requests
+const BASE_HEADERS = {
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+} as const;
+
+interface RealtimePriceData {
+  ticker?: string;
+  name?: string;
+  closePrice?: string;
+  priceChange?: string;
+  changeRate?: string;
+  volume?: string;
+  highPrice?: string;
+  lowPrice?: string;
+  openPrice?: string;
+  prevClosePrice?: string;
+}
+
 const ProductsPage = () => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Get initial state from URL params
   const tickerFromUrl = searchParams.get("ticker");
-  const rankingTypeFromUrl = (searchParams.get("ranking") as RankingType) || "volume";
-  const marketTypeFromUrl = (searchParams.get("market") as MarketType) || "전체";
+  const rankingTypeFromUrl =
+    (searchParams.get("ranking") as RankingType) || "volume";
+  const marketTypeFromUrl =
+    (searchParams.get("market") as MarketType) || "전체";
 
-  const [viewMode, setViewMode] = useState<ViewMode>(tickerFromUrl ? "detail" : "ranking");
-  const [rankingType, setRankingType] = useState<RankingType>(rankingTypeFromUrl);
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    tickerFromUrl ? "detail" : "ranking"
+  );
+  const [rankingType, setRankingType] =
+    useState<RankingType>(rankingTypeFromUrl);
   const [marketType, setMarketType] = useState<MarketType>(marketTypeFromUrl);
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
-  const [selectedTicker, setSelectedTicker] = useState<string | null>(tickerFromUrl);
-  const [timeRange, setTimeRange] = useState<TimeRange>("1w");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [chartType, setChartType] = useState<'line'>('line');
-  const [drawingMode, setDrawingMode] = useState(false);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(
+    tickerFromUrl
+  );
+  const [timeRange] = useState<TimeRange>("1w");
+  const [isLoading] = useState(false);
+  const [error] = useState<string | null>(null);
+  const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
+  const [drawingMode] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarChange = (event: CustomEvent) => {
+      setSidebarExpanded(event.detail.expanded);
+    };
+
+    window.addEventListener('sidebarStateChange', handleSidebarChange as EventListener);
+    return () => window.removeEventListener('sidebarStateChange', handleSidebarChange as EventListener);
+  }, []);
 
   // Use custom hooks for data fetching
-  const {
-    data: stockData,
-    isLoading: stockLoading,
-    error: stockError,
-  } = useStockData(selectedTicker, {
+  const { data: stockData } = useStockData(selectedTicker, {
     autoRefresh: true,
     refreshInterval: 30000, // Refresh every 30 seconds
   });
 
   // State for real-time price data
-  const [realtimePriceData, setRealtimePriceData] = useState<any>(null);
-  const [priceLoading, setPriceLoading] = useState(false);
+  const [realtimePriceData, setRealtimePriceData] =
+    useState<RealtimePriceData | null>(null);
 
   // Helper function to format volume with Korean units
   const formatVolume = (vol: string) => {
-    const num = parseInt(vol?.replace(/,/g, '') || '0');
+    const num = parseInt(vol?.replace(/,/g, "") || "0");
     if (num >= 100000000) {
-      return (num / 100000000).toFixed(1) + '억';
+      return (num / 100000000).toFixed(1) + "억";
     } else if (num >= 10000) {
-      return (num / 10000).toFixed(1) + '만';
+      return (num / 10000).toFixed(1) + "만";
     }
     return num.toLocaleString();
   };
 
-  const { indices: marketIndices } = useMarketIndices();
+  // removed unused market indices
 
   // Use the stock list hook for ranking data
-  const {
-    stocks: rankingData,
-    isLoading: rankingLoading,
-    error: rankingError,
-  } = useStockList(rankingType, marketType);
-
+  const { stocks: rankingData, error: rankingError } = useStockList(
+    rankingType,
+    marketType
+  );
 
   // Use stock basic info hook for enhanced detail view
   // Commented out as the endpoint doesn't exist yet
@@ -116,28 +154,27 @@ const ProductsPage = () => {
   */
 
   // Convert stock data to ranking format
-  const rankingStocks: RankingStock[] =
-    rankingData?.map((stock: any) => ({
-      rank: stock.rank || 0,
-      ticker: stock.ticker || "",
-      name: stock.name || "",
-      price: stock.price || 0,
-      change: stock.change || 0,
-      changeRate: stock.changeRate || 0,
-      marketCap: stock.marketCap || "0",
-      volume: stock.volume || "0",
-      tradeValue: stock.tradeValue || "0",
-    })) || [];
+  const rankingStocks: RankingStock[] = useMemo(
+    () =>
+      rankingData?.map((stock: any) => ({
+        rank: stock.rank || 0,
+        ticker: stock.ticker || "",
+        name: stock.name || "",
+        price: stock.price || 0,
+        change: stock.change || 0,
+        changeRate: stock.changeRate || 0,
+        marketCap: stock.marketCap || "0",
+        volume: stock.volume || "0",
+        tradeValue: stock.tradeValue || "0",
+      })) || [],
+    [rankingData]
+  );
 
-  // Debug logging
-  useEffect(() => {
-
-  }, [rankingData, rankingLoading, rankingError, rankingStocks]);
+  // removed unused debug effect
 
   // Update selected stock when stock data changes
   useEffect(() => {
     if (stockData && selectedTicker) {
-  
       setSelectedStock({
         ticker: stockData.ticker,
         name: stockData.name,
@@ -160,73 +197,62 @@ const ProductsPage = () => {
         return;
       }
 
-  
-
       // Show optimistic UI immediately to reduce perceived loading time
       setRealtimePriceData({
         ticker: selectedTicker,
-        name: `Loading ${selectedTicker}...`,
+        name: `로딩 중 ${selectedTicker}...`,
         closePrice: "0",
         priceChange: "0",
         changeRate: "0",
-        volume: "0"
+        volume: "0",
       });
-      setPriceLoading(true);
+
+      // Common headers used across attempts (outside try/catch for broader scope)
+      // use module-level BASE_HEADERS constant
 
       try {
         // 🚀 COMBINATION APPROACH: Parallel + Smart + Fast
-        
+
         // Smart market detection heuristic
         const getSmartMarketGuess = (ticker: string) => {
-          if (ticker.startsWith('3') || ticker.startsWith('9')) return 'KOSDAQ';
-          if (ticker.startsWith('04') || ticker.startsWith('05')) return 'KOSDAQ';
-          if (ticker.startsWith('00')) return 'KOSPI';
-          return 'KOSPI'; // Default for ambiguous cases
+          if (ticker.startsWith("3") || ticker.startsWith("9")) return "KOSDAQ";
+          if (ticker.startsWith("04") || ticker.startsWith("05"))
+            return "KOSDAQ";
+          if (ticker.startsWith("00")) return "KOSPI";
+          return "KOSPI"; // Default for ambiguous cases
         };
 
         const smartGuess = getSmartMarketGuess(selectedTicker);
-        const otherMarket = smartGuess === 'KOSPI' ? 'KOSDAQ' : 'KOSPI';
-        
+        const otherMarket = smartGuess === "KOSPI" ? "KOSDAQ" : "KOSPI";
+
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const baseHeaders = {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        };
 
-        console.log(`🎯 Smart guess: trying ${smartGuess} first for ${selectedTicker}`);
 
-        // Strategy 1: Try smart guess first (fastest for correct guesses)
+        // 예상 마켓 먼저 시도
         let response;
         let stockData;
-        let successfulMarket = '';
 
         try {
-          const smartUrl = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${smartGuess}&_t=${timestamp}`;
-          response = await axios.get(smartUrl, { headers: baseHeaders });
-          successfulMarket = smartGuess;
-          console.log(`✅ Smart guess SUCCESS: ${selectedTicker} found in ${smartGuess} market`);
+          const smartUrl = `${
+            import.meta.env.VITE_API_URL
+          }/api/krx/stock/${selectedTicker}?market=${smartGuess}&_t=${timestamp}`;
+          response = await axios.get(smartUrl, { headers: BASE_HEADERS });
         } catch (smartGuessError: any) {
-          // Only log error if it's not a 404 (expected for wrong market)
-          if (smartGuessError.response?.status !== 404) {
-            console.error(`⚠️ Unexpected error for ${smartGuess}:`, smartGuessError.message);
-          } else {
-            console.log(`📍 ${selectedTicker} not in ${smartGuess}, trying ${otherMarket}...`);
-          }
-          
-          // Strategy 2: Try the other market
+          // 404는 예상된 동작이므로 로그하지 않음
+
+          // 다른 마켓 시도
           try {
-            const fallbackUrl = `${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${otherMarket}&_t=${timestamp}`;
-            response = await axios.get(fallbackUrl, { headers: baseHeaders });
-            successfulMarket = otherMarket;
-            console.log(`✅ Fallback SUCCESS: ${selectedTicker} found in ${otherMarket} market`);
+            const fallbackUrl = `${
+              import.meta.env.VITE_API_URL
+            }/api/krx/stock/${selectedTicker}?market=${otherMarket}&_t=${timestamp}`;
+            response = await axios.get(fallbackUrl, { headers: BASE_HEADERS });
           } catch (fallbackError: any) {
-            if (fallbackError.response?.status === 404) {
-              console.warn(`⚠️ Stock ${selectedTicker} not found in either market`);
-            } else {
-              console.error(`❌ Unexpected error:`, fallbackError.message);
+            // 404는 예상된 동작, 다른 오류만 로그
+            if (fallbackError.response?.status !== 404) {
+              console.error(`Unexpected error:`, fallbackError.message);
             }
-            throw new Error('Both individual attempts failed');
+            throw new Error("Both individual attempts failed");
           }
         }
 
@@ -244,11 +270,12 @@ const ProductsPage = () => {
         }
 
         if (stockData) {
-
           // Check if we got data for the correct ticker
           const returnedTicker = stockData.ticker || stockData.ISU_SRT_CD;
           if (returnedTicker !== selectedTicker) {
-            console.error(`TICKER MISMATCH! Requested: ${selectedTicker}, Received: ${returnedTicker}`);
+            console.error(
+              `TICKER MISMATCH! Requested: ${selectedTicker}, Received: ${returnedTicker}`
+            );
             console.error("This indicates a backend caching issue");
           }
 
@@ -256,69 +283,94 @@ const ProductsPage = () => {
           const mappedData = {
             ticker: stockData.ticker || stockData.ISU_SRT_CD,
             name: stockData.name || stockData.ISU_ABBRV,
-            closePrice: (stockData.closePrice || stockData.TDD_CLSPRC || "0").toString().replace(/,/g, ''),
-            priceChange: (stockData.priceChange || stockData.CMPPREVDD_PRC || "0").toString().replace(/,/g, ''),
-            changeRate: (stockData.changeRate || stockData.FLUC_RT || "0").toString().replace(/,/g, ''),
-            volume: formatVolume(stockData.volume || stockData.ACC_TRDVOL || "0"),
+            closePrice: (stockData.closePrice || stockData.TDD_CLSPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            priceChange: (
+              stockData.priceChange ||
+              stockData.CMPPREVDD_PRC ||
+              "0"
+            )
+              .toString()
+              .replace(/,/g, ""),
+            changeRate: (stockData.changeRate || stockData.FLUC_RT || "0")
+              .toString()
+              .replace(/,/g, ""),
+            volume: formatVolume(
+              stockData.volume || stockData.ACC_TRDVOL || "0"
+            ),
             tradeValue: stockData.tradeValue || stockData.ACC_TRDVAL,
             marketCap: stockData.marketCap || stockData.MKTCAP,
             // Add OHLC prices
-            openPrice: (stockData.openPrice || stockData.TDD_OPNPRC || "0").toString().replace(/,/g, ''),
-            highPrice: (stockData.highPrice || stockData.TDD_HGPRC || "0").toString().replace(/,/g, ''),
-            lowPrice: (stockData.lowPrice || stockData.TDD_LWPRC || "0").toString().replace(/,/g, ''),
-            prevClosePrice: stockData.prevClosePrice || ((stockData.closePrice || stockData.TDD_CLSPRC || "0").toString().replace(/,/g, '') - (stockData.priceChange || stockData.CMPPREVDD_PRC || "0").toString().replace(/,/g, '')).toString()
+            openPrice: (stockData.openPrice || stockData.TDD_OPNPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            highPrice: (stockData.highPrice || stockData.TDD_HGPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            lowPrice: (stockData.lowPrice || stockData.TDD_LWPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            prevClosePrice:
+              stockData.prevClosePrice ||
+              (
+                (stockData.closePrice || stockData.TDD_CLSPRC || "0")
+                  .toString()
+                  .replace(/,/g, "") -
+                (stockData.priceChange || stockData.CMPPREVDD_PRC || "0")
+                  .toString()
+                  .replace(/,/g, "")
+              ).toString(),
           };
-          
-          // Debug logging for IT Chem
-          if (selectedTicker === '309710') {
-            console.log(`🔍 IT Chem API response:`, stockData);
-            console.log(`📊 Mapped data:`, mappedData);
-          }
 
-  
 
           // Only set the data if it's for the correct ticker
           if (returnedTicker === selectedTicker) {
             setRealtimePriceData(mappedData);
-            return; // Success, no need for fallback
+            return; // 성공
           } else {
             console.error("Skipping wrong ticker data, will try fallback");
-            // Continue to fallback below
+            // 다음 시도로 계속
           }
         } else {
-          console.log("No stock data in response, trying fallback");
+          // No stock data in response, trying fallback
         }
       } catch (err) {
-        console.error("Primary API failed:", err);
       }
 
-      // 🔄 ENHANCED FALLBACK: Multiple endpoint strategy with timeout
+      // 대체 마켓 시도
       try {
-        console.log(`🔄 Trying enhanced fallback for ${selectedTicker}...`);
-        
-        const smartGuess = selectedTicker.startsWith('3') || selectedTicker.startsWith('9') || 
-                          selectedTicker.startsWith('04') || selectedTicker.startsWith('05') 
-                          ? 'KOSDAQ' : 'KOSPI';
-        const otherMarket = smartGuess === 'KOSPI' ? 'KOSDAQ' : 'KOSPI';
 
-        // Strategy 3: Parallel API calls with Promise.race for speed
-        const createApiCall = (market: string) => 
-          axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=${market}`, {
-            headers: baseHeaders,
-            timeout: 5000 // 5 second timeout per request
-          });
+        const smartGuess =
+          selectedTicker.startsWith("3") ||
+          selectedTicker.startsWith("9") ||
+          selectedTicker.startsWith("04") ||
+          selectedTicker.startsWith("05")
+            ? "KOSDAQ"
+            : "KOSPI";
+        const otherMarket = smartGuess === "KOSPI" ? "KOSDAQ" : "KOSPI";
+
+        // 병렬 API 호출
+        const createApiCall = (market: string) =>
+          axios.get(
+            `${
+              import.meta.env.VITE_API_URL
+            }/api/krx/stock/${selectedTicker}?market=${market}`,
+            {
+              headers: BASE_HEADERS,
+              timeout: 5000, // 5 second timeout per request
+            }
+          );
 
         let dailyResponse;
         try {
           // Try smart guess first
           dailyResponse = await createApiCall(smartGuess);
-          console.log(`🚀 Enhanced fallback SUCCESS: ${selectedTicker} from ${smartGuess}`);
-        } catch (smartError) {
+        } catch {
           // Try other market
-          dailyResponse = await createApiCall(otherMarket);  
-          console.log(`🚀 Enhanced fallback SUCCESS: ${selectedTicker} from ${otherMarket}`);
+          dailyResponse = await createApiCall(otherMarket);
         }
-        
+
         // Handle both wrapped and direct format
         let stockData;
         if (dailyResponse.data) {
@@ -327,43 +379,55 @@ const ProductsPage = () => {
             if (dailyResponse.data.success && dailyResponse.data.data) {
               stockData = dailyResponse.data.data;
             }
-          } else if (dailyResponse.data.ISU_SRT_CD || dailyResponse.data.ticker) {
+          } else if (
+            dailyResponse.data.ISU_SRT_CD ||
+            dailyResponse.data.ticker
+          ) {
             // Direct KrxStockInfo object format
             stockData = dailyResponse.data;
           }
         }
-        
-        if (stockData) {
 
-          const price = parseFloat(stockData.closePrice?.replace(/,/g, '')) || 0;
-          const change = parseFloat(stockData.priceChange?.replace(/,/g, '')) || 0;
-          const changeRate = parseFloat(stockData.changeRate?.replace(/,/g, '')) || 0;
+        if (stockData) {
+          const price =
+            parseFloat(stockData.closePrice?.replace(/,/g, "")) || 0;
+          const change =
+            parseFloat(stockData.priceChange?.replace(/,/g, "")) || 0;
+          const changeRate =
+            parseFloat(stockData.changeRate?.replace(/,/g, "")) || 0;
 
           // Try to get name from search
           let stockName = "";
           try {
-            const searchResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/stock/search/${selectedTicker}`);
-            if (searchResponse.data.success && searchResponse.data.data.length > 0) {
+            const searchResponse = await axios.get(
+              `${
+                import.meta.env.VITE_API_URL
+              }/api/stock/search/${selectedTicker}`
+            );
+            if (
+              searchResponse.data.success &&
+              searchResponse.data.data.length > 0
+            ) {
               stockName = searchResponse.data.data[0].name;
-  
             }
           } catch (searchErr) {
-            console.error("Failed to get stock name:", searchErr);
+            // 종목명 검색 실패는 치명적이지 않음 - 로그 제거
           }
 
           // If still no name, try from the ranking list
           if (!stockName && rankingData) {
-            const stockFromRanking = rankingData.find((s: any) => s.ticker === selectedTicker);
+            const stockFromRanking = rankingData.find(
+              (s: any) => s.ticker === selectedTicker
+            );
             if (stockFromRanking) {
               stockName = stockFromRanking.name;
-  
             }
           }
 
           // Last resort - use ticker but mark it
           if (!stockName) {
             stockName = `종목 ${selectedTicker}`;
-            console.warn("Could not find stock name, using ticker");
+            // 종목명을 찾지 못한 경우 - 정상 폴백이므로 로그 제거
           }
 
           const fallbackData = {
@@ -374,69 +438,112 @@ const ProductsPage = () => {
             changeRate: changeRate.toFixed(2),
             volume: formatVolume(stockData.volume || "0"),
             // Add OHLC prices
-            openPrice: (stockData.openPrice || stockData.TDD_OPNPRC || "0").toString().replace(/,/g, ''),
-            highPrice: (stockData.highPrice || stockData.TDD_HGPRC || "0").toString().replace(/,/g, ''),
-            lowPrice: (stockData.lowPrice || stockData.TDD_LWPRC || "0").toString().replace(/,/g, ''),
-            prevClosePrice: (price - change).toString()
+            openPrice: (stockData.openPrice || stockData.TDD_OPNPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            highPrice: (stockData.highPrice || stockData.TDD_HGPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            lowPrice: (stockData.lowPrice || stockData.TDD_LWPRC || "0")
+              .toString()
+              .replace(/,/g, ""),
+            prevClosePrice: (price - change).toString(),
           };
-
 
           setRealtimePriceData(fallbackData);
         }
       } catch (fallbackErr) {
-        console.error("Enhanced fallback failed:", fallbackErr);
-        
-        // 🚁 ULTIMATE STRATEGY: Parallel requests with Promise.race
+        // 병렬 요청으로 재시도
         try {
-          console.log(`🚁 Last resort: Parallel requests for ${selectedTicker}...`);
-          
-          const kospiPromise = axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=KOSPI`, { 
-            headers: baseHeaders, timeout: 3000 
-          });
-          const kosdaqPromise = axios.get(`${import.meta.env.VITE_API_URL}/api/krx/stock/${selectedTicker}?market=KOSDAQ`, { 
-            headers: baseHeaders, timeout: 3000 
-          });
 
-          // Winner takes all - first successful response wins
-          const winnerResponse = await Promise.race([
-            kospiPromise.catch(err => ({ error: 'KOSPI failed', details: err })),
-            kosdaqPromise.catch(err => ({ error: 'KOSDAQ failed', details: err }))
+          const kospiPromise = axios.get(
+            `${
+              import.meta.env.VITE_API_URL
+            }/api/krx/stock/${selectedTicker}?market=KOSPI`,
+            {
+              headers: BASE_HEADERS,
+              timeout: 3000,
+            }
+          );
+          const kosdaqPromise = axios.get(
+            `${
+              import.meta.env.VITE_API_URL
+            }/api/krx/stock/${selectedTicker}?market=KOSDAQ`,
+            {
+              headers: BASE_HEADERS,
+              timeout: 3000,
+            }
+          );
+
+          // 먼저 성공한 응답 사용
+          const winnerResponse: any = await Promise.race([
+            kospiPromise.catch((err) => ({
+              error: "KOSPI failed",
+              details: err,
+            })),
+            kosdaqPromise.catch((err) => ({
+              error: "KOSDAQ failed",
+              details: err,
+            })),
           ]);
 
-          if (!winnerResponse.error && winnerResponse.data) {
-            console.log(`🏆 PARALLEL SUCCESS: ${selectedTicker} data retrieved!`);
-            
-            const data = winnerResponse.data.data || winnerResponse.data;
+          if (!("error" in winnerResponse) && (winnerResponse as any).data) {
+
+            const data =
+              (winnerResponse as any).data.data || (winnerResponse as any).data;
             setRealtimePriceData({
               ticker: selectedTicker,
               name: data.name || data.ISU_ABBRV || `Stock ${selectedTicker}`,
-              closePrice: (data.closePrice || data.TDD_CLSPRC || "0").toString(),
-              priceChange: (data.priceChange || data.CMPPREVDD_PRC || "0").toString(),
+              closePrice: (
+                data.closePrice ||
+                data.TDD_CLSPRC ||
+                "0"
+              ).toString(),
+              priceChange: (
+                data.priceChange ||
+                data.CMPPREVDD_PRC ||
+                "0"
+              ).toString(),
               changeRate: (data.changeRate || data.FLUC_RT || "0").toString(),
               volume: formatVolume(data.volume || data.ACC_TRDVOL || "0"),
               // Add OHLC prices
-              openPrice: (data.openPrice || data.TDD_OPNPRC || "0").toString().replace(/,/g, ''),
-              highPrice: (data.highPrice || data.TDD_HGPRC || "0").toString().replace(/,/g, ''),
-              lowPrice: (data.lowPrice || data.TDD_LWPRC || "0").toString().replace(/,/g, ''),
-              prevClosePrice: ((parseFloat((data.closePrice || data.TDD_CLSPRC || "0").toString().replace(/,/g, ''))) - (parseFloat((data.priceChange || data.CMPPREVDD_PRC || "0").toString().replace(/,/g, '')))).toString()
+              openPrice: (data.openPrice || data.TDD_OPNPRC || "0")
+                .toString()
+                .replace(/,/g, ""),
+              highPrice: (data.highPrice || data.TDD_HGPRC || "0")
+                .toString()
+                .replace(/,/g, ""),
+              lowPrice: (data.lowPrice || data.TDD_LWPRC || "0")
+                .toString()
+                .replace(/,/g, ""),
+              prevClosePrice: (
+                parseFloat(
+                  (data.closePrice || data.TDD_CLSPRC || "0")
+                    .toString()
+                    .replace(/,/g, "")
+                ) -
+                parseFloat(
+                  (data.priceChange || data.CMPPREVDD_PRC || "0")
+                    .toString()
+                    .replace(/,/g, "")
+                )
+              ).toString(),
             });
-            return; // Success!
+            return; // 성공
           }
         } catch (parallelErr) {
-          console.error("Even parallel requests failed:", parallelErr);
         }
-        
-        // 🆘 GRACEFUL DEGRADATION: Show minimal UI
+
+        // KOSPI와 KOSDAQ 모두에서 찾지 못함
+        console.error(`주식 ${selectedTicker}을(를) KOSPI와 KOSDAQ 모두에서 찾을 수 없습니다.`);
         setRealtimePriceData({
           ticker: selectedTicker,
           name: `Stock ${selectedTicker}`,
           closePrice: "0",
           priceChange: "0",
           changeRate: "0",
-          volume: "0"
+          volume: "0",
         });
-      } finally {
-        setPriceLoading(false);
       }
     };
 
@@ -461,9 +568,16 @@ const ProductsPage = () => {
     if (market) setMarketType(market);
   }, [searchParams]);
 
-
-  const selectStock = (stock: RankingStock) => {
-
+  const selectStock = (stock: {
+    rank: number;
+    ticker: string;
+    name: string;
+    price: number;
+    change: number;
+    changeRate: number;
+    marketCap?: string;
+    volume: string;
+  }) => {
     // Update URL params to include the ticker
     const newParams = new URLSearchParams(searchParams);
     newParams.set("ticker", stock.ticker);
@@ -481,10 +595,8 @@ const ProductsPage = () => {
       closePrice: (stock.price || 0).toString(),
       priceChange: (stock.change || 0).toString(),
       changeRate: (stock.changeRate || 0).toString(),
-      volume: stock.volume || "0"
+      volume: stock.volume || "0",
     });
-
-
   };
 
   const goBackToRanking = () => {
@@ -497,16 +609,54 @@ const ProductsPage = () => {
     setViewMode("ranking");
   };
 
-  const toggleFavorite = () => {
-    if (selectedStock) {
-      setFavorites((prev) =>
-        prev.includes(selectedStock.ticker)
-          ? prev.filter((t) => t !== selectedStock.ticker)
-          : [...prev, selectedStock.ticker]
-      );
+  const toggleFavorite = async () => {
+    if (!selectedTicker) return;
+
+    try {
+      if (isInWatchlist(selectedTicker)) {
+        // Optimistic UI update
+        removeFromWatchlist(selectedTicker);
+        await FavoriteStockService.removeFavoriteStock(selectedTicker);
+        return;
+      }
+
+      // Assemble watchlist item from available data
+      const name =
+        selectedStock?.name || realtimePriceData?.name || selectedTicker;
+      const price =
+        (selectedStock?.price ??
+          parseFloat(
+            (realtimePriceData?.closePrice || "0").toString().replace(/,/g, "")
+          )) ||
+        0;
+      const changeAmount =
+        (selectedStock?.change ??
+          parseFloat(
+            (realtimePriceData?.priceChange || "0").toString().replace(/,/g, "")
+          )) ||
+        0;
+      const changeRate =
+        (selectedStock?.changeRate ??
+          parseFloat(
+            (realtimePriceData?.changeRate || "0").toString().replace(/,/g, "")
+          )) ||
+        0;
+
+      const item: WatchlistItem = {
+        code: selectedTicker,
+        name,
+        price,
+        changeAmount,
+        changeRate,
+      };
+
+      // Optimistic UI add then persist
+      addToWatchlist(item);
+      await FavoriteStockService.addFavoriteStock(selectedTicker);
+    } catch (e) {
+      console.error("관심종목 토글 실패:", e);
     }
   };
-
 
   const handleRankingTypeChange = (newType: RankingType) => {
     const newParams = new URLSearchParams(searchParams);
@@ -523,19 +673,43 @@ const ProductsPage = () => {
   };
 
   const periodToDays: Record<TimeRange, number> = {
-    "1w": 7,    // Show 7 days of daily data
-    "1m": 30,   // Show 30 days of daily data
-    "3m": 90,   // Show 90 days of daily data
-    "6m": 180,  // Show 180 days of daily data
-    "1y": 365,  // Show 365 days of daily data
+    "1w": 7, // Show 7 days of daily data
+    "1m": 30, // Show 30 days of daily data
+    "3m": 90, // Show 90 days of daily data
+    "6m": 180, // Show 180 days of daily data
+    "1y": 365, // Show 365 days of daily data
   };
 
+  // Calculate dynamic width to prevent sidebar cropping
+  // Sidebar is 64px when collapsed, 320px when expanded on desktop, 256px on mobile
+  // Use full width only on mobile (< 768px), keep margin on tablets and desktop
+  const getSidebarWidth = () => {
+    if (windowWidth < 768) {
+      // Mobile: collapsed 56px (w-14), expanded 256px (w-64)
+      return sidebarExpanded ? 256 + 56 : 56; // expanded panel + collapsed sidebar
+    } else {
+      // Desktop: collapsed 64px (w-16), expanded 320px (w-80) 
+      return sidebarExpanded ? 320 + 64 : 80; // expanded panel + collapsed sidebar + padding
+    }
+  };
 
+  const wrapperStyle = windowWidth >= 768
+    ? {
+        width: `${windowWidth - getSidebarWidth()}px`,
+        maxWidth: `${windowWidth - getSidebarWidth()}px`,
+        overflow: 'hidden',
+        transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' // Smoother transition with easing
+      }
+    : {
+        width: '100%',
+        maxWidth: '100%'
+      };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="px-4 sm:px-6 lg:px-8 py-8 pt-24">
-        <div className="max-w-8xl mx-auto">
+      <main className="w-full overflow-x-hidden">
+        <div style={wrapperStyle}>
+          <div className="px-4 sm:px-6 lg:px-8 py-8 pt-24">
           {/* Loading and Error States */}
           {isLoading && (
             <div className="text-center py-8">
@@ -551,7 +725,7 @@ const ProductsPage = () => {
 
           {/* Stock Search Bar - Always visible */}
           <div className="mb-6">
-            <StockSearch 
+            <StockSearch
               onStockSelect={(stock) => {
                 selectStock({
                   rank: 0,
@@ -560,7 +734,8 @@ const ProductsPage = () => {
                   price: 0,
                   change: 0,
                   changeRate: 0,
-                  volume: 0
+                  marketCap: "0",
+                  volume: "0",
                 });
               }}
               darkMode={false}
@@ -569,7 +744,7 @@ const ProductsPage = () => {
 
           {/* Detail View */}
           {viewMode === "detail" && selectedTicker && (
-            <div className="space-y-6">
+            <div className="space-y-6 w-full">
               {/* Back Button */}
               <button
                 onClick={goBackToRanking}
@@ -594,25 +769,68 @@ const ProductsPage = () => {
               {/* Stock Info - Full Width */}
               <div className="space-y-6">
                 {/* Stock Header */}
-                {(selectedStock || realtimePriceData) ? (
+                {selectedStock || realtimePriceData ? (
                   <StockDetailHeader
                     key={`header-${selectedTicker}`}
                     ticker={selectedTicker || ""}
-                    name={selectedStock?.name || realtimePriceData?.name || selectedTicker || ""}
+                    name={
+                      selectedStock?.name ||
+                      realtimePriceData?.name ||
+                      selectedTicker ||
+                      ""
+                    }
                     price={(() => {
-                      const price = selectedStock?.price || parseFloat(realtimePriceData?.closePrice?.replace(/,/g, '')) || 0;
-
+                      const price =
+                        selectedStock?.price ||
+                        parseFloat(
+                          (realtimePriceData?.closePrice ?? "0")
+                            .toString()
+                            .replace(/,/g, "")
+                        ) ||
+                        0;
                       return price;
                     })()}
-                    change={selectedStock?.change || parseFloat(realtimePriceData?.priceChange?.replace(/,/g, '')) || 0}
-                    changeRate={selectedStock?.changeRate || parseFloat(realtimePriceData?.changeRate?.replace(/,/g, '')) || 0}
-                    high={parseFloat(realtimePriceData?.highPrice) || undefined}
-                    low={parseFloat(realtimePriceData?.lowPrice) || undefined}
-                    open={parseFloat(realtimePriceData?.openPrice) || undefined}
-                    prevClose={parseFloat(realtimePriceData?.prevClosePrice) || undefined}
+                    change={
+                      selectedStock?.change ||
+                      parseFloat(
+                        (realtimePriceData?.priceChange ?? "0")
+                          .toString()
+                          .replace(/,/g, "")
+                      ) ||
+                      0
+                    }
+                    changeRate={
+                      selectedStock?.changeRate ||
+                      parseFloat(
+                        (realtimePriceData?.changeRate ?? "0")
+                          .toString()
+                          .replace(/,/g, "")
+                      ) ||
+                      0
+                    }
+                    high={
+                      realtimePriceData?.highPrice
+                        ? parseFloat(realtimePriceData.highPrice)
+                        : undefined
+                    }
+                    low={
+                      realtimePriceData?.lowPrice
+                        ? parseFloat(realtimePriceData.lowPrice)
+                        : undefined
+                    }
+                    open={
+                      realtimePriceData?.openPrice
+                        ? parseFloat(realtimePriceData.openPrice)
+                        : undefined
+                    }
+                    prevClose={
+                      realtimePriceData?.prevClosePrice
+                        ? parseFloat(realtimePriceData.prevClosePrice)
+                        : undefined
+                    }
                     volume={realtimePriceData?.volume || selectedStock?.volume}
                     onFavoriteToggle={toggleFavorite}
-                    isFavorite={favorites.includes(selectedTicker || "")}
+                    isFavorite={isInWatchlist(selectedTicker || "")}
                   />
                 ) : (
                   <div className="bg-white rounded-lg shadow-sm p-6">
@@ -634,11 +852,9 @@ const ProductsPage = () => {
                   darkMode={false}
                   drawingMode={drawingMode}
                 />
-
               </div>
             </div>
           )}
-
 
           {/* Ranking View */}
           {viewMode === "ranking" && (
@@ -653,17 +869,20 @@ const ProductsPage = () => {
                   onStockClick={selectStock}
                   rankingType={rankingType}
                   onRankingTypeChange={handleRankingTypeChange}
-                  title={`${marketType === "전체" ? "통합" : marketType.toUpperCase()} 실시간 차트`}
+                  title={`${
+                    marketType === "전체" ? "통합" : marketType.toUpperCase()
+                  } 실시간 차트`}
                   marketType={marketType}
                   onMarketTypeChange={handleMarketTypeChange}
                 />
               )}
             </>
           )}
+          </div>
         </div>
       </main>
     </div>
   );
 };
 
-export default ProductsPage; 
+export default ProductsPage;

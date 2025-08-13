@@ -136,7 +136,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                   : 'bg-white border-gray-300 text-blue-600'
               } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             />
-            <label className={`text-sm font-medium ${
+            <label className={`text-sm font-medium whitespace-nowrap ${
               darkMode ? 'text-gray-200' : 'text-gray-700'
             } ${isDisabled ? 'opacity-50' : 'cursor-pointer'}`}
             onClick={() => !isDisabled && toggleIndicator(key)}>
@@ -148,16 +148,16 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                 const rect = e.currentTarget.getBoundingClientRect();
                 const tooltipWidth = 320;
                 const tooltipHeight = 120;
-                
+
                 // Calculate position relative to button
                 let x = rect.right + 8; // Position to the right of button
                 let y = rect.top + rect.height / 2;
-                
+
                 // Adjust if tooltip would go off screen
                 if (x + tooltipWidth > window.innerWidth) {
                   x = rect.left - tooltipWidth - 8; // Position to the left
                 }
-                
+
                 if (y + tooltipHeight / 2 > window.innerHeight) {
                   y = window.innerHeight - tooltipHeight - 8;
                 } else if (y - tooltipHeight / 2 < 0) {
@@ -165,7 +165,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                 } else {
                   y = y - tooltipHeight / 2;
                 }
-                
+
                 setTooltipPosition({ x, y });
                 setHoveredIndicator(key);
               }}
@@ -212,10 +212,14 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
               )}
             </div>
           </div>
+        </div>
 
-          {hasCustomPeriod && config.enabled && !isDisabled && (
-            <div className="flex items-center gap-2">
-              <input
+        {hasCustomPeriod && config.enabled && !isDisabled && (
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`text-xs whitespace-nowrap ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              기간:
+            </span>
+            <input
                 type="text"
                 value={editingValues[`${key}_period`] !== undefined
                   ? editingValues[`${key}_period`]
@@ -264,18 +268,16 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
               <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 일
               </span>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {secondaryPeriod && config.enabled && !isDisabled && (
-          <div className="flex items-center justify-end gap-2 mt-2">
-            <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`text-xs whitespace-nowrap ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               {secondaryPeriod.label}:
             </span>
             <input
-              type="number"
-              step="0.1"
+              type="text"
               value={editingValues[`${key}_${secondaryPeriod.field}`] !== undefined
                 ? editingValues[`${key}_${secondaryPeriod.field}`]
                 : secondaryPeriod.value}
@@ -314,7 +316,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                   return newState;
                 });
               }}
-              className={`w-16 px-2 py-1 text-xs rounded border ${
+              className={`w-16 px-2 py-1 text-xs rounded border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
                 darkMode
                   ? 'bg-gray-800 border-gray-600 text-gray-200'
                   : 'bg-white border-gray-300 text-gray-700'
@@ -334,8 +336,8 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
         {/* Header with glassmorphism accent */}
         <div className={`mb-4 pb-3 border-b ${darkMode ? 'border-gray-700/30' : 'border-gray-200/30'}`}>
           <h3 className={`text-sm font-bold tracking-wide ${
-            darkMode 
-              ? 'text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400' 
+            darkMode
+              ? 'text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400'
               : 'text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600'
           }`}>
             📈 기술적 지표
@@ -351,16 +353,16 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                   const rect = e.currentTarget.getBoundingClientRect();
                   const tooltipWidth = 288;
                   const tooltipHeight = 160;
-                  
+
                   // Calculate position relative to button
                   let x = rect.right + 8; // Position to the right of button
                   let y = rect.top + rect.height / 2;
-                  
+
                   // Adjust if tooltip would go off screen
                   if (x + tooltipWidth > window.innerWidth) {
                     x = rect.left - tooltipWidth - 8; // Position to the left
                   }
-                  
+
                   if (y + tooltipHeight / 2 > window.innerHeight) {
                     y = window.innerHeight - tooltipHeight - 8;
                   } else if (y - tooltipHeight / 2 < 0) {
@@ -368,7 +370,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                   } else {
                     y = y - tooltipHeight / 2;
                   }
-                  
+
                   setTooltipPosition({ x, y });
                   setHoveredIndicator('info');
                 }}
@@ -426,21 +428,6 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
           {renderIndicatorControl('ichimoku', '일목균형표', indicators.ichimoku, indicatorExplanations.ichimoku, false)}
         </div>
 
-        {/* Enhanced Tip with glassmorphism */}
-        <div className={`mt-4 p-3 rounded-xl text-xs backdrop-blur-sm border transition-all ${
-          darkMode 
-            ? 'bg-gradient-to-r from-blue-900/20 to-purple-900/20 text-gray-300 border-gray-700/30' 
-            : 'bg-gradient-to-r from-blue-50/50 to-purple-50/50 text-gray-600 border-gray-200/30'
-        } shadow-sm`}>
-          <div className="flex items-start gap-2">
-            <span className="text-sm">💡</span>
-            <div>
-              <strong className={darkMode ? 'text-blue-400' : 'text-blue-600'}>프로 팁:</strong> 
-              <span className="ml-1">여러 지표를 동시에 사용하면 차트가 복잡해질 수 있습니다.
-              2-3개의 지표를 선택하여 사용하는 것을 권장합니다.</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -10,11 +10,15 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 @Getter
 @Setter
 @Schema(description = "전문가 프로필 수정 요청 DTO")
 public class AdvisorProfileUpdateRequestDto {
+
+    // 업로드할 때만 쓰는 필드 (프론트에서 FormData로 넘어옴)
+    private MultipartFile profileImage;
 
     @Schema(description = "프로필 이미지 URL", example = "https://example.com/new-profile.jpg")
     private String profileImageUrl;

@@ -43,6 +43,8 @@ import InvestmentKnowledgeListPage from "@/pages/investment-knowledge-list-page"
 import WritePostPage from "@/pages/write-post-page";
 import InvestmentKnowledgeDetailPage from "@/pages/investment-knowledge-detail-page";
 import MyPage from "@/pages/my-page";
+import MyReviewsPage from "@/pages/my-reviews-page";
+import AdvisorReviewsPage from "@/pages/advisor-reviews-page";
 
 import SearchPage from "@/pages/search-page";
 import VideoConsultationPage from "@/pages/video-consultation-page";
@@ -61,17 +63,17 @@ const hideNavbarRoutes: string[] = [
   "/signup-complete",
 ];
 
-// Sidebar를 보여줄 페이지 목록 (모든 페이지에 적용)
-const showSidebarRoutes: string[] = [
-  "/", // 홈페이지
+// Sidebar를 보여줄 경로 Prefix 목록
+const sidebarPrefixes: string[] = [
   // 전문가 관련 페이지
   "/advisors-list",
-  "/advisors-detail",
+  "/advisors-detail/", // 동적 파라미터 대응
   "/advisors-introduction-create",
   "/advisors-introduction-update",
-  // 투자 지식 in 관련 페이지
+  // 투자 지식 관련 페이지
   "/investment-knowledge-list",
-  "/investment-knowledge-detail",
+  "/investment-knowledge-detail/", // 동적 파라미터 대응
+  // 기타
   "/products",
   "/mypage",
   "/settings",
@@ -96,10 +98,11 @@ const AppContent: React.FC = () => {
   const location = useLocation();
   const showNavbar: boolean = !hideNavbarRoutes.includes(location.pathname);
   const showSidebar: boolean =
-    showSidebarRoutes.includes(location.pathname) ||
-    location.pathname.startsWith("/expert-detail/") ||
-    location.pathname.startsWith("/community/post/");
-  const showFooter: boolean = !hideFooterRoutes.some(route => location.pathname.startsWith(route));
+    location.pathname === "/" ||
+    sidebarPrefixes.some((prefix) => location.pathname.startsWith(prefix));
+  const showFooter: boolean = !hideFooterRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  );
   const isVideoPage = location.pathname.startsWith("/video-consultation");
 
   return (
@@ -124,16 +127,33 @@ const AppContent: React.FC = () => {
 
               {/* 마이페이지 관련 path */}
               <Route path="/mypage" element={<MyPage />} />
+              <Route path="/my-reviews" element={<MyReviewsPage />} />
 
               {/* 전문가 관련 path */}
               <Route path="/advisors-list" element={<AdvisorsListPage />} />
-              <Route path="/advisors-detail/:id" element={<AdvisorstDetailPage />} />
-              <Route path="/advisors-introduction-create/:advisorId" element={<AdvisorsIntroductionCreatePage />} />
-              <Route path="/advisors-introduction-update/:advisorId" element={<AdvisorsIntroductionUpdatePage />} />
+              <Route
+                path="/advisors-detail/:id"
+                element={<AdvisorstDetailPage />}
+              />
+              <Route path="/advisors/:advisorId/reviews" element={<AdvisorReviewsPage />} />
+              <Route
+                path="/advisors-introduction-create/:advisorId"
+                element={<AdvisorsIntroductionCreatePage />}
+              />
+              <Route
+                path="/advisors-introduction-update/:advisorId"
+                element={<AdvisorsIntroductionUpdatePage />}
+              />
 
               {/* 투자 지식 in 관련 path */}
-              <Route path="/investment-knowledge-list" element={<InvestmentKnowledgeListPage />} />
-              <Route path="/investment-knowledge-detail/:postId" element={<InvestmentKnowledgeDetailPage />} />
+              <Route
+                path="/investment-knowledge-list"
+                element={<InvestmentKnowledgeListPage />}
+              />
+              <Route
+                path="/investment-knowledge-detail/:postId"
+                element={<InvestmentKnowledgeDetailPage />}
+              />
               <Route path="/write-post" element={<WritePostPage />} />
 
               {/* 상품 관련 path */}
@@ -141,7 +161,7 @@ const AppContent: React.FC = () => {
 
               {/* 관리자 관련 path */}
               <Route
-                path="/admin" 
+                path="/admin"
                 element={
                   <AdminProtectedRoute>
                     <AdminPage />
@@ -161,7 +181,6 @@ const AppContent: React.FC = () => {
               {/* 결제 결과 관련 path */}
               <Route path="/payment/success" element={<PaymentSuccess />} />
               <Route path="/payment/fail" element={<PaymentFail />} />
-
 
               <Route
                 path="/products"

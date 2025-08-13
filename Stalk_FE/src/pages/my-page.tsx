@@ -1,21 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import profileDefault from "@/assets/images/profiles/Profile_default.svg";
-import profileCat from "@/assets/images/profiles/Profile_cat.svg";
-import profileCheek from "@/assets/images/profiles/Profile_cheek.svg";
-import profileFox from "@/assets/images/profiles/Profile_fox.svg";
-import profilePanda from "@/assets/images/profiles/Profile_panda.svg";
-import profilePuppy from "@/assets/images/profiles/Profile_puppy.svg";
-import profileRabbit from "@/assets/images/profiles/Profile_rabbit.svg";
-import certificationExample from "@/assets/images/dummy/certification_example.svg";
+
+// import certificationExample from "@/assets/images/dummy/certification_example.svg";
 import ConsultationService from "@/services/consultationService";
+import MyInfo from "@/components/mypage/my_info/my_info";
 import AuthService from "@/services/authService";
 import AdvisorService from "@/services/advisorService";
 import ReservationService from "@/services/reservationService";
 import { CancelReservationModal } from "@/components/modals";
 import UserService from "@/services/userService";
 import AdvisorTimeTable from "@/components/AdvisorTimeTable";
+import MyConsultationList from "@/components/mypage/my_consultation/my_consultation_list";
 import FavoriteService, {
   FavoriteAdvisorResponseDto,
 } from "@/services/favoriteService";
@@ -240,6 +236,55 @@ const MyPage = () => {
     }
   };
 
+  // 투자 스타일별 색상 클래스 매핑 (home-page.tsx와 동일)
+  const getStyleClasses = (style: string) => {
+    switch (style) {
+      case "SHORT":
+        return {
+          headerBg: "bg-green-100",
+          headerText: "text-green-600",
+          accentText: "text-green-600",
+          buttonSelected: "bg-green-500 text-white hover:bg-green-600",
+        };
+      case "MID_SHORT":
+        return {
+          headerBg: "bg-blue-100",
+          headerText: "text-blue-600",
+          accentText: "text-blue-600",
+          buttonSelected: "bg-blue-500 text-white hover:bg-blue-600",
+        };
+      case "MID":
+        return {
+          headerBg: "bg-orange-100",
+          headerText: "text-orange-600",
+          accentText: "text-orange-600",
+          buttonSelected: "bg-orange-500 text-white hover:bg-orange-600",
+        };
+      case "MID_LONG":
+        return {
+          headerBg: "bg-purple-100",
+          headerText: "text-purple-600",
+          accentText: "text-purple-600",
+          buttonSelected: "bg-purple-500 text-white hover:bg-purple-600",
+        };
+      case "LONG":
+        return {
+          headerBg: "bg-red-100",
+          headerText: "text-red-600",
+          accentText: "text-red-600",
+          buttonSelected: "bg-red-500 text-white hover:bg-red-600",
+        };
+      default:
+        return {
+          border: "border-gray-200",
+          headerBg: "bg-gray-100",
+          headerText: "text-gray-700",
+          accentText: "text-gray-700",
+          buttonSelected: "bg-gray-600 text-white hover:bg-gray-700",
+        };
+    }
+  };
+
   // 사용자 정보 로드 함수
   const loadUserInfo = async () => {
     try {
@@ -282,7 +327,7 @@ const MyPage = () => {
       setProfileForm((prev) => ({
         ...prev,
         nickname: profileData.nickname,
-        selectedAvatar: profileData.profileImage || "fox",
+        selectedAvatar: profileData.profileImage ? "default" : "fox",
       }));
     } catch (err) {
       console.error("사용자 정보 로드 실패:", err);
@@ -332,7 +377,7 @@ const MyPage = () => {
         // 내 advisorId 조회
         const status = await AdvisorService.getProfileStatus();
         if (status?.advisorId) {
-          navigate(`/expert-introduction-update/${status.advisorId}`);
+          navigate(`/advisors-introduction-update/${status.advisorId}`);
         }
       } catch {
         // 무시: 상태 조회 실패 시 이동하지 않음
@@ -365,7 +410,7 @@ const MyPage = () => {
 
   const [profileForm, setProfileForm] = useState({
     nickname: userInfo?.userName || "",
-    selectedAvatar: "fox", // 기본값을 fox로 설정 (현재 표시되는 이미지)
+    selectedAvatar: userProfile?.profileImage ? "default" : "fox",
   });
 
   const [imageUploadForm, setImageUploadForm] = useState<{
@@ -578,15 +623,31 @@ const MyPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // Avatar options
+  // 업로드/상대경로/절대경로를 절대 URL로 변환
+  const resolveImageUrl = (imagePath?: string | null) => {
+    if (!imagePath) {
+      return `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
+    }
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+    if (imagePath.startsWith('/')) {
+      return `${import.meta.env.VITE_API_URL}${imagePath}`;
+    }
+    return `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
+  };
+
+  const defaultAvatarImage = resolveImageUrl(userProfile?.profileImage);
+
+  // Avatar options (백엔드 uploads 경로 사용)
   const avatarOptions = [
-    { id: "default", image: profileDefault },
-    { id: "cat", image: profileCat },
-    { id: "cheek", image: profileCheek },
-    { id: "fox", image: profileFox },
-    { id: "panda", image: profilePanda },
-    { id: "puppy", image: profilePuppy },
-    { id: "rabbit", image: profileRabbit },
+    { id: "default", image: defaultAvatarImage },
+    { id: "cat", image: `${import.meta.env.VITE_API_URL}/uploads/profile_cat.png` },
+    { id: "cheek", image: `${import.meta.env.VITE_API_URL}/uploads/profile_cheek.png` },
+    { id: "fox", image: `${import.meta.env.VITE_API_URL}/uploads/profile_fox.png` },
+    { id: "panda", image: `${import.meta.env.VITE_API_URL}/uploads/profile_panda.png` },
+    { id: "puppy", image: `${import.meta.env.VITE_API_URL}/uploads/profile_dog.png` },
+    { id: "rabbit", image: `${import.meta.env.VITE_API_URL}/uploads/profile_rabbit.png` },
   ];
 
   // Form handlers
@@ -681,9 +742,7 @@ const MyPage = () => {
   const getProfileImage = () => {
     // 1. 유저 프로필 정보나 이미지 경로가 없으면 기본 이미지 반환
     if (!userProfile?.profileImage) {
-      // 선택된 미리보기 이미지가 있다면 그것을 보여주는 로직도 추가할 수 있습니다.
-      // return getSelectedProfileImage() || profileDefault;
-      return profileDefault;
+      return `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
     }
 
     const imagePath = userProfile.profileImage; // 예: "/uploads/image.png"
@@ -701,7 +760,7 @@ const MyPage = () => {
 
     // 4. 그 외의 경우 (예: 레거시 아바타 ID 등) 처리
     const avatar = avatarOptions.find((avatar) => avatar.id === imagePath);
-    return avatar ? avatar.image : profileDefault;
+    return avatar ? avatar.image : `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
   };
 
 
@@ -902,6 +961,38 @@ const MyPage = () => {
     }
   };
 
+  // 기본 제공 아바타 이미지를 클릭했을 때 해당 이미지를 파일로 업로드하여 저장
+  const handleSelectPredefinedAvatar = async (avatarId: string, imageUrl: string) => {
+    try {
+      setIsUpdatingProfile(true);
+      setProfileUpdateError(null);
+
+      // URL에서 Blob을 가져와 File 객체로 변환
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const fallbackName = imageUrl.split('/').pop() || 'profile.png';
+      const file = new File([blob], fallbackName, { type: blob.type || 'image/png' });
+
+      const nicknameToUse = (profileForm.nickname && profileForm.nickname.trim())
+        ? profileForm.nickname.trim()
+        : (userProfile?.nickname || '');
+
+      const result = await UserService.updateProfile(nicknameToUse, file);
+      if (result.success) {
+        // 선택 상태 업데이트 및 사용자 정보 새로고침
+        setProfileForm(prev => ({ ...prev, selectedAvatar: avatarId }));
+        await loadUserInfo();
+      } else {
+        setProfileUpdateError(result.message);
+      }
+    } catch (error) {
+      console.error('기본 아바타 적용 오류:', error);
+      setProfileUpdateError('프로필 이미지 적용 중 오류가 발생했습니다.');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
     
@@ -931,488 +1022,95 @@ const MyPage = () => {
           {/* Main Content Area */}
           <div className="flex-1">
             {activeTab === "내 정보" && (
-              <div className="space-y-8">
-                {/* 내 정보 Section */}
-                <div className="bg-white rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      내 정보
-                    </h2>
-                    <div className="flex space-x-4">
-                      <button
-                        onClick={() => setShowPasswordModal(true)}
-                        className="text-blue-600 hover:text-blue-700 font-medium"
-                        disabled={isLoading}
-                      >
-                        비밀번호 변경
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditInfoForm((prev) => ({
-                            ...prev,
-                            name: userProfile?.name || prev.name || "",
-                            contact: userProfile?.contact || prev.contact || "",
-                            email: prev.email || "",
-                          }));
-                          setShowEditInfoModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        내 정보 수정
-                      </button>
-                    </div>
-                  </div>
-
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                      <span className="ml-2 text-gray-600">
-                        사용자 정보를 불러오는 중...
-                      </span>
-                    </div>
-                  ) : error ? (
-                    <div className="text-center py-8">
-                      <div className="text-red-600 mb-2">⚠️ {error}</div>
-                      <button
-                        onClick={() => window.location.reload()}
-                        className="text-blue-600 hover:text-blue-700 text-sm"
-                      >
-                        다시 시도
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-gray-600">아이디</span>
-                        <span className="text-gray-900 font-medium">
-                          {userProfile?.userId || userInfo?.userId || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-gray-600">이름</span>
-                        <span className="text-gray-900 font-medium">
-                          {userProfile?.name || editInfoForm.name || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-gray-600">휴대폰 번호</span>
-                        <span className="text-gray-900 font-medium">
-                          {userProfile?.contact ||
-                            editInfoForm.contact ||
-                            "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-gray-600">이메일 주소</span>
-                        <span className="text-gray-900 font-medium">
-                          {userProfile?.email || editInfoForm.email || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-gray-600">역할</span>
-                        <span className="text-gray-900 font-medium">
-                          {userProfile?.role === "USER"
-                            ? "일반 사용자"
-                            : userProfile?.role === "ADVISOR"
-                            ? "전문가"
-                            : userProfile?.role === "ADMIN"
-                            ? "관리자"
-                            : "N/A"}
-                        </span>
-                      </div>
-                      {isExpert && (
-                        <div className="flex flex-col gap-2 py-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-600">
-                              전문 자격 증명
-                            </span>
-                            <button
-                              onClick={() => setShowCertModal(true)}
-                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                            >
-                              자격증 추가
-                            </button>
-                          </div>
-                          {certLoading ? (
-                            <span className="text-gray-400 text-sm">
-                              로딩 중...
-                            </span>
-                          ) : certificates.length === 0 ? (
-                            <span className="text-gray-400 text-sm">
-                              인증된 자격증이 없습니다.
-                            </span>
-                          ) : (
-                            certificates.map((cert) => (
-                              <div
-                                key={cert.requestId}
-                                className="flex items-center justify-end space-x-2"
-                              >
-                                <span className="text-gray-900 font-medium">
-                                  {getCertificateDisplayName(
-                                    cert.certificateName
-                                  )}
-                                </span>
-                                <svg
-                                  className="w-5 h-5 text-blue-600"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                <span className="text-blue-600 text-sm font-medium">
-                                  승인
-                                </span>
-                                <svg
-                                  className="w-4 h-4 text-gray-400"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 커뮤니티 프로필 Section */}
-                <div className="bg-white p-6">
-                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      커뮤니티 프로필
-                    </h2>
-                    <button
-                      onClick={() => setShowProfileEditModal(true)}
-                      className="text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      프로필 편집
-                    </button>
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center">
-                      <img
-                        src={getProfileImage()}
-                        alt="profile"
-                        className="w-10 h-10 rounded-full"
-                      />
-                    </div>
-                    <span className="text-gray-900 font-medium">
-                      {userProfile?.nickname || userInfo?.userName || profileForm.nickname}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 회원탈퇴 Section */}
-                <div className="bg-white p-6">
-                  <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      회원탈퇴
-                    </h2>
-                    <button
-                      onClick={() => setShowWithdrawalModal(true)}
-                      className="text-red-600 hover:text-red-700 font-medium"
-                    >
-                      회원탈퇴
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <MyInfo
+                isLoading={isLoading}
+                error={error}
+                userProfile={userProfile}
+                userInfo={userInfo}
+                editInfoForm={editInfoForm}
+                setEditInfoForm={setEditInfoForm}
+                setShowPasswordModal={setShowPasswordModal}
+                setShowEditInfoModal={setShowEditInfoModal}
+                isExpert={isExpert}
+                certificates={certificates}
+                certLoading={certLoading}
+                getCertificateDisplayName={getCertificateDisplayName}
+                setShowCertModal={setShowCertModal}
+                setShowProfileEditModal={setShowProfileEditModal}
+                getProfileImage={getProfileImage}
+                profileForm={profileForm}
+                setShowWithdrawalModal={setShowWithdrawalModal}
+                showPasswordModal={showPasswordModal}
+                passwordForm={passwordForm}
+                onChangePasswordForm={handlePasswordChange}
+                onSubmitPasswordChange={submitPasswordChange}
+                onClosePasswordModal={() => setShowPasswordModal(false)}
+                showEditInfoModal={showEditInfoModal}
+                onChangeEditInfo={handleEditInfoChange}
+                onSubmitEditInfo={handleEditInfoSubmit}
+                onCloseEditInfoModal={() => setShowEditInfoModal(false)}
+                // Community profile edit modal
+                showProfileEditModal={showProfileEditModal}
+                avatarOptions={avatarOptions}
+                onSelectPredefinedAvatar={handleSelectPredefinedAvatar}
+                onOpenImageUploadModal={() => setShowImageUploadModal(true)}
+                showImageUploadModal={showImageUploadModal}
+                onCloseImageUploadModal={() => setShowImageUploadModal(false)}
+                onFileSelect={handleFileSelect}
+                imageUploadForm={imageUploadForm}
+                onFileDelete={handleFileDelete}
+                onChangeProfileForm={handleProfileChange}
+                isUpdatingProfile={isUpdatingProfile}
+                profileUpdateError={profileUpdateError}
+                onSubmitProfileEdit={handleProfileSubmit}
+                // Account delete modal
+                showWithdrawalModal={showWithdrawalModal}
+                onConfirmAccountDelete={async () => {
+                  const res = await UserService.deleteAccount(
+                    userProfile?.userId || "",
+                    ""
+                  );
+                  alert(res.message);
+                  if (res.success) {
+                    AuthService.removeAccessToken();
+                    setShowWithdrawalModal(false);
+                    navigate("/login");
+                  }
+                }}
+                onCloseWithdrawalModal={() => setShowWithdrawalModal(false)}
+                // Certification create modal
+                showCertModal={showCertModal}
+                certForm={certForm}
+                onChangeCertForm={(form) => setCertForm(form)}
+                onSubmitCertForm={handleCertSubmit}
+                certSubmitting={certSubmitting}
+                onCloseCertModal={() => setShowCertModal(false)}
+              />
             )}
 
-            {activeTab === "내 상담 내역" && (
-              <div
-                className="bg-white 
-              rounded-lg p-6"
-              >
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  내 상담 내역
-                </h2>
-
-                {/* Sub-tabs */}
-                <div className="flex space-x-2 mb-6">
-                  <button
-                    onClick={() => setConsultationTab("상담 전")}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      consultationTab === "상담 전"
-                        ? "bg-blue-600 text-white"
-                        : "bg-white text-gray-600 border border-gray-300"
-                    }`}
-                  >
-                    상담 전
-                  </button>
-                  <button
-                    onClick={() => setConsultationTab("상담 완료")}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      consultationTab === "상담 완료"
-                        ? "bg-blue-600 text-white"
-                        : "bg-white text-gray-600 border border-gray-300"
-                    }`}
-                  >
-                    상담 완료
-                  </button>
-                </div>
-
-                {/* 로딩 상태 표시 */}
-                {isLoadingConsultations && (
-                  <div className="flex justify-center items-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-2 text-gray-600">
-                      상담 내역을 불러오는 중...
-                    </span>
-                  </div>
-                )}
-
-                {/* 에러 상태 표시 */}
-                {consultationError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <svg
-                          className="h-5 w-5 text-red-400"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm text-red-800">
-                          {consultationError}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 실제 상담 내역 테이블 */}
-                {!isLoadingConsultations && !consultationError && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            상담일자
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            상담시간
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            상담 요청 내용
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            전문가
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            {consultationTab === "상담 전"
-                              ? "화상상담"
-                              : "화상상담"}
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            {consultationTab === "상담 전"
-                              ? "상담취소"
-                              : "차트조회"}
-                          </th>
-                          {consultationTab === "상담 완료" && (
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                              상담일지
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {realConsultationData[
-                          consultationTab as keyof typeof realConsultationData
-                        ].length > 0 ? (
-                          realConsultationData[
-                            consultationTab as keyof typeof realConsultationData
-                          ].map((item, index) => (
-                            <tr
-                              key={index}
-                              className="border-b border-gray-100"
-                            >
-                              <td className="px-4 py-3 text-left text-sm text-gray-900">
-                                {item.date}
-                              </td>
-                              <td className="px-4 py-3 text-left text-sm text-gray-900">
-                                {item.time}
-                              </td>
-                              <td className="px-4 py-3 text-left text-sm text-gray-900">
-                                {item.content}
-                              </td>
-                              <td className="px-4 py-3 text-left text-sm text-gray-900">
-                                {item.expert}
-                              </td>
-                              <td className="px-4 py-3 text-left">
-                                <button
-                                  className={`${(item.status === 'cancelled' || consultationTab === '상담 완료')
-                                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                                    : 'bg-gray-500 text-white hover:bg-gray-600'
-                                  } px-3 py-1 rounded-lg text-sm transition-colors`}
-                                  onClick={() => handleEnterConsultation(item)}
-                                  disabled={item.status === 'cancelled' || consultationTab === '상담 완료'}
-                                >
-                                  {item.videoConsultation}
-                                </button>
-                              </td>
-                              <td className="px-4 py-3">
-                                {consultationTab !== "상담 완료" ? (
-                                  <button
-                                    onClick={() => handleCancelConsultation(item)}
-                                    className={`${item.status === 'cancelled'
-                                      ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                                      : 'bg-red-500 text-white hover:bg-red-600'
-                                    } px-3 py-1 rounded-lg text-sm transition-colors`}
-                                    disabled={isCancelling || item.status === 'cancelled'}
-                                  >
-                                    {item.action}
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => navigate(`/expert-detail/${encodeURIComponent(item.expert)}`)}
-                                    className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                                  >
-                                    {item.action}
-                                  </button>
-                                )}
-                              </td>
-                              {consultationTab === "상담 완료" && (
-                                <td className="px-4 py-3">
-                                  <button
-                                    onClick={() =>
-                                      handleConsultationDiaryClick(item)
-                                    }
-                                    className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                                  >
-                                    상담일지
-                                  </button>
-                                </td>
-                              )}
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td
-                              colSpan={consultationTab === "상담 완료" ? 7 : 6}
-                              className="px-4 py-8 text-center text-gray-500"
-                            >
-                              {consultationTab === "상담 전"
-                                ? "예정된 상담이 없습니다."
-                                : "완료된 상담이 없습니다."}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* 하드코딩된 데이터 (WebRTC 상담방 수정용) */}
-                <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">
-                    하드코딩된 데이터 (WebRTC 상담방 수정용)
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-gray-100">
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            상담일자
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            상담시간
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            상담 요청 내용
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            전문가
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            {consultationTab === "상담 전"
-                              ? "화상상담"
-                              : "화상상담"}
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            {consultationTab === "상담 전"
-                              ? "상담취소"
-                              : "차트조회"}
-                          </th>
-                          {consultationTab === "상담 완료" && (
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                              상담일지
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {consultationData[
-                          consultationTab as keyof typeof consultationData
-                        ].map((item, index) => (
-                          <tr key={index} className="border-b border-gray-200">
-                            <td className="px-4 py-3 text-left text-sm text-gray-900">
-                              {item.date}
-                            </td>
-                            <td className="px-4 py-3 text-left text-sm text-gray-900">
-                              {item.time}
-                            </td>
-                            <td className="px-4 py-3 text-left text-sm text-gray-900">
-                              {item.content}
-                            </td>
-                            <td className="px-4 py-3 text-left text-sm text-gray-900">
-                              {item.expert}
-                            </td>
-                            <td className="px-4 py-3 text-left">
-                              <button
-                                className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors"
-                                onClick={() => handleEnterConsultation(item)}
-                              >
-                                {item.videoConsultation}
-                              </button>
-                            </td>
-                              <td className="px-4 py-3">
-                                <button
-                                  onClick={() => handleCancelConsultation(item)}
-                                  className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors"
-                                  disabled={isCancelling}
-                                >
-                                  {item.action}
-                                </button>
-                              </td>
-                            {consultationTab === "상담 완료" && (
-                              <td className="px-4 py-3">
-                                <button
-                                  onClick={() =>
-                                    handleConsultationDiaryClick(item)
-                                  }
-                                  className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                                >
-                                  상담일지
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+            {(activeTab === "내 상담 내역" || activeTab === "상담일지") && (
+              <MyConsultationList
+                consultationTab={consultationTab as "상담 전" | "상담 완료"}
+                onChangeTab={(tab) => setConsultationTab(tab)}
+                isLoading={isLoadingConsultations}
+                error={consultationError}
+                realConsultationData={realConsultationData}
+                onEnterConsultation={handleEnterConsultation}
+                onCancelConsultation={handleCancelConsultation}
+                isCancelling={isCancelling}
+                onViewDiary={handleConsultationDiaryClick}
+                onNavigateAdvisor={(expertName) => navigate(`/advisors-detail/${encodeURIComponent(expertName)}`)}
+                hardcodedConsultationData={consultationData as any}
+                activeTab={activeTab}
+                selectedConsultation={selectedConsultation}
+                isLoadingDiary={isLoadingDiary}
+                diaryError={diaryError}
+                consultationDiary={consultationDiary}
+                onCloseDiary={handleCloseDiary}
+                onRetryDiary={() => handleConsultationDiaryClick(selectedConsultation as any)}
+                onAnalyzeVideo={handleVideoAnalysis}
+                videoAnalysisResult={videoAnalysisResult}
+              />
             )}
 
             {activeTab === "찜한 전문가" && !isExpert && (
@@ -1434,70 +1132,87 @@ const MyPage = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {favoriteAdvisors.map((advisor) => (
-                      <div
-                        key={advisor.advisorId}
-                        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow relative"
-                      >
-                        {/* 찜해제 버튼 - 오른쪽 위 */}
-                        <button
-                          onClick={() =>
-                            handleRemoveFavorite(advisor.advisorId)
-                          }
-                          className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition-colors"
-                          title="찜해제"
+                    {favoriteAdvisors.map((advisor) => {
+                      const cls = getStyleClasses(advisor.preferredTradeStyle);
+                      return (
+                        <div
+                          key={advisor.advisorId}
+                          className={`bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow relative`}
                         >
-                          <svg
-                            className="w-5 h-5"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-
-                        {/* Review Count */}
-                        <div className="flex items-center mb-3">
-                          <svg
-                            className="w-4 h-4 text-yellow-400 mr-1"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                          <span className="text-sm text-gray-600">
-                            리뷰({advisor.reviewCount})
-                          </span>
-                        </div>
+                          {/* Preferred Style Badge (홈페이지와 동일 색상 체계) */}
+                          <div className={`text-left text-xs font-semibold ${cls.headerText} ${cls.headerBg} w-fit rounded-full px-3 py-1 mx-auto mb-4`}>
+                            {getTradeStyleDisplayName(advisor.preferredTradeStyle)} 투자
+                          </div>
 
                         {/* Profile Image */}
                         <div className="text-center mb-3">
                           <img
-                            src={advisor.profileImage || profileDefault}
+                            src={advisor.profileImage || `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`}
                             alt={advisor.name}
                             className="w-20 h-20 rounded-full mx-auto object-cover border-2 border-gray-200"
                           />
                         </div>
 
-                        {/* Name */}
-                        <div className="text-center mb-1">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {advisor.name}
-                          </h3>
+                        <div className="flex flex-row items-center justify-center space-x-2">
+                          {/* 찜해제 버튼 - 오른쪽 위 */}
+                          <button
+                            onClick={() =>
+                              handleRemoveFavorite(advisor.advisorId)
+                            }
+                            className="text-red-500 hover:text-red-700 transition-colors"
+                            title="찜해제"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+
+                          {/* Name */}
+                          <div className="text-center mb-1">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              {advisor.name}
+                            </h3>
+                          </div>
+                        </div>
+                        
+                        {/* 평점 */}
+                        <div className="flex flex-row items-center justify-center space-x-2">
+                          <div className="flex items-center justify-center mb-3">
+                            <svg
+                                className="w-4 h-4 text-yellow-400 mr-1"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                              <span className="text-sm text-gray-600">
+                                {Number(advisor.averageRating ?? 0).toFixed(1)}
+                              </span>
+                            </div>
+
+                            {/* Review Count */}
+                            <div className="flex items-center justify-center mb-3">
+                            <svg
+                              className="w-4 h-4 text-gray-400 mr-1"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M3 4a3 3 0 013-3h8a3 3 0 013 3v6a3 3 0 01-3 3H8l-4 4v-4a3 3 0 01-1-2V4z" />
+                            </svg>
+                            <span className="text-sm text-gray-600">
+                              리뷰({advisor.reviewCount ?? 0})
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Trading Style */}
-                        <div className="text-center mb-4">
-                          <span className="text-sm text-gray-500">
-                            {getTradeStyleDisplayName(
-                              advisor.preferredTradeStyle
-                            )}
-                          </span>
-                        </div>
 
                         {/* Short Intro */}
                         <p className="text-sm text-gray-600 mb-4 text-center line-clamp-2">
@@ -1508,7 +1223,7 @@ const MyPage = () => {
                         <div className="text-center">
                           <button
                             onClick={() =>
-                              navigate(`/expert-detail/${advisor.advisorId}`)
+                              navigate(`/advisors-detail/${advisor.advisorId}`)
                             }
                             className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition-colors w-full"
                           >
@@ -1516,7 +1231,8 @@ const MyPage = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
               </div>
@@ -1969,74 +1685,7 @@ const MyPage = () => {
         </div>
       </div>
 
-      {/* 비밀번호 변경 모달 */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">
-                비밀번호 변경
-              </h3>
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form className="space-y-6" onSubmit={submitPasswordChange}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  현재 비밀번호
-                </label>
-                <input
-                  type="password"
-                  name="currentPassword"
-                  value={passwordForm.currentPassword}
-                  onChange={handlePasswordChange}
-                  placeholder="현재 비밀번호를 입력해주세요"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  새로운 비밀번호
-                </label>
-                <input
-                  type="password"
-                  name="newPassword"
-                  value={passwordForm.newPassword}
-                  onChange={handlePasswordChange}
-                  placeholder="새로운 비밀번호를 입력해주세요"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  새로운 비밀번호 확인
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={passwordForm.confirmPassword}
-                  onChange={handlePasswordChange}
-                  placeholder="새로운 비밀번호를 한 번 더 입력해주세요"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="flex justify-end pt-4">
-                <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  변경하기
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 비밀번호 변경 모달은 MyInfo 내부 PasswordUpdate 컴포넌트로 분리 */}
 
       <CancelReservationModal
         isOpen={showCancelModal}
@@ -2050,248 +1699,12 @@ const MyPage = () => {
         onClose={() => setShowCancelModal(false)}
       />
 
-      {/* 정보 수정 모달 */}
-      {showEditInfoModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">내 정보 수정</h3>
-              <button
-                onClick={() => setShowEditInfoModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
+      {/* 내 정보 수정 모달 */}
+      {/* 내 정보 수정 모달은 MyInfo 내부 MyInfoUpdate 컴포넌트로 분리 */}
 
-            <form className="space-y-6" onSubmit={handleEditInfoSubmit}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  이름
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={editInfoForm.name}
-                  onChange={handleEditInfoChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  연락처
-                </label>
-                <input
-                  type="tel"
-                  name="contact"
-                  value={editInfoForm.contact}
-                  onChange={handleEditInfoChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              
-              <div className="flex justify-end pt-4">
-                <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  저장
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 프로필 편집 모달은 MyInfo 내부 MyCommunityInfoUpdate 컴포넌트로 분리 */}
 
-      {/* 프로필 편집 모달 */}
-      {showProfileEditModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-lg w-full shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">
-                내 커뮤니티 프로필 수정
-              </h3>
-              <button
-                onClick={() => setShowProfileEditModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form
-              className="space-y-6"
-              onSubmit={handleProfileSubmit}
-            >
-              <div>
-                <label className="block text-left text-m font-bold text-gray-900 mb-4">
-                  프로필 이미지
-                </label>
-                <div className="grid grid-cols-4 gap-4 mb-4">
-                  {avatarOptions.map((avatar) => (
-                    <button
-                      key={avatar.id}
-                      type="button"
-                      onClick={() =>
-                        setProfileForm({
-                          ...profileForm,
-                          selectedAvatar: avatar.id,
-                        })
-                      }
-                      className={`w-16 h-16 rounded-full flex items-center justify-center hover:scale-110 transition-transform ${
-                        profileForm.selectedAvatar === avatar.id
-                          ? "ring-4 ring-blue-500"
-                          : ""
-                      }`}
-                    >
-                      <img
-                        src={avatar.image}
-                        alt={avatar.id}
-                        className="w-14 h-14 rounded-full"
-                      />
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setShowImageUploadModal(true)}
-                    className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl hover:scale-110 transition-transform"
-                  >
-                    +
-                  </button>
-                </div>
-                
-                {/* 파일 업로드 상태 표시 */}
-                {imageUploadForm.selectedFile && (
-                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm text-blue-700 font-medium">
-                          선택된 파일: {imageUploadForm.fileName}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleFileDelete}
-                        className="text-red-500 hover:text-red-700 text-sm font-medium"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-left text-m font-bold text-gray-900 mb-2">
-                  닉네임
-                </label>
-                <input
-                  type="text"
-                  name="nickname"
-                  value={profileForm.nickname}
-                  onChange={handleProfileChange}
-                  minLength={2}
-                  maxLength={10}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isUpdatingProfile}
-                  placeholder="2자 이상 10자 이하로 입력해주세요"
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  {profileForm.nickname.length}/10자
-                </p>
-              </div>
-              
-              {/* 에러 메시지 표시 */}
-              {profileUpdateError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg
-                        className="h-5 w-5 text-red-400"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-red-800">{profileUpdateError}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex justify-end pt-4">
-                <button
-                  type="submit"
-                  disabled={isUpdatingProfile}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  {isUpdatingProfile ? '저장 중...' : '저장'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 회원탈퇴 모달 */}
-      {showWithdrawalModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">회원 탈퇴</h3>
-              <button
-                onClick={() => setShowWithdrawalModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="text-gray-700">
-                <p className="mb-2">
-                  회원 탈퇴를 진행하면 모든 계정의 정보가 삭제되고 다시 복구할
-                  수 없습니다.
-                </p>
-                <p>삭제를 원치 않는 경우 "돌아가기" 버튼을 누르세요.</p>
-              </div>
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  onClick={async () => {
-                    const res = await UserService.deleteAccount(
-                      userProfile?.userId || "",
-                      ""
-                    );
-                    alert(res.message);
-                    if (res.success) {
-                      AuthService.removeAccessToken();
-                      setShowWithdrawalModal(false);
-                      navigate("/login");
-                    }
-                  }}
-                  className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  회원탈퇴
-                </button>
-                <button
-                  onClick={() => setShowWithdrawalModal(false)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  돌아가기
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 회원탈퇴 모달은 MyInfo 내부 AccountDelete 컴포넌트로 분리 */}
 
       {/* 프로필 이미지 추가 모달 */}
       {showImageUploadModal && (
@@ -2345,10 +1758,11 @@ const MyPage = () => {
                 </button>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• 프로필 사진은 300x400px 사이즈를 권장합니다.</li>
+                <ul className="text-left text-sm text-gray-600 space-y-1">
+                  <li>• 프로필 사진은 정사각형 사이즈를 권장합니다.</li>
                   <li>
-                    • 파일 형식은 JPGE(.jpg, .jpeg) 또는 PNG(.png)만 지원합니다.
+                    • 지원하는 파일 형식은 아래와 같습니다.<br />
+                      <span className="ml-3 text-red-600">JPGE(.jpg, .jpeg) 또는 PNG(.png)</span>
                   </li>
                   <li>• 업로드 파일 용량은 2MB 이하만 가능합니다.</li>
                 </ul>
@@ -2379,149 +1793,7 @@ const MyPage = () => {
         </div>
       )}
 
-      {/* 자격증 추가 모달 */}
-      {showCertModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-4xl w-full shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">
-                전문 자격 인증
-              </h3>
-              <button
-                onClick={() => setShowCertModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCertSubmit}>
-              {/* Certificate Example Image */}
-              <div className="mb-6">
-                <img
-                  src={certificationExample}
-                  alt="Certificate Example"
-                  className="w-full max-w-2xl mx-auto"
-                />
-              </div>
-
-              {/* Instructions */}
-              <div className="w-full pl-10 text-left border border-gray-200 rounded-lg p-4 mb-6">
-                <ul className="text-left text-sm text-gray-700 space-y-3 py-3">
-                  <li>
-                    • 위 합격증 원본대조 번호 입력 방식을 보고 아래 창에
-                    입력해주세요.
-                  </li>
-                  <li>
-                    • 입력 시 하이픈('-') 없이 숫자만 입력하시기 바랍니다.
-                  </li>
-                </ul>
-              </div>
-
-              {/* 자격증 폼 */}
-              <div className="w-full flex flex-row gap-4 mb-6">
-                {/* Select */}
-                <div className="w-1/4 flex flex-col gap-3">
-                  <h3 className="text-left pl-5">전문 자격명</h3>
-
-                  <div className="w-full">
-                    <select
-                      name="certificateName"
-                      value={certForm.certificateName}
-                      onChange={(e) =>
-                        setCertForm({
-                          ...certForm,
-                          certificateName: e.target.value,
-                        })
-                      }
-                      className="text-sm text-gray-500 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">전문 자격을 선택하세요</option>
-                      <option value="financial_advisor">금융투자상담사</option>
-                      <option value="securities_analyst">증권분석사</option>
-                      <option value="cfa">CFA</option>
-                      <option value="cpa">CPA</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Input Fields */}
-                <div className="w-3/4 flex flex-col gap-3">
-                  <h3 className="text-left pl-5">인증번호 입력</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    {/* Input 1 */}
-                    <div className="flex flex-col">
-                      <input
-                        type="text"
-                        value={certForm.certificateFileSn}
-                        onChange={(e) =>
-                          setCertForm({
-                            ...certForm,
-                            certificateFileSn: e.target.value,
-                          })
-                        }
-                        placeholder="('-') 없이 숫자만 입력"
-                        maxLength={8}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        중앙에 위치한 합격증 번호 (8자리)
-                      </p>
-                    </div>
-
-                    {/* Input 2 */}
-                    <div className="flex flex-col">
-                      <input
-                        type="text"
-                        value={certForm.birth}
-                        onChange={(e) =>
-                          setCertForm({ ...certForm, birth: e.target.value })
-                        }
-                        placeholder="YYYYMMDD"
-                        maxLength={8}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        생년월일 (YYYYMMDD)
-                      </p>
-                    </div>
-
-                    {/* Input 3 */}
-                    <div className="flex flex-col">
-                      <input
-                        type="text"
-                        value={certForm.certificateFileNumber}
-                        onChange={(e) =>
-                          setCertForm({
-                            ...certForm,
-                            certificateFileNumber: e.target.value,
-                          })
-                        }
-                        placeholder="6자리 입력"
-                        maxLength={6}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        발급번호 마지막 6자리
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                  disabled={certSubmitting}
-                >
-                  {certSubmitting ? "등록 중..." : "등록하기"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 자격증 추가 모달은 MyInfo 내부 CertificationCreate 컴포넌트로 분리 */}
     </div>
   );
 };

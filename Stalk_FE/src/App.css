@@ -55,3 +55,30 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Safari and Chrome */
 }
+
+/* Custom dark scrollbar for consultation room chart */
+.chart-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 #1f2937;
+}
+
+.chart-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chart-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937;
+  border-radius: 4px;
+}
+
+.chart-scrollbar::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+  border: 1px solid #374151;
+  transition: all 0.2s ease;
+}
+
+.chart-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+  border-color: #4b5563;
+}
