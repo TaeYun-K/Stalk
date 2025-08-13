@@ -768,6 +768,9 @@ const VideoConsultationPage: React.FC = () => {
     if (isRecording) return; // 중복 클릭 방지
 
     try {
+
+      const userId = userInfo?.userId ?? '0';
+      const name = userInfo?.name ?? 'unknown';
       const token = AuthService.getAccessToken();
 
       // 1) 화면공유 토큰 발급 (두 번째 Connection용)
@@ -776,7 +779,10 @@ const VideoConsultationPage: React.FC = () => {
         const tokenRes = await axios.post(
           `/api/recordings/sessions/${encodeURIComponent(ovSessionId)}/connections/screen`,
           {},
-          { headers: { Authorization: `Bearer ${token}` } }
+          { 
+            headers: { Authorization: `Bearer ${token}` },
+            params: {userId, name}
+         }
         );
         const screenToken = tokenRes?.data?.data?.token as string | undefined;
         if (!screenToken) throw new Error("화면공유 토큰 발급 실패");
