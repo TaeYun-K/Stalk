@@ -797,7 +797,7 @@ const VideoConsultationPage: React.FC = () => {
       //    - 이미 누군가 화면공유 중이면 이 단계는 생략해도 됨
       if (!hasAnyScreen(session)) {
         const tokenRes = await axios.post(
-          `/api/recordings/sessions/${encodeURIComponent(ovSessionId)}/connections/screen`,
+          `/api/recordings/sessions/${encodeURIComponent(ovSessionId)}/connections`,
           {},
           { 
             headers: { Authorization: `Bearer ${token}` },
