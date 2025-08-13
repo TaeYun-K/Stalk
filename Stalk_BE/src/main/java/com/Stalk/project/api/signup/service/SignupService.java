@@ -8,6 +8,7 @@ import com.Stalk.project.api.auth.email.dao.EmailVerificationMapper;
 import com.Stalk.project.api.auth.email.entity.EmailVerification;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -54,7 +55,7 @@ public class SignupService {
         user.setNickname(req.getNickname());
         user.setLoginType("LOCAL");
         user.setRole("USER");
-        user.setImage("/images/default_profile.png");
+        user.setImage("/uploads/profile_default.png");
         user.setIsVerified(true);
         user.setTermsAgreed(req.getAgreedPrivacy());
         user.setIsActive(true);

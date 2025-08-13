@@ -4,23 +4,19 @@ import com.Stalk.project.api.openvidu.dto.out.VideoRecording;
 import com.Stalk.project.api.openvidu.service.VideoRecordingService;
 import com.Stalk.project.global.response.BaseResponse;
 import com.Stalk.project.global.response.BaseResponseStatus;
-import io.openvidu.java.client.Connection;
-import io.openvidu.java.client.ConnectionProperties;
-import io.openvidu.java.client.ConnectionType;
-import io.openvidu.java.client.OpenVidu;
-import io.openvidu.java.client.OpenViduRole;
-import io.openvidu.java.client.Recording;
-import io.openvidu.java.client.RecordingLayout;
-import io.openvidu.java.client.RecordingProperties;
-import io.openvidu.java.client.Session;
+import io.openvidu.java.client.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeoutException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,65 +28,117 @@ public class VideoRecordingController {
 
     private final OpenVidu openVidu;
     private final VideoRecordingService recordingService;
-    @Operation(
-        summary = "화면공유용 토큰 발급",
-        description = "같은 세션에 화면공유를 별도 Connection으로 publish 하기 위한 토큰을 발급합니다(106 오류 방지)."
-    )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "발급 성공"),
-        @ApiResponse(responseCode = "404", description = "세션 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
-    })
-    @PostMapping("/sessions/{sessionId}/connections/screen")
-    public ResponseEntity<BaseResponse<Map<String, String>>> createScreenShareToken(
-        @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
-        @RequestParam String userId, @RequestParam String name
+
+    private static final long WAIT_TIMEOUT_MS = 10_000; // 최대 10초
+    private static final long WAIT_INTERVAL_MS = 300;   // 폴링 간격
+
+    @Operation(summary = "OV 연결 토큰 발급", description = "웹캠/화면공유 모두 공통. ownerId/ownerName/kind를 serverData로 저장")
+    @PostMapping("/sessions/{sessionId}/connections")
+    public ResponseEntity<BaseResponse<Map<String, String>>> createConnectionToken(
+            @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
+            @Parameter(description = "cam | screen") @RequestParam(defaultValue = "cam") String kind,
+            @Parameter(description = "유저 ID(문자)") @RequestParam String userId,
+            @Parameter(description = "유저 이름") @RequestParam String name
     ) {
         try {
-            // 세션 존재 확인 (없으면 404)
             Session s = openVidu.getActiveSession(sessionId);
             if (s == null) {
                 return ResponseEntity.status(404)
-                    .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
+                        .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
             }
 
-            String dataJson = String.format("{\"kind\":\"screen\",\"ownerId\":\"%s\",\"ownerName\":\"%s\"}", userId, name);
+            // 서버 메타데이터(두 연결 모두 동일 스키마)
+            String dataJson = String.format("{\"ownerId\":\"%s\",\"ownerName\":\"%s\",\"kind\":\"%s\"}", userId, name, kind);
 
             ConnectionProperties props = new ConnectionProperties.Builder()
-                .type(ConnectionType.WEBRTC)
-                .role(OpenViduRole.PUBLISHER)
-                .data(dataJson)
-                .build();
+                    .type(ConnectionType.WEBRTC)
+                    .role(OpenViduRole.PUBLISHER)
+                    .data(dataJson) // <= 핵심
+                    .build();
 
             Connection connection = s.createConnection(props);
             return ResponseEntity.ok(new BaseResponse<>(Map.of("token", connection.getToken())));
 
         } catch (Exception e) {
-            log.error("🔴 화면공유 토큰 발급 실패: {}", e.getMessage(), e);
+            log.error("🔴 토큰 발급 실패: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
-                .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
+                    .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
-    @Operation(summary = "녹화 시작")
+    @Operation(
+            summary = "녹화 시작",
+            description = "COMPOSED(PIP) 녹화를 시작합니다. 서버가 CAMERA+SCREEN 스트림을 인지할 때까지 대기 후 시작하며, 이미 시작된 경우 멱등적으로 성공으로 처리합니다."
+    )
     @PostMapping("/start/{sessionId}")
-    public ResponseEntity<BaseResponse<Void>> startRecording(@PathVariable String sessionId,
-                                                             @RequestParam Long consultationId) {
+    public ResponseEntity<BaseResponse<Void>> startRecording(
+            @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
+            @Parameter(description = "상담 ID") @RequestParam Long consultationId) {
         try {
+            // 0) 서버 상태 동기화 + 세션/모드 검증
+            openVidu.fetch();
+            Session session = openVidu.getActiveSessions().stream()
+                    .filter(s -> s.getSessionId().equals(sessionId))
+                    .findFirst().orElse(null);
+            if (session == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
+            }
+            if (session.getProperties().mediaMode() != MediaMode.ROUTED) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR, "세션이 ROUTED 모드가 아니어서 COMPOSED 녹화가 불가합니다."));
+            }
+
+            // 1) 이미 녹화 중이면 멱등적으로 성공
+            if (session.isBeingRecorded()) {
+                log.info("Recording already active for {}", sessionId);
+                return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
+            }
+
+            // 2) 서버가 CAM+SCREEN 모두 인지할 때까지 대기
+            waitUntilServerSees(sessionId, Set.of("CAMERA", "SCREEN"), WAIT_TIMEOUT_MS, WAIT_INTERVAL_MS);
+
+            // 3) 녹화 시작
             RecordingProperties properties = new RecordingProperties.Builder()
-                .outputMode(Recording.OutputMode.COMPOSED)
-                .recordingLayout(RecordingLayout.PICTURE_IN_PICTURE)
-                .name("recording_" + sessionId)
-                .hasAudio(true)
-                .hasVideo(true)
-                .build();
+                    .outputMode(Recording.OutputMode.COMPOSED)
+                    .recordingLayout(RecordingLayout.PICTURE_IN_PICTURE)
+                    .name("recording_" + sessionId)
+                    .hasAudio(true)
+                    .hasVideo(true)
+                    .build();
 
             Recording recording = openVidu.startRecording(sessionId, properties);
+
+            // 4) 사후 처리
             recordingService.saveStartedRecording(recording, consultationId);
 
             return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
+
+        } catch (TimeoutException te) {
+            log.warn("⏱️ 녹화 시작 대기 타임아웃: {}", te.getMessage());
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR, "CAMERA/SCREEN 스트림이 서버에 인식되지 않았습니다."));
+        } catch (OpenViduHttpException e) {
+            // 409: 이미 녹화중이거나(경쟁호출), 다른 사유로 start 불가
+            if (e.getStatus() == 409) {
+                try {
+                    openVidu.fetch();
+                    boolean nowRecording = openVidu.getActiveSessions().stream()
+                            .anyMatch(s -> s.getSessionId().equals(sessionId) && s.isBeingRecorded());
+                    if (nowRecording) {
+                        log.info("409 received but recording is active for {}", sessionId);
+                        return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
+                    }
+                } catch (Exception ignore) {}
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR, "녹화를 시작할 수 없습니다(중복 또는 상태 충돌)."));
+            }
+            log.error("🔴 녹화 시작 실패(status={}): {}", e.getStatus(), e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
         } catch (Exception e) {
-            log.error("🔴 녹화 시작 실패: {}", e.getMessage(), e); // ✅ 로그 추가
+            log.error("🔴 녹화 시작 실패: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
         }
@@ -117,6 +165,53 @@ public class VideoRecordingController {
 
         List<VideoRecording> recordings = recordingService.getRecordingsByConsultation(consultationId);
         return ResponseEntity.ok(new BaseResponse<>(recordings));
+    }
+
+
+
+    /**
+     * OpenVidu 서버 상태를 동기화(fetch)하면서,
+     * 해당 세션이 지정한 typeOfVideo(CAMERA/SCREEN)를 모두 포함할 때까지 기다린다.
+     */
+    private void waitUntilServerSees(String sessionId, Set<String> needTypes,
+                                     long timeoutMs, long intervalMs) throws TimeoutException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        while (System.currentTimeMillis() < deadline) {
+            if (hasAllTypes(sessionId, needTypes)) {
+                return;
+            }
+            try {
+                Thread.sleep(intervalMs);
+            } catch (InterruptedException ignored) {}
+        }
+        throw new TimeoutException("Server did not see " + needTypes + " for session " + sessionId);
+    }
+
+    private boolean hasAllTypes(String sessionId, Set<String> needTypes) {
+        try {
+            // 서버 상태를 최신으로 동기화
+            openVidu.fetch();
+
+            // 활성 세션 중 대상 세션 찾기
+            Session session = openVidu.getActiveSessions().stream()
+                    .filter(s -> s.getSessionId().equals(sessionId))
+                    .findFirst().orElse(null);
+
+            if (session == null || session.getConnections() == null) return false;
+
+            // 퍼블리셔들의 typeOfVideo 수집 (CAMERA / SCREEN)
+            List<String> types = session.getConnections().stream()
+                    .flatMap(c -> c.getPublishers().stream())
+                    .map(Publisher::getTypeOfVideo) // "CAMERA" / "SCREEN"
+                    .toList();
+
+            // 모두 포함하는지 검사
+            return needTypes.stream().allMatch(types::contains);
+        } catch (OpenViduJavaClientException | OpenViduHttpException e) {
+            log.warn("OpenVidu fetch 실패 또는 조회 오류: {}", e.getMessage());
+            return false;
+        }
     }
 
 }
