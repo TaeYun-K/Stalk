@@ -49,7 +49,12 @@ public class AdvisorProfileService {
         validateCareerEntriesForCreate(request.getCareerEntries());
 
         try {
-            String profileImageUrl = fileStorageService.storeFile(request.getProfileImageUrl());
+            // 이미지 업로드
+            if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
+                String url = fileStorageService.storeFile(request.getProfileImage());
+                request.setProfileImageUrl(url);
+                request.setProfileImage(null);
+            }
 
             // 4. 프로필 상세 정보 등록
             advisorProfileMapper.insertAdvisorDetailInfo(advisorId, request);
