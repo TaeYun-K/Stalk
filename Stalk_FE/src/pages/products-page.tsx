@@ -88,6 +88,17 @@ const ProductsPage = () => {
   const [error] = useState<string | null>(null);
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const [drawingMode] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Use custom hooks for data fetching
   const { data: stockData } = useStockData(selectedTicker, {
@@ -704,10 +715,25 @@ const ProductsPage = () => {
     "1y": 365, // Show 365 days of daily data
   };
 
+  // Calculate dynamic width to prevent sidebar cropping
+  // Sidebar is 64px when collapsed, we add extra space for comfort
+  // Use full width only on mobile (< 768px), keep margin on tablets and desktop
+  const wrapperStyle = windowWidth >= 768 
+    ? { 
+        width: `${windowWidth - 80}px`, // Subtract sidebar width
+        maxWidth: `${windowWidth - 80}px`,
+        overflow: 'hidden'
+      } 
+    : {
+        width: '100%',
+        maxWidth: '100%'
+      };
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="px-4 sm:px-6 lg:px-8 py-8 pt-24">
-        <div className="max-w-8xl mx-auto">
+      <main className="w-full overflow-x-hidden">
+        <div style={wrapperStyle}>
+          <div className="px-4 sm:px-6 lg:px-8 py-8 pt-24">
           {/* Loading and Error States */}
           {isLoading && (
             <div className="text-center py-8">
@@ -742,7 +768,7 @@ const ProductsPage = () => {
 
           {/* Detail View */}
           {viewMode === "detail" && selectedTicker && (
-            <div className="space-y-6">
+            <div className="space-y-6 w-full">
               {/* Back Button */}
               <button
                 onClick={goBackToRanking}
@@ -876,6 +902,7 @@ const ProductsPage = () => {
               )}
             </>
           )}
+          </div>
         </div>
       </main>
     </div>
