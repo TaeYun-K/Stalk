@@ -38,7 +38,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
 
   const colors = [
     '#1e40af', // Deep Blue
-    '#7c3aed', // Purple  
+    '#7c3aed', // Purple
     '#ea580c', // Orange
     '#374151', // Gray
     '#0f766e', // Teal
@@ -72,7 +72,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
               : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
           }`}
         >
-          추세선
+          수평선
         </button>
         <button
           onClick={() => handleToolChange('vertical')}
@@ -103,16 +103,6 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           }`}
         >
           화살표
-        </button>
-        <button
-          onClick={() => handleToolChange('fibonacci')}
-          className={`px-2 py-1 text-xs rounded ${
-            selectedTool === 'fibonacci'
-              ? 'bg-blue-600 text-white'
-              : darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
-          }`}
-        >
-          피보나치
         </button>
       </div>
 
