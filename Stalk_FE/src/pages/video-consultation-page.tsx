@@ -136,7 +136,11 @@ async function waitForStreamsOnServer(
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const { data } = await axios.get(`/api/openvidu/sessions/${encodeURIComponent(sessionId)}`);
+    const token = AuthService.getAccessToken();
+    const { data } = await axios.get(
+      `/api/openvidu/sessions/${encodeURIComponent(sessionId)}`,
+      { headers: { Authorization: `Bearer ${token}` } } // ✅ JWT 포함
+    );
     const conns = data?.connections?.content ?? [];
     const types = conns.flatMap((c: any) => (c.publishers ?? []).map((p: any) => p.typeOfVideo));
     const hasCam = types.includes('CAMERA');
