@@ -8,11 +8,13 @@ import {
   CommunityCommentDto,
 } from "@/types";
 import { Dialog, Transition } from "@headlessui/react";
+import { useAuth } from "@/context/AuthContext";
 
 const KnowledgeBoardPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { postId } = useParams<{ postId: string }>();
+  const { userInfo: authUserInfo, userRole: authUserRole } = useAuth();
   // 탭은 항상 knowledge로 고정 (미사용 변수 제거)
   useState("knowledge");
   const [commentInput, setCommentInput] = useState("");
@@ -31,6 +33,58 @@ const KnowledgeBoardPage = () => {
   const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<
     number | null
   >(null);
+  // 댓글 작성자(전문가) 이름 -> 전문가 ID 매핑 (툴팁/클릭 제어용)
+  const [advisorNameToId, setAdvisorNameToId] = useState<Record<string, number>>({});
+
+  // 현재 사용자 이름 정보와 작성자 표시명이 일치하는지 검사 (name, userName, nickname 대비)
+  const isAuthorCurrentUser = (authorName: string, user: any): boolean => {
+    const tokenUser = AuthService.getUserInfo?.() || null;
+    const candidateNames = [
+      user?.userName,
+      user?.name,
+      user?.nickname,
+      user?.userId,
+      tokenUser?.userName,
+      tokenUser?.userId,
+      tokenUser?.name,
+      tokenUser?.nickname,
+      authUserInfo?.userName,
+    ]
+      .filter((v: unknown): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((s) => s.trim().toLowerCase());
+    const normalizedAuthor = (authorName || "").trim().toLowerCase();
+    return candidateNames.includes(normalizedAuthor);
+  };
+
+  // 작성자 소유 여부를 보다 견고하게 판별 (ID 우선, 이름/로그인ID 폴백)
+  const isCurrentUserPostOwner = (user: any, post: any): boolean => {
+    if (!post) return false;
+    const tokenUser = AuthService.getUserInfo?.() || null;
+    const effectiveUser = user || tokenUser;
+    if (!effectiveUser) return false;
+    const possibleAuthorIds = [post?.authorId, post?.userId, post?.authorUserId]
+      .filter((v: unknown) => v !== null && v !== undefined);
+    const possibleUserIds = [effectiveUser?.id, effectiveUser?.userId]
+      .filter((v: unknown) => v !== null && v !== undefined);
+
+    // 숫자/문자 구분 없이 문자열 비교로도 한 번 더 체크
+    const hasSameId = possibleAuthorIds.some((aid) =>
+      possibleUserIds.some((uid) => String(aid) === String(uid))
+    );
+
+    if (hasSameId) return true;
+
+    // 이름/닉네임/로그인ID로 폴백 비교
+    return isAuthorCurrentUser(post?.authorName, effectiveUser);
+  };
+
+  const canManagePost = (post: any): boolean => {
+    const tokenUser = AuthService.getUserInfo?.() || null;
+    const effectiveUser = currentUser || tokenUser || authUserInfo;
+    if (!effectiveUser || !post) return false;
+    if (effectiveUser.role === "ADMIN" || authUserRole === "ADMIN") return true;
+    return isCurrentUserPostOwner(effectiveUser, post);
+  };
 
   // 뉴스 탭 제거로 인해 항상 knowledge로 고정
   useEffect(() => {}, [searchParams]);
@@ -47,17 +101,14 @@ const KnowledgeBoardPage = () => {
     loadComments();
   }, [postId]);
 
-  // 현재 사용자 정보 로드
+  // 현재 사용자 정보 로드 (새로고침 시에도 refresh 쿠키로 복구 시도)
   useEffect(() => {
     const loadCurrentUser = async () => {
       try {
-        if (AuthService.isLoggedIn()) {
-          const userProfile = await AuthService.getUserProfile();
-          setCurrentUser(userProfile);
-        } else {
-          setCurrentUser(null);
-        }
+        const userProfile = await AuthService.getUserProfile();
+        setCurrentUser(userProfile);
       } catch (e) {
+        // 비로그인 또는 토큰 복구 실패 시 null 유지
         setCurrentUser(null);
         console.error("사용자 정보 로드 실패:", e);
       }
@@ -112,6 +163,42 @@ const KnowledgeBoardPage = () => {
       console.error("Error fetching comments:", error);
     }
   };
+
+  // 댓글 목록이 갱신될 때, 댓글 작성자 중 전문가들의 상세 페이지 존재 여부를 미리 조회해 매핑 생성
+  useEffect(() => {
+    const prefetchAdvisorMap = async () => {
+      try {
+        const advisorNames = Array.from(
+          new Set(
+            comments
+              .filter((c) => c.authorRole === "ADVISOR")
+              .map((c) => c.authorName)
+          )
+        );
+        if (advisorNames.length === 0) {
+          setAdvisorNameToId({});
+          return;
+        }
+        const response = await AuthService.publicRequest(
+          `/api/advisors?pageNo=1&pageSize=1000`
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const advisors: Array<{ id?: number; name?: string }> =
+          data?.result?.content ?? data?.result ?? [];
+        const map: Record<string, number> = {};
+        advisors.forEach((a) => {
+          if (a?.name && typeof a.id === "number") {
+            map[a.name] = a.id;
+          }
+        });
+        setAdvisorNameToId(map);
+      } catch {
+        // 무시: 전문가 목록이 없거나 오류가 나면 클릭만 비활성화됨
+      }
+    };
+    prefetchAdvisorMap();
+  }, [comments]);
 
   const handleCommentSubmit = async () => {
     if (commentInput.trim() === "" || !postId) return;
@@ -200,32 +287,7 @@ const KnowledgeBoardPage = () => {
     }
   };
 
-  // 댓글 작성자(전문가)의 프로필 이미지 클릭 시 전문가 상세 페이지로 이동
-  const handleCommentAuthorImageClick = async (
-    comment: CommunityCommentDto
-  ) => {
-    if (comment.authorRole !== "ADVISOR") return;
-    try {
-      // 여러 명일 수 있어 첫 페이지 다건 조회 후 이름 일치 탐색 (규모가 크면 개선 필요)
-      const response = await AuthService.publicRequest(
-        `/api/advisors?pageNo=1&pageSize=100`
-      );
-      if (!response.ok) {
-        navigate("/advisors-list");
-        return;
-      }
-      const data = await response.json();
-      const advisors: Array<{ id?: number; name?: string }> = data?.result?.content ?? [];
-      const matched = advisors.find((a) => a?.name === comment.authorName);
-      if (matched?.id) {
-        navigate(`/advisors-detail/${matched.id}`);
-      } else {
-        navigate("/advisors-list");
-      }
-    } catch {
-      navigate("/advisors-list");
-    }
-  };
+  // (클릭 로직은 렌더링 시점의 매핑을 사용)
 
   // 리스트 페이지와 동일한 카테고리 색상 배지 클래스 매핑
   const getCategoryBadgeClass = (category: string) => {
@@ -350,10 +412,7 @@ const KnowledgeBoardPage = () => {
                   </span>
                   <div className="flex space-x-2">
                     {/* 게시글 수정/삭제 버튼은 필요 시 소유자/관리자에만 노출 */}
-                    {currentUser &&
-                      (currentUser.role === "ADMIN" ||
-                        postDetail.authorName ===
-                          (currentUser.name ?? currentUser.userId)) && (
+                    {canManagePost(postDetail) && (
                         <>
                           <button
                             onClick={() => handleEditPost(postDetail.postId)}
@@ -375,6 +434,17 @@ const KnowledgeBoardPage = () => {
               <span className="pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200">
                 {postDetail.content}
               </span>
+              {/* 댓글 Title 윗줄 오른쪽: 게시글 삭제 버튼 */}
+              <div className="flex items-center justify-end mt-2">
+                {canManagePost(postDetail) && (
+                    <button
+                      onClick={() => handleDeletePost(postDetail.postId)}
+                      className="px-4 py-2 rounded-lg bg-gray-200 text-black hover:bg-red-600 hover:text-white transition-colors"
+                    >
+                      삭제
+                    </button>
+                  )}
+              </div>
             </div>
 
             {/* 댓글 */}
@@ -440,27 +510,54 @@ const KnowledgeBoardPage = () => {
                     <div className="flex flex-row items-center justify-between w-full">
                       {/* 댓글 작성자 이미지 & 프로필 */}
                       <div className="flex flex-row gap-3 items-center">
-                        <button
-                          type="button"
-                          onClick={() => handleCommentAuthorImageClick(comment)}
-                          className="w-10 h-10 rounded-full overflow-hidden focus:outline-none"
-                          title="전문가 상세 보기"
-                        >
-                          {comment.authorRole === "ADVISOR" &&
-                          comment.authorProfileImage ? (
-                            <img
-                              src={comment.authorProfileImage}
-                              alt={`${comment.authorName} 프로필 이미지`}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-sm font-semibold text-gray-600">
-                                {comment.authorName.charAt(0)}
-                              </span>
-                            </div>
-                          )}
-                        </button>
+                        <div className="relative group">
+                          {(() => {
+                            const isAdvisor = comment.authorRole === "ADVISOR";
+                            const matchedId = advisorNameToId[comment.authorName];
+                            const hasAdvisorDetail = isAdvisor && typeof matchedId === "number";
+                            const handleClick = () => {
+                              if (hasAdvisorDetail) {
+                                navigate(`/advisors-detail/${matchedId}`);
+                              }
+                            };
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={hasAdvisorDetail ? handleClick : undefined}
+                                  aria-disabled={!hasAdvisorDetail}
+                                  className={`w-10 h-10 rounded-full overflow-hidden focus:outline-none ${
+                                    isAdvisor
+                                      ? hasAdvisorDetail
+                                        ? "cursor-pointer"
+                                        : "cursor-not-allowed"
+                                      : "cursor-default"
+                                  }`}
+                                  title={hasAdvisorDetail ? "전문가 상세 보기" : undefined}
+                                >
+                                  {comment.authorProfileImage ? (
+                                    <img
+                                      src={comment.authorProfileImage}
+                                      alt={`${comment.authorName} 프로필 이미지`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                                      <span className="text-sm font-semibold text-gray-600">
+                                        {comment.authorName.charAt(0)}
+                                      </span>
+                                    </div>
+                                  )}
+                                </button>
+                                {isAdvisor && !hasAdvisorDetail && (
+                                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 whitespace-nowrap rounded-md bg-gray-800 text-white text-xs py-1 px-2 shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                    전문가 상세 페이지가 없습니다
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
                         <div className="flex flex-col items-start ml-2">
                           <span className="text-sm font-semibold">
                             {comment.authorName}
