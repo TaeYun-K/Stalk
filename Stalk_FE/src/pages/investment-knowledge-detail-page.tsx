@@ -8,11 +8,13 @@ import {
   CommunityCommentDto,
 } from "@/types";
 import { Dialog, Transition } from "@headlessui/react";
+import { useAuth } from "@/context/AuthContext";
 
 const KnowledgeBoardPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { postId } = useParams<{ postId: string }>();
+  const { userInfo: authUserInfo, userRole: authUserRole } = useAuth();
   // 탭은 항상 knowledge로 고정 (미사용 변수 제거)
   useState("knowledge");
   const [commentInput, setCommentInput] = useState("");
@@ -33,6 +35,56 @@ const KnowledgeBoardPage = () => {
   >(null);
   // 댓글 작성자(전문가) 이름 -> 전문가 ID 매핑 (툴팁/클릭 제어용)
   const [advisorNameToId, setAdvisorNameToId] = useState<Record<string, number>>({});
+
+  // 현재 사용자 이름 정보와 작성자 표시명이 일치하는지 검사 (name, userName, nickname 대비)
+  const isAuthorCurrentUser = (authorName: string, user: any): boolean => {
+    const tokenUser = AuthService.getUserInfo?.() || null;
+    const candidateNames = [
+      user?.userName,
+      user?.name,
+      user?.nickname,
+      user?.userId,
+      tokenUser?.userName,
+      tokenUser?.userId,
+      tokenUser?.name,
+      tokenUser?.nickname,
+      authUserInfo?.userName,
+    ]
+      .filter((v: unknown): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((s) => s.trim().toLowerCase());
+    const normalizedAuthor = (authorName || "").trim().toLowerCase();
+    return candidateNames.includes(normalizedAuthor);
+  };
+
+  // 작성자 소유 여부를 보다 견고하게 판별 (ID 우선, 이름/로그인ID 폴백)
+  const isCurrentUserPostOwner = (user: any, post: any): boolean => {
+    if (!post) return false;
+    const tokenUser = AuthService.getUserInfo?.() || null;
+    const effectiveUser = user || tokenUser;
+    if (!effectiveUser) return false;
+    const possibleAuthorIds = [post?.authorId, post?.userId, post?.authorUserId]
+      .filter((v: unknown) => v !== null && v !== undefined);
+    const possibleUserIds = [effectiveUser?.id, effectiveUser?.userId]
+      .filter((v: unknown) => v !== null && v !== undefined);
+
+    // 숫자/문자 구분 없이 문자열 비교로도 한 번 더 체크
+    const hasSameId = possibleAuthorIds.some((aid) =>
+      possibleUserIds.some((uid) => String(aid) === String(uid))
+    );
+
+    if (hasSameId) return true;
+
+    // 이름/닉네임/로그인ID로 폴백 비교
+    return isAuthorCurrentUser(post?.authorName, effectiveUser);
+  };
+
+  const canManagePost = (post: any): boolean => {
+    const tokenUser = AuthService.getUserInfo?.() || null;
+    const effectiveUser = currentUser || tokenUser || authUserInfo;
+    if (!effectiveUser || !post) return false;
+    if (effectiveUser.role === "ADMIN" || authUserRole === "ADMIN") return true;
+    return isCurrentUserPostOwner(effectiveUser, post);
+  };
 
   // 뉴스 탭 제거로 인해 항상 knowledge로 고정
   useEffect(() => {}, [searchParams]);
@@ -360,10 +412,7 @@ const KnowledgeBoardPage = () => {
                   </span>
                   <div className="flex space-x-2">
                     {/* 게시글 수정/삭제 버튼은 필요 시 소유자/관리자에만 노출 */}
-                    {currentUser &&
-                      (currentUser.role === "ADMIN" ||
-                        postDetail.authorName ===
-                          (currentUser.name ?? currentUser.userId)) && (
+                    {canManagePost(postDetail) && (
                         <>
                           <button
                             onClick={() => handleEditPost(postDetail.postId)}
@@ -385,6 +434,17 @@ const KnowledgeBoardPage = () => {
               <span className="pt-5 pb-7 text-sm text-gray-500 leading-loose text-justify border-b border-gray-200">
                 {postDetail.content}
               </span>
+              {/* 댓글 Title 윗줄 오른쪽: 게시글 삭제 버튼 */}
+              <div className="flex items-center justify-end mt-2">
+                {canManagePost(postDetail) && (
+                    <button
+                      onClick={() => handleDeletePost(postDetail.postId)}
+                      className="px-4 py-2 rounded-lg bg-gray-200 text-black hover:bg-red-600 hover:text-white transition-colors"
+                    >
+                      삭제
+                    </button>
+                  )}
+              </div>
             </div>
 
             {/* 댓글 */}

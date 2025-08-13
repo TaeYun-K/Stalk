@@ -11,14 +11,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth/signup")
 @RequiredArgsConstructor
-@Validated  // 클래스 레벨에서도 검증 활성화
+@Validated
 public class SignupController {
 
     private final SignupService signupService;
 
     @PostMapping
     public ResponseEntity<SignupResponse> signup(
-        @Validated @RequestBody SignupRequest request          // <-- @Valid 추가
+        @Validated @RequestBody SignupRequest request
     ) {
         SignupResponse response = signupService.register(request);
         return ResponseEntity.ok(response);

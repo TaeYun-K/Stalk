@@ -15,6 +15,9 @@ import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
 import com.Stalk.project.global.util.PageRequestDto;
 import com.Stalk.project.global.util.SecurityUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -24,6 +27,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -41,17 +46,31 @@ public class AdvisorProfileController {
 
     @PostMapping(value = "/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<AdvisorProfileResponseDto> createAdvisorProfile(
-        @RequestPart(value = "profileImage", required = false) MultipartFile profileImage,
-        @RequestPart("publicContact") String publicContact,
-        @RequestPart("shortIntro") String shortIntro,
-        @RequestPart("longIntro") String longIntro,
-        @RequestPart("preferredTradeStyle") String preferredTradeStyle,
-        @RequestPart(value = "consultationFee", required = false) String consultationFee,
-        @RequestPart("careerEntries") List<CareerEntryDto> careerEntries
+                    @RequestPart(value = "profileImage", required = false) MultipartFile profileImage,
+                    @RequestPart("publicContact") String publicContact,
+                    @RequestPart("shortIntro") String shortIntro,
+                    @RequestPart("longIntro") String longIntro,
+                    @RequestPart("preferredTradeStyle") String preferredTradeStyle,
+                    @RequestPart(value = "consultationFee", required = false) String consultationFee,
+                    @RequestPart("careerEntries") String careerEntriesJson  // 이 부분 변경
     ) {
         Long advisorId = SecurityUtil.getCurrentUserPrimaryId();
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
+        }
+
+        // JSON 문자열을 List<CareerEntryDto>로 변환 (업데이트와 동일한 로직 추가)
+        List<CareerEntryDto> careerEntries = null;
+        if (careerEntriesJson != null && !careerEntriesJson.trim().isEmpty()) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                objectMapper.registerModule(new JavaTimeModule());
+                careerEntries = objectMapper.readValue(careerEntriesJson,
+                                new TypeReference<List<CareerEntryDto>>() {});
+            } catch (Exception e) {
+                log.error("Failed to parse careerEntries JSON: {}", careerEntriesJson, e);
+                throw new BaseException(BaseResponseStatus.INVALID_JSON_FORMAT);
+            }
         }
 
         AdvisorProfileCreateRequestDto req = new AdvisorProfileCreateRequestDto();
@@ -67,60 +86,78 @@ public class AdvisorProfileController {
         return new BaseResponse<>(result);
     }
 
-
-    // ===== 전문가 상세 정보 수정 =====
-
-    @PutMapping("/profile")
-    @Operation(
-        summary = "전문가 상세 정보 수정",
-        description = "등록된 프로필 정보를 수정합니다. 경력 정보는 개별적으로 생성/수정/삭제가 가능합니다."
+    @PutMapping(
+                    value = "/profile",
+                    consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "프로필 수정 성공"),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청 (수정할 내용 없음 등)"),
-        @ApiResponse(responseCode = "403", description = "권한 없음"),
-        @ApiResponse(responseCode = "404", description = "등록된 프로필 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
-    })
     public BaseResponse<AdvisorProfileResponseDto> updateAdvisorProfile(
-        @Valid @ModelAttribute AdvisorProfileUpdateRequestDto request) {
-
+                    @RequestPart(value = "profileImage", required = false) MultipartFile profileImage,
+                    @RequestPart("publicContact") String publicContact,
+                    @RequestPart("shortIntro") String shortIntro,
+                    @RequestPart("longIntro") String longIntro,
+                    @RequestPart("preferredTradeStyle") String preferredTradeStyle,
+                    @RequestPart(value = "consultationFee", required = false) String consultationFee,
+                    @RequestPart("careerEntries") String careerEntriesJson
+    ) {
         log.info("PUT /api/advisors/profile - Updating advisor profile");
 
-        // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
 
-        // 2. 전문가 권한 확인
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
         }
 
-        // 3. 서비스 호출
-        AdvisorProfileResponseDto result = advisorProfileService.updateAdvisorProfile(
-            currentUserId, request);
+        // JSON 문자열을 List<CareerEntryDto>로 변환
+        List<CareerEntryDto> careerEntries = null;
+        if (careerEntriesJson != null && !careerEntriesJson.trim().isEmpty()) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                objectMapper.registerModule(new JavaTimeModule());
+                careerEntries = objectMapper.readValue(careerEntriesJson,
+                                new TypeReference<List<CareerEntryDto>>() {});
+            } catch (Exception e) {
+                log.error("Failed to parse careerEntries JSON: {}", careerEntriesJson, e);
+                throw new BaseException(BaseResponseStatus.INVALID_JSON_FORMAT);
+            }
+        }
+
+        AdvisorProfileUpdateRequestDto request = new AdvisorProfileUpdateRequestDto();
+        request.setProfileImage(profileImage); // 이 부분 수정
+        request.setPublicContact(publicContact);
+        request.setShortIntro(shortIntro);
+        request.setLongIntro(longIntro);
+        request.setPreferredTradeStyle(PreferredTradeStyle.valueOf(preferredTradeStyle));
+        if (consultationFee != null) {
+            request.setConsultationFee(Integer.valueOf(consultationFee));
+        }
+        request.setCareerEntries(careerEntries);
+
+        AdvisorProfileResponseDto result =
+                        advisorProfileService.updateAdvisorProfile(currentUserId, request);
 
         return new BaseResponse<>(result);
     }
+
 
     // ===== 자격 승인 요청 =====
 
     @PostMapping("/certificate-approval")
     @Operation(
-        summary = "자격증 승인 요청",
-        description = "새로운 자격증 승인을 요청하거나, 거절된 자격증을 재요청합니다."
+                    summary = "자격증 승인 요청",
+                    description = "새로운 자격증 승인을 요청하거나, 거절된 자격증을 재요청합니다."
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "승인 요청 접수 성공"),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청 (유효하지 않은 자격증 정보 등)"),
-        @ApiResponse(responseCode = "403", description = "권한 없음"),
-        @ApiResponse(responseCode = "404", description = "이전 요청을 찾을 수 없음 (재요청 시)"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
+                    @ApiResponse(responseCode = "200", description = "승인 요청 접수 성공"),
+                    @ApiResponse(responseCode = "400", description = "잘못된 요청 (유효하지 않은 자격증 정보 등)"),
+                    @ApiResponse(responseCode = "403", description = "권한 없음"),
+                    @ApiResponse(responseCode = "404", description = "이전 요청을 찾을 수 없음 (재요청 시)"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<CertificateApprovalResponseDto> requestCertificateApproval(
-        @Valid @RequestBody AdvisorCertificateApprovalRequestDto request) {
+                    @Valid @RequestBody AdvisorCertificateApprovalRequestDto request) {
 
         log.info("POST /api/advisors/certificate-approval - Processing certificate approval request, isReRequest: {}",
-            request.isReRequest());
+                        request.isReRequest());
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
@@ -132,7 +169,7 @@ public class AdvisorProfileController {
 
         // 3. 서비스 호출
         CertificateApprovalResponseDto result = advisorProfileService.requestCertificateApproval(
-            currentUserId, request);
+                        currentUserId, request);
 
         return new BaseResponse<>(result);
     }
@@ -141,27 +178,27 @@ public class AdvisorProfileController {
 
     @GetMapping("/certificate-approval")
     @Operation(
-        summary = "승인 요청 이력 조회",
-        description = "현재 전문가의 자격증 승인 요청 이력을 페이지별로 조회합니다."
+                    summary = "승인 요청 이력 조회",
+                    description = "현재 전문가의 자격증 승인 요청 이력을 페이지별로 조회합니다."
     )
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "승인 이력 조회 성공",
-            content = @Content(schema = @Schema(implementation = CursorPage.class))
-        ),
-        @ApiResponse(responseCode = "403", description = "권한 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
+                    @ApiResponse(
+                                    responseCode = "200",
+                                    description = "승인 이력 조회 성공",
+                                    content = @Content(schema = @Schema(implementation = CursorPage.class))
+                    ),
+                    @ApiResponse(responseCode = "403", description = "권한 없음"),
+                    @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<CursorPage<ApprovalHistoryResponseDto>> getApprovalHistory(
-        @Parameter(description = "페이지 번호", example = "1")
-        @RequestParam(defaultValue = "1") int pageNo,
+                    @Parameter(description = "페이지 번호", example = "1")
+                    @RequestParam(defaultValue = "1") int pageNo,
 
-        @Parameter(description = "페이지 크기", example = "10")
-        @RequestParam(defaultValue = "10") int pageSize) {
+                    @Parameter(description = "페이지 크기", example = "10")
+                    @RequestParam(defaultValue = "10") int pageSize) {
 
         log.info("GET /api/advisors/certificate-approval - Getting approval history, pageNo: {}, pageSize: {}",
-            pageNo, pageSize);
+                        pageNo, pageSize);
 
         // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
@@ -176,7 +213,7 @@ public class AdvisorProfileController {
 
         // 4. 서비스 호출
         CursorPage<ApprovalHistoryResponseDto> result = advisorProfileService.getApprovalHistory(
-            currentUserId, pageRequest);
+                        currentUserId, pageRequest);
 
         return new BaseResponse<>(result);
     }
@@ -185,12 +222,12 @@ public class AdvisorProfileController {
 
     @GetMapping("/profile/status")
     @Operation(
-        summary = "프로필 상태 확인",
-        description = "현재 전문가의 프로필 등록 상태를 확인합니다."
+                    summary = "프로필 상태 확인",
+                    description = "현재 전문가의 프로필 등록 상태를 확인합니다."
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "상태 조회 성공"),
-        @ApiResponse(responseCode = "403", description = "권한 없음")
+                    @ApiResponse(responseCode = "200", description = "상태 조회 성공"),
+                    @ApiResponse(responseCode = "403", description = "권한 없음")
     })
     public BaseResponse<ProfileStatusResponseDto> getProfileStatus() {
 
@@ -206,9 +243,9 @@ public class AdvisorProfileController {
 
         // 3. 상태 정보 생성 (간단한 상태만 반환)
         ProfileStatusResponseDto status = ProfileStatusResponseDto.builder()
-            .advisorId(currentUserId)
-            .message("프로필 상태 조회 성공")
-            .build();
+                        .advisorId(currentUserId)
+                        .message("프로필 상태 조회 성공")
+                        .build();
 
         return new BaseResponse<>(status);
     }

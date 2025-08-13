@@ -316,7 +316,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
     fetchExpert();
   }, [advisorId]);
 
-  // 전체 등록 처리 함수 (FormData로 전송)
+  // 전체 등록 처리 함수 (FormData로 전송) - 수정된 버전
   const handleSubmitAll = async () => {
     try {
       console.log("Starting update process...");
@@ -339,7 +339,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         return;
       }
 
-      // 거래 스타일 정규화 (한글 값이 들어왔을 가능성 방지)
+      // 거래 스타일 정규화
       const normalizeTradeStyle = (
         value: string | undefined
       ): PreferredTradeStyle | undefined => {
@@ -383,7 +383,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
           const base = initialCareerMap[apiId];
           return {
             id: apiId,
-            action: "DELETE",
+            action: "DELETE" as const,
             title: base?.company ?? "",
             description: base?.position ?? "",
             startedAt: base?.startDate
@@ -408,7 +408,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         })
         .map((e) => ({
           id: e.apiId,
-          action: "UPDATE",
+          action: "UPDATE" as const,
           title: e.company,
           description: e.position,
           startedAt: e.startDate.replace(/\./g, "-"),
@@ -418,7 +418,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
       const createEntriesAll: CareerPayload[] = careerEntries
         .filter((e) => e.apiId === undefined)
         .map((e) => ({
-          action: "CREATE",
+          action: "CREATE" as const,
           title: e.company,
           description: e.position,
           startedAt: e.startDate.replace(/\./g, "-"),
@@ -431,17 +431,16 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         ...createEntriesAll,
       ];
 
-      // === 여기부터 FormData 조립 ===
+      // === FormData 조립 (수정된 부분) ===
       const form = new FormData();
 
-      // 파일(선택)
+      // 파일 (선택)
       if (profileImage) {
-        // 백엔드 @RequestPart 이름에 맞춰 키를 조정해줘야 함. (예: "profileImage", "image", ...)
-        form.append("profileImage", profileImage, profileImage.name);
+        form.append("profileImage", profileImage);
       }
 
-      // 단순 문자열/숫자 필드
-      form.append("publicContact", expertContact); // 예: @RequestPart("publicContact") String
+      // 단순 문자열/숫자 필드들을 @RequestParam으로 전송
+      form.append("publicContact", expertContact);
       form.append("shortIntro", experTitle.trim());
       form.append("longIntro", expertIntroduction.trim());
       form.append("preferredTradeStyle", normalizedStyle ?? "MID_LONG");
@@ -449,32 +448,38 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         form.append("consultationFee", consultationFee);
       }
 
-      // 경력 리스트(JSON Part) — Spring에선 @RequestPart("careerEntries")로 받기 좋게 JSON으로 보냄
-      const careerEntriesJson = new Blob(
-        [
-          JSON.stringify(
-            careerChanges.length > 0 ? careerChanges : createEntriesAll
-          ),
-        ],
-        { type: "application/json" }
+      // 경력 리스트를 JSON 문자열로 변환하여 전송
+      // Blob 대신 단순 문자열로 전송
+      const careerEntriesJsonString = JSON.stringify(
+        careerChanges.length > 0 ? careerChanges : createEntriesAll
       );
-      form.append("careerEntries", careerEntriesJson);
-
-      // (선택) 기존 이미지 URL을 유지하려면, 파일을 안 보낼 때만 서버에서 유지하도록 처리
-      // 필요시 아래 라인을 사용:
-      // if (!profileImage && profileImageUrl) form.append("profileImageUrl", profileImageUrl);
+      form.append("careerEntries", careerEntriesJsonString);
 
       console.log("Submitting profile (multipart/form-data)...");
-      const response = await advisorService.updateProfile(form);
-      console.log("Profile updated successfully:", response);
+
+      // advisorService.updateProfile 메서드가 FormData를 받도록 수정되어 있는지 확인
+      const response = await fetch("/api/advisors/profile", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // Content-Type은 자동으로 설정됨 (FormData 사용시)
+        },
+        body: form,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "프로필 수정에 실패했습니다.");
+      }
+
+      const responseData = await response.json();
+      console.log("Profile updated successfully:", responseData);
 
       alert("전문가 프로필이 성공적으로 수정되었습니다.");
 
-      const returnedId =
-        (response && (response.id as string | number | undefined)) ?? undefined;
-      const targetId = returnedId ?? advisorId;
-      if (targetId) {
-        navigate(`/advisors-detail/${targetId}`);
+      const returnedId = responseData?.result?.id ?? advisorId;
+      if (returnedId) {
+        navigate(`/advisors-detail/${returnedId}`);
       } else {
         navigate("/experts");
       }
@@ -484,12 +489,13 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         error instanceof Error
           ? error.message
           : "수정 중 오류가 발생했습니다. 다시 시도해주세요.";
+
       if (message.includes("401") || message.includes("인증")) {
         alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
         navigate("/login");
         return;
       }
-      alert("수정 중 오류가 발생했습니다. 다시 시도해주세요.");
+      alert(message);
     }
   };
 

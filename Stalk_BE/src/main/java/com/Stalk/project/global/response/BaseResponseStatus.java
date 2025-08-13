@@ -32,6 +32,8 @@ public enum BaseResponseStatus {
   DATABASE_CONSTRAINT_VIOLATION(HttpStatus.CONFLICT, false, 409, "데이터베이스 제약 조건을 위반했습니다. "
       + "(유니크 키 중복, 외래 키 위반, NOT NULL 위반 등에서 발생합니다.)"),
 
+  INVALID_JSON_FORMAT(HttpStatus.NOT_FOUND, false, 410, "유효하지 않은 JSON 형식입니다."),
+
   /**
    * 500: 기타 에러.
    */
