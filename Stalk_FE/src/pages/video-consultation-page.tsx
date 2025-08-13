@@ -96,26 +96,36 @@ const DEFAULT_VIDEO_CONFIG = {
 // ✅ OV connection.data 안전 파서 (JSON/legacy 모두 흡수)
 function parseOvData(raw: string): any {
   if (!raw) return {};
+
+  // A. "clientDataJSON%/%serverDataJSON" 포맷 우선 처리
+  if (raw.includes('%/%')) {
+    const [clientPart] = raw.split('%/%');
+    try { return JSON.parse(clientPart); } catch {}
+  }
+
+  // B. 통짜 JSON 포맷 처리
   try {
     const obj = JSON.parse(raw);
-    // { serverData: "...json..." } 케이스
-    if (obj?.serverData && typeof obj.serverData === 'string') {
-      try { return JSON.parse(obj.serverData); } catch { /* noop */ }
+    if (obj?.clientData && typeof obj.clientData === 'string') {
+      try { return JSON.parse(obj.clientData); } catch {}
     }
-    // 바로 { ownerId, ... } 케이스
-    if (obj && obj.ownerId) return obj;
-  } catch { /* fallthrough */ }
+    if (obj?.serverData && typeof obj.serverData === 'string') {
+      try { return JSON.parse(obj.serverData); } catch {}
+    }
+    if (obj && (obj.ownerId || obj.kind)) return obj;
+  } catch {}
 
-  // "clientData=...&serverData=..." 같은 포맷 방어
-  const m = /serverData=([^,&]+)/.exec(raw);
-  if (m) {
-    try { return JSON.parse(decodeURIComponent(m[1])); } catch { /* noop */ }
-  }
+  // C. 레거시 key=value 포맷 방어
+  const mClient = /clientData=([^,&]+)/.exec(raw);
+  if (mClient) { try { return JSON.parse(decodeURIComponent(mClient[1])); } catch {} }
+  const mServer = /serverData=([^,&]+)/.exec(raw);
+  if (mServer) { try { return JSON.parse(decodeURIComponent(mServer[1])); } catch {} }
+
   return {};
 }
 
-const TIMER_INTERVAL_MS = 1000;
 
+const TIMER_INTERVAL_MS = 1000;
 
 
 const VideoConsultationPage: React.FC = () => {
@@ -172,7 +182,64 @@ const VideoConsultationPage: React.FC = () => {
   const [screenSession, setScreenSession] = useState<Session | null>(null);
   const [screenPublisher, setScreenPublisher] = useState<Publisher | null>(null);
   const isMyScreenActive = () => !!screenPublisher || !!screenSession;
+  const screenConnectingRef = useRef(false);
+  const isCleaningScreenRef = useRef(false);
+  const myScreenConnectionIdRef = useRef<string | null>(null);
 
+  // 안전하게 트랙 정지
+  const stopTracks = (pub?: Publisher | null) => {
+    try {
+      const ms = pub?.stream?.getMediaStream?.();
+      ms?.getTracks?.().forEach(t => {
+        try { t.stop(); } catch {}
+      });
+    } catch {}
+  };
+
+  const cleanupScreenShare = async () => {
+    if (isCleaningScreenRef.current) return;
+    isCleaningScreenRef.current = true;
+
+    try {
+      // 1) 퍼블리셔가 있으면 우선 unpublish
+      if (screenPublisher) {
+        try {
+          // second connection 우선
+          if (screenSession) {
+            await screenSession.unpublish(screenPublisher);
+          } else if (session) {
+            // same-connection 방식 대비 (혹시 토글에서 같은 세션 퍼블리시한 경우)
+            await session.unpublish(screenPublisher);
+          }
+        } catch (e) {
+          // unpublish 실패해도 트랙은 반드시 정지
+          console.warn("[cleanupScreenShare] unpublish failed:", e);
+        } finally {
+          stopTracks(screenPublisher);
+        }
+      }
+
+      // 2) 두 번째 세션을 쓰는 경우 세션 종료
+      if (screenSession) {
+        try { await screenSession.disconnect(); } catch (e) {
+          console.warn("[cleanupScreenShare] screenSession.disconnect failed:", e);
+        }
+      }
+
+      // 3) OpenVidu 인스턴스는 세션 끊으면 같이 정리됨 (명시 해제는 선택)
+      // try { (screenOv as any)?.off?.(); } catch {}
+
+      // 4) 상태 초기화
+      setScreenPublisher(null);
+      setScreenSession(null);
+      setScreenOv(null);
+      myScreenConnectionIdRef.current = null; 
+      setIsScreenSharing(false);
+
+    } finally {
+      isCleaningScreenRef.current = false;
+    }
+  };
 
   // 참가자 역할 구분을 위한 함수
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -277,6 +344,17 @@ const VideoConsultationPage: React.FC = () => {
 
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
+          const meta = parseOvData(event.stream.connection.data); 
+          const isScreen = event.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+          const mine = meta?.ownerId && meta.ownerId === userInfo?.userId;
+
+          const fromThisConnection = session.connection?.connectionId === event.stream.connection.connectionId;
+          const fromMySecondConn = myScreenConnectionIdRef.current === event.stream.connection.connectionId;
+          if (isScreen && (mine || fromThisConnection || fromMySecondConn))  {
+            console.log('[OV] skip subscribe for recording-only screen stream');
+            return;
+          }
+  
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscriber 스트림:', subscriber.stream.getMediaStream());
@@ -337,6 +415,9 @@ const VideoConsultationPage: React.FC = () => {
         });
 
         session.on('connectionCreated', (event) => {
+          const meta = parseOvData(event.connection.data);
+          if (meta?.kind === 'screen') return; // ✅ 화면공유 connection은 입장 알림/리스트 제외
+
           const raw = event.connection.data;
           const userData = JSON.parse(raw.split("%/%")[0]);
           const username = userData.userData || "익명";
@@ -573,20 +654,28 @@ const VideoConsultationPage: React.FC = () => {
 
   // 화면 공유 토글 함수
   const toggleScreenShare = async () => {
-    if (!isScreenSharing && ov && session) {
-      try {
-        const screenPublisher = await ov.initPublisherAsync(undefined, {
+    if (!ov || !session) return;
+
+    try {
+      if (!screenPublisher) {
+        const pub = await ov.initPublisherAsync(undefined, {
           videoSource: "screen",
           publishAudio: false,
           publishVideo: true,
         });
-        await session.publish(screenPublisher);
+        await session.publish(pub);
+        setScreenPublisher(pub);
         setIsScreenSharing(true);
-      } catch (error) {
-        console.error("Error sharing screen:", error);
+      } else {
+        try { await session.unpublish(screenPublisher); } catch {}
+        try { screenPublisher.stream.getMediaStream().getTracks().forEach(t => t.stop()); } catch {}
+        setScreenPublisher(null);
+        setIsScreenSharing(false);
+        await cleanupScreenShare();
       }
-    } else {
-      setIsScreenSharing(false);
+    } catch (error) {
+      console.error("Error toggling screen share:", error);
+      await cleanupScreenShare();
     }
   };
 
@@ -788,84 +877,86 @@ const VideoConsultationPage: React.FC = () => {
       alert("세션 정보가 없습니다.");
       return;
     }
-    if (isRecording) return; // 중복 클릭 방지
+    if (isRecording) return;
+    if (screenConnectingRef.current) return;
 
     try {
-
       const userId = userInfo?.userId ?? '0';
       const name = userInfo?.name ?? 'unknown';
       const token = AuthService.getAccessToken();
 
-      // 1) 화면공유 토큰 발급 (두 번째 Connection용)
-      //    - 이미 누군가 화면공유 중이면 이 단계는 생략해도 됨
-      if (!hasAnyScreen(session)) {
+      // 1) 화면공유 연결(두 번째 connection) 필요하면 한 번만 생성
+      if (!isMyScreenActive() && !hasAnyScreen(session)) {
+        screenConnectingRef.current = true;
+
+        // ✅ 컨트롤러 경로 통일: /connections  +  kind=screen
         const tokenRes = await axios.post(
           `/api/recordings/sessions/${encodeURIComponent(ovSessionId)}/connections`,
           {},
-          { 
+          {
             headers: { Authorization: `Bearer ${token}` },
-            params: {kind: 'screen', userId, name}
+            params: { kind: 'screen', userId, name },
           }
         );
         const screenToken = tokenRes?.data?.result?.token ?? tokenRes?.data?.data?.token;
         if (!screenToken) throw new Error("화면공유 토큰 발급 실패");
 
-        // 2) 두 번째 OV/Session 생성 및 연결
         const ov2 = new OpenVidu();
         const sess2 = ov2.initSession();
+
+        // ✅ screen connection에도 동일 메타데이터 전달
         await sess2.connect(
           screenToken,
-          JSON.stringify({
-            ownerId: userId,
-            ownerName: name,
-            kind: 'screen' // ✅ cam과 구분
-          })
+          JSON.stringify({ ownerId: userId, ownerName: name, kind: 'screen' })
         );
+        myScreenConnectionIdRef.current = sess2.connection?.connectionId || null;
         setScreenOv(ov2);
         setScreenSession(sess2);
 
-        // 3) 화면공유 퍼블리시 (이 클릭 컨텍스트 안에서 실행되어야 함)
-        //    사용자가 브라우저 선택 팝업에서 취소하면 throw → 아래 catch로 이동
         const pub = await ov2.initPublisherAsync(undefined, {
           videoSource: "screen",
           mirror: false,
-          // audioSource: "screen" // 필요 시 브라우저 지원 여부 확인 후 사용
+          // audioSource: "screen" // 브라우저 지원 시 필요하면 ON
         });
         await sess2.publish(pub);
         setScreenPublisher(pub);
         console.log("[recording] screen published on second connection");
+
+        // 트랙이 live인지 즉시 확인
+        const vt = pub.stream.getMediaStream()?.getVideoTracks?.()[0];        
+        if (!vt || vt.readyState !== 'live') {
+          throw new Error('Screen track not live');
+        }
+
+        await axios.post(`/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`, {}, { headers: { Authorization: `Bearer ${token}` }});
+
+        // (선택) 레이스 방지용 짧은 대기
+        await new Promise((r) => setTimeout(r, 120));
       } else {
-        console.log("[recording] some screen share already present → skip creating second connection");
+        console.log("[recording] screen exists → skip creating second connection");
       }
 
-      // 4) 서버 녹화 시작 (COMPOSED + PIP/CUSTOM은 서버 설정대로)
+      // 2) 녹화 시작 (불필요 params 제거)
       const recRes = await axios.post(
-        `/api/recordings/start/${encodeURIComponent(ovSessionId)}?consultationId=${encodeURIComponent(
-          String(consultationId)
-        )}`,
+        `/api/recordings/start/${encodeURIComponent(ovSessionId)}?consultationId=${encodeURIComponent(String(consultationId))}`,
         {},
-        { 
-          headers: { Authorization: `Bearer ${token}` } ,
-        }
-        
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const recId = (recRes?.data?.data?.recordingId as string) || ovSessionId; // fallback
+      const recId = (recRes?.data?.data?.recordingId as string) || ovSessionId;
       setRecordingId(recId);
       setIsRecording(true);
-      // toast.success?.("녹화를 시작했어요. (화면+웹캠)");
 
     } catch (e: any) {
-      // 사용자가 화면 선택 팝업 취소한 경우 NotAllowedError 가능
       if (e?.name === "NotAllowedError" || String(e?.message || "").includes("Permission")) {
         alert("화면 공유가 취소되어 녹화를 시작하지 않았습니다.");
       } else {
         alert("녹화 시작에 실패했습니다.");
       }
       console.error("[recording] start failed:", e);
-
-      // 화면공유 세션이 일부만 열렸다면 정리
       cleanupScreenShare();
+    } finally {
+      screenConnectingRef.current = false;
     }
   };
 
@@ -1491,7 +1582,15 @@ const VideoConsultationPage: React.FC = () => {
             <div className="h-full grid grid-cols-2 gap-2">
                 {/* 구독자 비디오 렌더링 */}
                 {subscribers.length > 0 ? (
-                  subscribers.map((subscriber, index) => {
+                  subscribers
+                  .filter(sub => {
+                    const meta = parseOvData(sub.stream.connection.data);
+                    const isScreen = sub.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+                    const mine = meta?.ownerId === userInfo?.userId;
+                    const fromMySecondConn = myScreenConnectionIdRef.current === sub.stream.connection.connectionId;
+                    return !(isScreen && (mine || fromMySecondConn));
+                  })
+                  .map((subscriber, index) => {
                     const name = getParticipantName(subscriber);
                     const role = getParticipantRole(subscriber);
                     const roleName = getRoleDisplayName(role);
