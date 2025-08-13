@@ -1173,7 +1173,7 @@ const AdvisorsDetailPage: React.FC = () => {
                         {/* 전문가 본인인 경우 수정/삭제 버튼 */}
                         <button
                           onClick={() =>
-                            navigate(`/expert-introduction-update/${advisorId}`)
+                            id && navigate(`/advisors-introduction-update/${parseInt(id)}`)
                           }
                           className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
                         >
