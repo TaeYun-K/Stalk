@@ -1,1 +1,29 @@
-node_modules
+# IDE / Editor
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Node.js
+node_modules/
+dist/
+
+# Java / Spring Boot
+target/
+build/
+
+# Environment & secrets
+.env
+*.key
+*.pem
+
+# Temporary files
+tmp/
+*.tmp
