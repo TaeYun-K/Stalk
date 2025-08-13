@@ -43,6 +43,8 @@ import InvestmentKnowledgeListPage from "@/pages/investment-knowledge-list-page"
 import WritePostPage from "@/pages/write-post-page";
 import InvestmentKnowledgeDetailPage from "@/pages/investment-knowledge-detail-page";
 import MyPage from "@/pages/my-page";
+import MyReviewsPage from "@/pages/my-reviews-page";
+import AdvisorReviewsPage from "@/pages/advisor-reviews-page";
 
 import SearchPage from "@/pages/search-page";
 import VideoConsultationPage from "@/pages/video-consultation-page";
@@ -125,6 +127,7 @@ const AppContent: React.FC = () => {
 
               {/* 마이페이지 관련 path */}
               <Route path="/mypage" element={<MyPage />} />
+              <Route path="/my-reviews" element={<MyReviewsPage />} />
 
               {/* 전문가 관련 path */}
               <Route path="/advisors-list" element={<AdvisorsListPage />} />
@@ -132,6 +135,7 @@ const AppContent: React.FC = () => {
                 path="/advisors-detail/:id"
                 element={<AdvisorstDetailPage />}
               />
+              <Route path="/advisors/:advisorId/reviews" element={<AdvisorReviewsPage />} />
               <Route
                 path="/advisors-introduction-create/:advisorId"
                 element={<AdvisorsIntroductionCreatePage />}
