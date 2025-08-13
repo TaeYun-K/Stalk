@@ -32,50 +32,45 @@ public class VideoRecordingController {
 
     private final OpenVidu openVidu;
     private final VideoRecordingService recordingService;
-    @Operation(
-        summary = "화면공유용 토큰 발급",
-        description = "같은 세션에 화면공유를 별도 Connection으로 publish 하기 위한 토큰을 발급합니다(106 오류 방지)."
-    )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "발급 성공"),
-        @ApiResponse(responseCode = "404", description = "세션 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
-    })
-    @PostMapping("/sessions/{sessionId}/connections/screen")
-    public ResponseEntity<BaseResponse<Map<String, String>>> createScreenShareToken(
-        @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
-        @RequestParam String userId, @RequestParam String name
+
+    @Operation(summary = "OV 연결 토큰 발급", description = "웹캠/화면공유 모두 공통. ownerId/ownerName/kind를 serverData로 저장")
+    @PostMapping("/sessions/{sessionId}/connections")
+    public ResponseEntity<BaseResponse<Map<String, String>>> createConnectionToken(
+            @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
+            @Parameter(description = "cam | screen") @RequestParam(defaultValue = "cam") String kind,
+            @Parameter(description = "유저 ID(문자)") @RequestParam String userId,
+            @Parameter(description = "유저 이름") @RequestParam String name
     ) {
         try {
-            // 세션 존재 확인 (없으면 404)
             Session s = openVidu.getActiveSession(sessionId);
             if (s == null) {
                 return ResponseEntity.status(404)
-                    .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
+                        .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
             }
 
-            String dataJson = String.format("{\"kind\":\"screen\",\"ownerId\":\"%s\",\"ownerName\":\"%s\"}", userId, name);
+            // 서버 메타데이터(두 연결 모두 동일 스키마)
+            String dataJson = String.format("{\"ownerId\":\"%s\",\"ownerName\":\"%s\",\"kind\":\"%s\"}", userId, name, kind);
 
             ConnectionProperties props = new ConnectionProperties.Builder()
-                .type(ConnectionType.WEBRTC)
-                .role(OpenViduRole.PUBLISHER)
-                .data(dataJson)
-                .build();
+                    .type(ConnectionType.WEBRTC)
+                    .role(OpenViduRole.PUBLISHER)
+                    .data(dataJson) // <= 핵심
+                    .build();
 
             Connection connection = s.createConnection(props);
             return ResponseEntity.ok(new BaseResponse<>(Map.of("token", connection.getToken())));
 
         } catch (Exception e) {
-            log.error("🔴 화면공유 토큰 발급 실패: {}", e.getMessage(), e);
+            log.error("🔴 토큰 발급 실패: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
-                .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
+                    .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
     @Operation(summary = "녹화 시작")
     @PostMapping("/start/{sessionId}")
     public ResponseEntity<BaseResponse<Void>> startRecording(@PathVariable String sessionId,
-                                                             @RequestParam Long consultationId) {
+                                                            @RequestParam Long consultationId) {
         try {
             RecordingProperties properties = new RecordingProperties.Builder()
                 .outputMode(Recording.OutputMode.COMPOSED)
