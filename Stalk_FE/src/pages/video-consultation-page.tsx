@@ -93,7 +93,29 @@ const DEFAULT_VIDEO_CONFIG = {
   mirror: true,
 };
 
+// ✅ OV connection.data 안전 파서 (JSON/legacy 모두 흡수)
+function parseOvData(raw: string): any {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    // { serverData: "...json..." } 케이스
+    if (obj?.serverData && typeof obj.serverData === 'string') {
+      try { return JSON.parse(obj.serverData); } catch { /* noop */ }
+    }
+    // 바로 { ownerId, ... } 케이스
+    if (obj && obj.ownerId) return obj;
+  } catch { /* fallthrough */ }
+
+  // "clientData=...&serverData=..." 같은 포맷 방어
+  const m = /serverData=([^,&]+)/.exec(raw);
+  if (m) {
+    try { return JSON.parse(decodeURIComponent(m[1])); } catch { /* noop */ }
+  }
+  return {};
+}
+
 const TIMER_INTERVAL_MS = 1000;
+
 
 
 const VideoConsultationPage: React.FC = () => {
@@ -341,11 +363,17 @@ const VideoConsultationPage: React.FC = () => {
             setChatMessages((prev) => [...prev, msg]);
         });
 
+        const ownerId = userInfo?.userId ?? '0';
+        const ownerName = userInfo?.name ?? 'unknown';
+
         // 사용자 정보를 포함한 연결 데이터 준비
         const connectionData = {
           role: userInfo?.role || 'USER',
           userData: userInfo?.name || ('익명'),
-          userId: userInfo?.userId || '0'
+          userId: userInfo?.userId || '0',
+          ownerId,                  // 🔑 그룹핑/녹화용 공통 키
+          ownerName,                // 🔑 표시용
+          kind: 'cam'               // 🔑 cam|screen 구분
         };
 
         // 세션에 연결
@@ -744,20 +772,12 @@ const VideoConsultationPage: React.FC = () => {
 
   // 이미 화면공유(본인/상대) 존재하는지 체크
   const hasAnyScreen = (sess?: Session | null) =>
-    !!sess?.streamManagers?.some((sm: any) => sm?.stream?.typeOfVideo === "SCREEN");
-
-  // 화면공유 세션/퍼블리셔 정리 (종료 시 호출)
-  const cleanupScreenShare = () => {
-    try {
-      screenPublisher?.stream?.getMediaStream()?.getTracks()?.forEach(t => t.stop());
-    } catch {}
-    try {
-      screenSession?.disconnect();
-    } catch {}
-    setScreenPublisher(null);
-    setScreenSession(null);
-    setScreenOv(null);
-  };
+  !!sess?.streamManagers?.some((sm: any) => {
+    const st = sm?.stream;
+    if (!st) return false;
+    const meta = parseOvData(st?.connection?.data);
+    return meta?.kind === 'screen' || st?.typeOfVideo === 'SCREEN';
+  });
 
   // 녹화 시작
   const handleStartRecording = async () => {
@@ -781,7 +801,7 @@ const VideoConsultationPage: React.FC = () => {
           {},
           { 
             headers: { Authorization: `Bearer ${token}` },
-            params: {userId, name}
+            params: {kind: 'screen', userId, name}
           }
         );
         const screenToken = tokenRes?.data?.result?.token ?? tokenRes?.data?.data?.token;
@@ -790,7 +810,14 @@ const VideoConsultationPage: React.FC = () => {
         // 2) 두 번째 OV/Session 생성 및 연결
         const ov2 = new OpenVidu();
         const sess2 = ov2.initSession();
-        await sess2.connect(screenToken);
+        await sess2.connect(
+          screenToken,
+          JSON.stringify({
+            ownerId: userId,
+            ownerName: name,
+            kind: 'screen' // ✅ cam과 구분
+          })
+        );
         setScreenOv(ov2);
         setScreenSession(sess2);
 
@@ -814,7 +841,10 @@ const VideoConsultationPage: React.FC = () => {
           String(consultationId)
         )}`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` } ,
+        }
+        
       );
 
       const recId = (recRes?.data?.data?.recordingId as string) || ovSessionId; // fallback
