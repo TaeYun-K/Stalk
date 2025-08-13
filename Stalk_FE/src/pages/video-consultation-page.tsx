@@ -1523,7 +1523,7 @@ const VideoConsultationPage: React.FC = () => {
               <div className="flex-1 p-4 min-w-0 overflow-hidden">
                 <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
                   <div className="flex-1 relative overflow-y-auto chart-scrollbar">
-                    {selectedStock ? (
+                    {selectedStock || currentChart ? (
                       <div
                         style={{
                           position: 'relative',
@@ -1535,7 +1535,7 @@ const VideoConsultationPage: React.FC = () => {
                         <ChartErrorBoundary>
                           <div style={{ width: '100%', minHeight: '600px', minWidth: 0 }}>
                             <StockChart
-                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: '' } : null)}
+                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: currentChart.name ?? '' } : null)}
                               darkMode={true}
                               session={session}
                               chartInfo={currentChart ?? undefined}
