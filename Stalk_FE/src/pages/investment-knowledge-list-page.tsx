@@ -151,7 +151,7 @@ const InvestmentKnowledgeListPage = () => {
       {/* 상단 웰컴 이미지 */}
       <div className="relative w-full h-60 overflow-hidden flex justify-center">
         <img
-          src="/public/investment-knowledge-list-image.jpeg"
+          src="/investment-knowledge-list-image.jpeg"
           alt=""
           className="w-full h-full object-cover" />
         <div className="absolute gap-3 flex flex-col justify-center items-center bg-black/50 w-full h-full text-4xl font-bold text-white">
@@ -160,6 +160,15 @@ const InvestmentKnowledgeListPage = () => {
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-40">
+        <div className='text-left bg-gray-100 rounded-lg p-8 mt-10 space-y-2'>
+          <p className='text-lg font-bold'>📌 투자 지식 iN 이용 안내</p>
+          <ul className='list-disc list-inside ml-2 space-y-1'>
+            <li>답변은 <span className='font-bold'>전문가의 자율 참여</span>로 제공됩니다.</li>
+            <li>답변이 없거나 지연될 수 있습니다.</li>
+            <li><span className='font-bold'>정확하고 신속한 자문</span>
+            이 필요하다면, 전문가의 <span className='font-bold cursor-pointer hover:underline hover:text-red-600' onClick={() => navigate('/advisors-list')}>유료상담</span>을 이용해 주세요.</li>
+          </ul>
+        </div>
         <div className="flex flex-col gap-8">
           <div className="pt-16 flex-1">
               <div className="space-y-6">
