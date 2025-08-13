@@ -16,7 +16,7 @@ const InvestmentKnowledgeListPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [pageNo, setPageNo] = useState(1);
   const [hasNext, setHasNext] = useState(true);
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, userRole } = useAuth();
 
 
   const fetchKnowledgePosts = async (
@@ -214,15 +214,15 @@ const InvestmentKnowledgeListPage = () => {
                       </Transition>
                     </div>
                   </Listbox>
+                  {isLoggedIn && userRole === 'USER' ? (
                   <button
                     type="button"
-                    disabled={!isLoggedIn}
                     onClick={() => isLoggedIn && setMyOnly(prev => !prev)}
                     className={`${myOnly ? 'text-gray-800 border-b-2 border-gray-800 pb-0.5' : 'text-gray-500 hover:text-gray-700'} ${!isLoggedIn ? 'cursor-not-allowed text-gray-300' : ''}`}
-                    title={!isLoggedIn ? '로그인 후 이용 가능합니다.' : '내가 작성한 글만 보기'}
                   >
                     My Posts
                   </button>
+                  ) : null}
                 </div>
                 {/* 오른쪽: 정렬 버튼 + 글쓰기 */}
                 <div className="flex items-center gap-6">
@@ -246,7 +246,7 @@ const InvestmentKnowledgeListPage = () => {
                       답글순
                     </button>
                   </div>
-                  {isLoggedIn ? (
+                  {isLoggedIn && userRole === 'USER' ? (
                     <button
                       onClick={() => navigate('/write-post')}
                       className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
