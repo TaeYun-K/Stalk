@@ -187,7 +187,20 @@ class AuthService {
       token ? token.substring(0, 20) + "..." : "null"
     );
     if (!token) {
-      throw new Error("인증이 필요합니다.");
+      // 토큰이 메모리/스토리지에 없더라도 refresh 쿠키가 있으면 갱신 시도
+      try {
+        console.log("No access token found. Attempting refresh using cookie...");
+        const newToken = await this.refreshToken();
+        if (newToken) {
+          token = newToken;
+          console.log("Access token acquired via refresh.");
+        } else {
+          throw new Error("인증이 필요합니다.");
+        }
+      } catch (e) {
+        console.error("Failed to obtain token via refresh:", e);
+        throw new Error("인증이 필요합니다.");
+      }
     }
 
     // 토큰이 만료되었거나 곧 만료될 예정인 경우에만 refresh
