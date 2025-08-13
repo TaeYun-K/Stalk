@@ -108,8 +108,8 @@ const Sidebar: React.FC = () => {
       // ADMIN은 알림과 자격인증만 보이게
       return item.id === "notifications" || item.id === "certification";
     } else {
-      // USER, ADVISOR는 자격인증을 제외한 모든 메뉴
-      return item.id !== "certification";
+      // USER, ADVISOR는 자격인증과 보유종목을 제외
+      return item.id !== "certification" && item.id !== "holdings";
     }
   });
 
