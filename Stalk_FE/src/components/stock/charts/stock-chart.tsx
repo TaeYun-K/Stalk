@@ -393,7 +393,6 @@ const StockChart: React.FC<StockChartProps> = ({
         setSharedChart(info);
         setPeriod(info.period);
 
-        console.log('[chart] apply', info);
 
         fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
@@ -793,7 +792,6 @@ const StockChart: React.FC<StockChartProps> = ({
   // Sync external activeIndicator with internal state
   useEffect(() => {
     if (isConsultationMode) {
-      console.log('Chart: Syncing indicator from consultation room:', activeIndicator);
       // Directly set the indicator settings instead of calling handleExclusiveIndicatorChange
       setIndicatorSettings(prev => ({
         ...prev,
@@ -813,7 +811,6 @@ const StockChart: React.FC<StockChartProps> = ({
   // Sync external drawingMode with internal state
   useEffect(() => {
     if (isConsultationMode) {
-      console.log('Chart: Syncing drawing mode from consultation room:', propDrawingMode);
       setIsDrawingMode(propDrawingMode);
     }
   }, [propDrawingMode, isConsultationMode]);
@@ -821,7 +818,6 @@ const StockChart: React.FC<StockChartProps> = ({
   // Sync external period with internal state
   useEffect(() => {
     if (isConsultationMode && propPeriod) {
-      console.log('Chart: Syncing period from consultation room:', propPeriod);
       setPeriod(propPeriod.toString());
     }
   }, [propPeriod, isConsultationMode]);
@@ -837,10 +833,6 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
-      console.log('[fetch] start', {
-        ticker: override?.ticker ?? getCurrentTicker(),
-        period: override?.period ?? period
-      });
 
       // More comprehensive market type detection - same logic as in use-stock-data.ts
       const ticker = override?.ticker ?? getCurrentTicker();
@@ -941,16 +933,13 @@ const StockChart: React.FC<StockChartProps> = ({
 
         if (!data || data.length === 0) {
           console.error("StockChart - 데이터 포인트가 없음");
-          console.error("Data:", data);
-          console.error("stockInfo was:", stockInfo);
           setError("차트 데이터가 없습니다.");
           return;
         }
 
-        // Log data status
+        // 데이터 상태 확인
         if (data.length === 1) {
-          console.warn("Only received 1 data point. Check if backend is returning historical data properly.");
-        } else {
+          console.warn("데이터 포인트가 1개만 수신됨. 백엔드가 과거 데이터를 올바르게 반환하는지 확인 필요.");
         }
 
         // Filter out any invalid data points and sort
@@ -1026,22 +1015,22 @@ const StockChart: React.FC<StockChartProps> = ({
         const highs = [...realHighs, ...futurePadding];
         const lows = [...realLows, ...futurePadding];
 
-        // Critical debug - check if data aligns correctly
-        console.log('CHART DATA ALIGNMENT CHECK:', {
-          futureDays,
-          realDataCount: sortedData.length,
-          labelsCount: labels.length,
-          pricesCount: prices.length,
-          lastRealPrice: realPrices[realPrices.length - 1],
-          lastRealDate: sortedData[sortedData.length - 1]?.date,
-          labelAtLastRealData: labels[sortedData.length - 1],
-          priceAtLastRealData: prices[sortedData.length - 1],
-          firstNaNIndex: prices.findIndex(p => isNaN(p)),
-          sample: {
-            labels: labels.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2),
-            prices: prices.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2)
-          }
-        });
+        // 데이터 정렬 확인 - 미래 공간과 실제 데이터가 올바르게 정렬되는지 체크
+        // console.log('CHART DATA ALIGNMENT CHECK:', {
+        //   futureDays,
+        //   realDataCount: sortedData.length,
+        //   labelsCount: labels.length,
+        //   pricesCount: prices.length,
+        //   lastRealPrice: realPrices[realPrices.length - 1],
+        //   lastRealDate: sortedData[sortedData.length - 1]?.date,
+        //   labelAtLastRealData: labels[sortedData.length - 1],
+        //   priceAtLastRealData: prices[sortedData.length - 1],
+        //   firstNaNIndex: prices.findIndex(p => isNaN(p)),
+        //   sample: {
+        //     labels: labels.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2),
+        //     prices: prices.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2)
+        //   }
+        // });
 
 
 
@@ -1095,7 +1084,7 @@ const StockChart: React.FC<StockChartProps> = ({
             },
             // Median volume reference line
             {
-              label: 'Reference (Median)',
+              label: '기준선 (중앙값)',
               data: new Array(labels.length).fill(medianVolume),
               type: 'line' as const,
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
@@ -1183,7 +1172,7 @@ const StockChart: React.FC<StockChartProps> = ({
         );
 
         newDatasets.push({
-          label: 'BB Upper',
+          label: '볼린저 상단',
           data: bollingerResult.upperBand,
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
@@ -1194,7 +1183,7 @@ const StockChart: React.FC<StockChartProps> = ({
         });
 
         newDatasets.push({
-          label: 'BB Lower',
+          label: '볼린저 하단',
           data: bollingerResult.lowerBand,
           borderColor: 'rgba(249, 115, 22, 0.8)',
           backgroundColor: 'transparent',
@@ -1205,7 +1194,7 @@ const StockChart: React.FC<StockChartProps> = ({
         });
 
         newDatasets.push({
-          label: 'BB Middle',
+          label: '볼린저 중심',
           data: bollingerResult.middleBand,
           borderColor: 'rgba(249, 115, 22, 0.6)',
           backgroundColor: 'transparent',
@@ -1377,7 +1366,7 @@ const StockChart: React.FC<StockChartProps> = ({
             },
             // Horizontal reference lines
             {
-              label: 'Reference (70)',
+              label: '기준선 (70)',
               data: new Array(labels.length).fill(70),
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
               backgroundColor: 'transparent',
@@ -1390,7 +1379,7 @@ const StockChart: React.FC<StockChartProps> = ({
               legend: { display: false },
             },
             {
-              label: 'Reference (50)',
+              label: '기준선 (50)',
               data: new Array(labels.length).fill(50),
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
               backgroundColor: 'transparent',
@@ -1403,7 +1392,7 @@ const StockChart: React.FC<StockChartProps> = ({
               legend: { display: false },
             },
             {
-              label: 'Reference (30)',
+              label: '기준선 (30)',
               data: new Array(labels.length).fill(30),
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
               backgroundColor: 'transparent',
@@ -1461,7 +1450,7 @@ const StockChart: React.FC<StockChartProps> = ({
               spanGaps: false,
             },
             {
-              label: 'Signal',
+              label: '시그널',
               data: signalLine,
               borderColor: 'rgb(255, 99, 132)',
               backgroundColor: 'transparent',
@@ -1475,7 +1464,7 @@ const StockChart: React.FC<StockChartProps> = ({
             },
             // Render histogram as vertical lines with fill to simulate bars
             {
-              label: 'Histogram',
+              label: '히스토그램',
               data: histogram,
               borderColor: 'rgba(128, 128, 128, 0.5)',
               backgroundColor: (context: any) => {
@@ -1496,7 +1485,7 @@ const StockChart: React.FC<StockChartProps> = ({
             },
             // MACD reference lines
             {
-              label: 'Reference (+1)',
+              label: '기준선 (+1)',
               data: new Array(labels.length).fill(1),
               type: 'line' as const,
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
@@ -1511,7 +1500,7 @@ const StockChart: React.FC<StockChartProps> = ({
               legend: { display: false },
             },
             {
-              label: 'Reference (0)',
+              label: '기준선 (0)',
               data: new Array(labels.length).fill(0),
               type: 'line' as const,
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
@@ -1526,7 +1515,7 @@ const StockChart: React.FC<StockChartProps> = ({
               legend: { display: false },
             },
             {
-              label: 'Reference (-1)',
+              label: '기준선 (-1)',
               data: new Array(labels.length).fill(-1),
               type: 'line' as const,
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
@@ -1595,7 +1584,7 @@ const StockChart: React.FC<StockChartProps> = ({
             },
             // Horizontal reference lines
             {
-              label: 'Reference (80)',
+              label: '기준선 (80)',
               data: new Array(labels.length).fill(80),
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
               backgroundColor: 'transparent',
@@ -1608,7 +1597,7 @@ const StockChart: React.FC<StockChartProps> = ({
               legend: { display: false },
             },
             {
-              label: 'Reference (50)',
+              label: '기준선 (50)',
               data: new Array(labels.length).fill(50),
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
               backgroundColor: 'transparent',
@@ -1621,7 +1610,7 @@ const StockChart: React.FC<StockChartProps> = ({
               legend: { display: false },
             },
             {
-              label: 'Reference (20)',
+              label: '기준선 (20)',
               data: new Array(labels.length).fill(20),
               borderColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.3)',
               backgroundColor: 'transparent',
@@ -1798,7 +1787,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const volumeTooltipElements = [];
               for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
                 const dataset = volumeChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   volumeElements.push({ datasetIndex: i, index });
                   volumeTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -1822,7 +1811,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const rsiTooltipElements = [];
               for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
                 const dataset = rsiChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   rsiElements.push({ datasetIndex: i, index });
                   rsiTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -1846,7 +1835,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const macdTooltipElements = [];
               for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
                 const dataset = macdChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   macdElements.push({ datasetIndex: i, index });
                   macdTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -1870,7 +1859,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const stochTooltipElements = [];
               for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
                 const dataset = stochasticChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   stochElements.push({ datasetIndex: i, index });
                   stochTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -2103,7 +2092,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const volumeTooltipElements = [];
               for (let i = 0; i < volumeChartRef.current.data.datasets.length; i++) {
                 const dataset = volumeChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   volumeElements.push({ datasetIndex: i, index });
                   volumeTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -2127,7 +2116,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const rsiTooltipElements = [];
               for (let i = 0; i < rsiChartRef.current.data.datasets.length; i++) {
                 const dataset = rsiChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   rsiElements.push({ datasetIndex: i, index });
                   rsiTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -2151,7 +2140,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const macdTooltipElements = [];
               for (let i = 0; i < macdChartRef.current.data.datasets.length; i++) {
                 const dataset = macdChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   macdElements.push({ datasetIndex: i, index });
                   macdTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -2175,7 +2164,7 @@ const StockChart: React.FC<StockChartProps> = ({
               const stochTooltipElements = [];
               for (let i = 0; i < stochasticChartRef.current.data.datasets.length; i++) {
                 const dataset = stochasticChartRef.current.data.datasets[i];
-                if (dataset && dataset.label && !dataset.label.includes('Reference')) {
+                if (dataset && dataset.label && !dataset.label.includes('기준선')) {
                   stochElements.push({ datasetIndex: i, index });
                   stochTooltipElements.push({ datasetIndex: i, index });
                 }
@@ -2233,7 +2222,7 @@ const StockChart: React.FC<StockChartProps> = ({
             const datasetLabel = context.dataset.label || '';
 
             // Skip reference lines
-            if (datasetLabel.includes('Reference')) {
+            if (datasetLabel.includes('기준선')) {
               return null;
             }
 
@@ -2258,7 +2247,7 @@ const StockChart: React.FC<StockChartProps> = ({
           },
           filter: function(tooltipItem: any) {
             // Hide reference lines from tooltips
-            return !tooltipItem.dataset.label.includes('Reference');
+            return !tooltipItem.dataset.label.includes('기준선');
           }
         }
       },
