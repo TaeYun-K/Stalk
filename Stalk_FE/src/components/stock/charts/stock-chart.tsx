@@ -90,6 +90,7 @@ type ChartType = 'line';
 type ChartInfo = {
   ticker: string;
   period: string;
+  name: string;
 };
 
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
@@ -204,8 +205,32 @@ const StockChart: React.FC<StockChartProps> = ({
   const stochasticChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
 
+
+  const getCurrentName = () =>
+  sharedChart?.name || chartInfo?.name || selectedStock?.name || '';
+
   const getCurrentTicker = () =>
   sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
+
+  // name을 함께 보내도록 하기 위한 헬퍼
+  const broadcastChartChange = (override?: Partial<ChartInfo>) => {
+    if (!session) return;
+    const info: ChartInfo = {
+      ticker: override?.ticker ?? getCurrentTicker(),
+      period: override?.period ?? period,
+      // 로컬에서 보이는 이름을 ‘무조건’ 포함 (없으면 ticker로 대체)
+      name: (override?.name ?? getCurrentName() ?? '').trim() || getCurrentTicker(),
+    };
+    if (!info.ticker || !info.period) return;
+
+    session.signal({
+      type: 'chart:change',
+      data: JSON.stringify(info),
+    }).catch(console.error);
+
+    // 내 화면의 sharedChart도 동기화 (표시 일관성)
+    setSharedChart(info);
+  };
 
   const chartKey = { ticker: getCurrentTicker(), period };
 
@@ -315,12 +340,16 @@ const StockChart: React.FC<StockChartProps> = ({
       !sharedChart?.ticker && !chartInfo?.ticker && !selectedStock?.ticker;
 
     if (noLocalChart) {
-      session.signal({
-        type: 'chart:sync_request',
-        data: JSON.stringify({ ts: Date.now() }),
-      }).catch(console.error);
+      // 바로 보내도 되지만, 확실히 하기 위해 한 틱 뒤에 보냄
+      const id = setTimeout(() => {
+        session.signal({
+          type: 'chart:sync_request',
+          data: JSON.stringify({ ts: Date.now() }),
+        }).catch(console.error);
+      }, 0);
+      return () => clearTimeout(id);
     }
-  }, [session]);
+  }, [session, sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker]);
 
   // ✅ chart:sync_request 들어오면 현재 차트 info 응답
   useEffect(() => {
@@ -330,7 +359,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // 내가 가지고 있는 현재 차트 상태
         const ticker = getCurrentTicker();
-        const info = { ticker, period };
+        const info = { ticker, period, name: getCurrentName() };
 
         // 내가 아직 차트를 안 보고 있으면 응답할 게 없으니 무시
         if (!info.ticker || !info.period) return;
@@ -363,6 +392,9 @@ const StockChart: React.FC<StockChartProps> = ({
         if (!info?.ticker || !info?.period) return;
         setSharedChart(info);
         setPeriod(info.period);
+
+        console.log('[chart] apply', info);
+
         fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
     };
@@ -385,14 +417,14 @@ const StockChart: React.FC<StockChartProps> = ({
     }
     if (propDrawingMode !== isDrawingMode) {
       setIsDrawingMode(propDrawingMode);
-      
+
       // When drawing mode is activated, automatically add future space
       if (propDrawingMode && !isDrawingMode) {
         // Only set initial future space if user hasn't manually scrolled
         if (futureDays === 0) {
           // Add 30 days of future space when entering drawing mode
           setFutureDays(30);
-          
+
           // Show scroll indicator briefly
           setScrollIndicatorVisible(true);
           if (scrollTimeoutRef.current) {
@@ -402,7 +434,7 @@ const StockChart: React.FC<StockChartProps> = ({
             setScrollIndicatorVisible(false);
           }, 2000);
         }
-        
+
         // Small delay to ensure chart is rendered with future space
         setTimeout(() => {
           const chartContainer = document.querySelector('.chart-container');
@@ -427,7 +459,7 @@ const StockChart: React.FC<StockChartProps> = ({
   // ticker 변경시 fetch
   useEffect(() => {
     const ticker = getCurrentTicker();
-    
+
     if(!ticker) return;
     fetchChartData(); //내부에서 getCurrentTicker와 period 사용
 
@@ -493,7 +525,7 @@ const StockChart: React.FC<StockChartProps> = ({
     const handleNativeWheel = (e: WheelEvent) => {
       // Only handle vertical scroll, not horizontal
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      
+
       // Prevent default scrolling
       e.preventDefault();
       e.stopPropagation();
@@ -733,7 +765,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const msg = JSON.parse(e.data);
         // Check if update is for current chart
         if (msg?.chart?.ticker !== chartKey.ticker || msg?.chart?.period !== chartKey.period) return;
-        
+
         // Update local future days
         if (typeof msg.futureDays === 'number') {
           setFutureDays(msg.futureDays);
@@ -770,7 +802,7 @@ const StockChart: React.FC<StockChartProps> = ({
         macd: { ...prev.macd, enabled: activeIndicator === 'macd' },
         stochastic: { ...prev.stochastic, enabled: activeIndicator === 'stochastic' }
       }));
-      
+
       // Only set active tab if there's an indicator, otherwise keep current tab
       if (activeIndicator) {
         setActiveIndicatorTab(activeIndicator);
@@ -805,6 +837,11 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
+      console.log('[fetch] start', {
+        ticker: override?.ticker ?? getCurrentTicker(),
+        period: override?.period ?? period
+      });
+
       // More comprehensive market type detection - same logic as in use-stock-data.ts
       const ticker = override?.ticker ?? getCurrentTicker();
       let marketType: string;
@@ -950,7 +987,7 @@ const StockChart: React.FC<StockChartProps> = ({
         }
 
         setRawData(sortedData); // Store only real data for indicator calculations
-        
+
         // Notify parent component about data point count
         if (onDataPointsUpdate) {
           onDataPointsUpdate(sortedData.length);
@@ -978,7 +1015,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const realOpens = sortedData.map(item => item.open || item.close);
         const realHighs = sortedData.map(item => item.high || item.close);
         const realLows = sortedData.map(item => item.low || item.close);
-        
+
         // Create arrays with correct length including future padding
         const futureCount = Math.max(0, finalData.length - sortedData.length);
         // Use NaN for future padding - Chart.js will skip these points with spanGaps: false
@@ -988,7 +1025,7 @@ const StockChart: React.FC<StockChartProps> = ({
         const opens = [...realOpens, ...futurePadding];
         const highs = [...realHighs, ...futurePadding];
         const lows = [...realLows, ...futurePadding];
-        
+
         // Critical debug - check if data aligns correctly
         console.log('CHART DATA ALIGNMENT CHECK:', {
           futureDays,
@@ -1005,7 +1042,7 @@ const StockChart: React.FC<StockChartProps> = ({
             prices: prices.slice(Math.max(0, sortedData.length - 2), sortedData.length + 2)
           }
         });
-        
+
 
 
         // Simplified line chart configuration
@@ -1412,6 +1449,7 @@ const StockChart: React.FC<StockChartProps> = ({
             {
               label: 'MACD',
               data: macdLine,
+              type: 'line' as const,
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'transparent',
               tension: 0.1,
@@ -1614,26 +1652,16 @@ const StockChart: React.FC<StockChartProps> = ({
 
   // 내가 period 바꿀 때 브로드 캐스트 보내기
   const handlePeriodChange = (newPeriod: string) => {
+
     setPeriod(newPeriod);
-    
-    // Call external handler if provided (for consultation mode) - YOUR LOCAL CODE
-    externalPeriodChange?.(parseInt(newPeriod));
 
-    const ticker = getCurrentTicker();
+    // 기존 onChartChange 콜백 유지
+    onChartChange?.({ ticker: getCurrentTicker(), period: newPeriod, name: getCurrentName() || getCurrentTicker() });
 
-    if (ticker) {
-      const info = { ticker, period: newPeriod };
-      // 기존 상위 콜백 유지
-      onChartChange?.(info);
-      // ✅ 세션 브로드캐스트 추가 - FROM DEV (for real-time collaboration)
-      session?.signal({
-        type: 'chart:change',
-        data: JSON.stringify(info),
-      }).catch(console.error);
+    // ✅ 시그널 전송을 헬퍼로 통일
 
-      // 내가 바꾼 걸 sharedChart에도 반영 (내 화면도 일관성 있게)
-      setSharedChart(info);
-    }
+    broadcastChartChange({ period: newPeriod });
+
   };
 
   const handleChartTypeChange = (newType: ChartType) => {
@@ -1654,7 +1682,7 @@ const StockChart: React.FC<StockChartProps> = ({
       [indicator]: config
     };
     setIndicatorSettings(newSettings);
-    
+
     // Call external handler if provided (for consultation mode)
     externalIndicatorChange?.(newSettings);
   };
@@ -1672,7 +1700,7 @@ const StockChart: React.FC<StockChartProps> = ({
     if (selectedIndicator === 'stochastic' && !canShowStochastic) {
       console.warn(`Stochastic requires at least 14 data points. Current: ${rawData?.length || 0}`);
     }
-    
+
     setIndicatorSettings(prev => ({
       ...prev,
       volume: { ...prev.volume, enabled: selectedIndicator === 'volume' },
@@ -1754,7 +1782,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // Enhanced safety checks to prevent sync errors
         if (!chart?.scales?.x || !chart?.data?.labels || !chart?.data?.datasets) return;
-        
+
         let index = -1;
 
         // Get index from active elements (most reliable)
@@ -2035,7 +2063,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // Enhanced safety checks to prevent sync errors
         if (!chart?.scales?.x || !chart?.data?.labels || !chart?.data?.datasets) return;
-        
+
         let index = -1;
 
         // Get index from active elements (most reliable)
@@ -2200,7 +2228,7 @@ const StockChart: React.FC<StockChartProps> = ({
             if (chartData && index >= chartData.actualDataLength) {
               return null;
             }
-            
+
             const value = context.parsed.y;
             const datasetLabel = context.dataset.label || '';
 
@@ -2387,10 +2415,10 @@ const StockChart: React.FC<StockChartProps> = ({
   return (
     <>
     <div className={`h-full w-full flex ${
-      isConsultationMode && darkMode 
-        ? 'bg-gray-900' 
-        : darkMode 
-          ? 'bg-gray-950' 
+      isConsultationMode && darkMode
+        ? 'bg-gray-900'
+        : darkMode
+          ? 'bg-gray-950'
           : 'bg-gray-50'
     } relative`}>
       {/* Enhanced Glassmorphism Left Sidebar */}
@@ -2398,8 +2426,8 @@ const StockChart: React.FC<StockChartProps> = ({
         className={`w-52 flex-shrink-0 ${
           isConsultationMode && darkMode
             ? 'bg-gray-800/95 backdrop-blur-xl border-r border-gray-600/30'
-            : darkMode 
-              ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40' 
+            : darkMode
+              ? 'bg-gradient-to-b from-gray-900/90 via-gray-850/90 to-gray-800/90 backdrop-blur-2xl border-r border-gray-700/40'
               : 'bg-gradient-to-b from-white/90 via-gray-50/90 to-white/90 backdrop-blur-2xl border-r border-gray-200/40'
         } flex flex-col h-full relative z-20 overflow-hidden`}
       >
@@ -2447,7 +2475,7 @@ const StockChart: React.FC<StockChartProps> = ({
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {selectedStock?.name || ticker}
+                      {getCurrentName() || ticker}
                     </h2>
                     <span className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
                       darkMode
@@ -2790,9 +2818,9 @@ const StockChart: React.FC<StockChartProps> = ({
         <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white'} shadow-xl border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'} flex flex-col min-h-0`}>
 
             {/* Main Price Chart Section - Dynamic height based on indicator */}
-            <div className="relative chart-container" style={{ 
-              minHeight: '300px', 
-              height: 'auto', 
+            <div className="relative chart-container" style={{
+              minHeight: '300px',
+              height: 'auto',
               overflowX: isDrawingMode && futureDays > 0 ? 'auto' : 'hidden',
               overflowY: 'hidden'
             }}>
@@ -2844,11 +2872,11 @@ const StockChart: React.FC<StockChartProps> = ({
                       <div
                         className={`absolute top-4 left-4 flex items-center gap-1.5 px-2 py-1 rounded-md backdrop-blur-sm transition-all duration-500 ${
                           isDrawingMode
-                            ? darkMode 
-                              ? 'bg-purple-600/20 border border-purple-500/30' 
+                            ? darkMode
+                              ? 'bg-purple-600/20 border border-purple-500/30'
                               : 'bg-purple-100/80 border border-purple-300'
-                            : darkMode 
-                              ? 'bg-white/10 border border-white/20' 
+                            : darkMode
+                              ? 'bg-white/10 border border-white/20'
                               : 'bg-black/10'
                         }`}
                         style={{ opacity: isDrawingMode || scrollIndicatorVisible ? 0.9 : 0.4 }}
@@ -2862,7 +2890,7 @@ const StockChart: React.FC<StockChartProps> = ({
                         </span>
                       </div>
                     )}
-                    
+
 
                   </div>
                 )}
@@ -2940,7 +2968,7 @@ const StockChart: React.FC<StockChartProps> = ({
           </div>
         </div>
       </div>
-    
+
     {/* Indicator Help Tooltip - Moved outside main container */}
     {hoveredIndicatorHelp && createPortal(
       <div

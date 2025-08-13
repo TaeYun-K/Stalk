@@ -154,7 +154,7 @@ const StockSearch: React.FC<StockSearchProps> = ({
       </div>
 
       {searchResults.length > 0 && createPortal(
-        <div 
+        <div
           className={`fixed ${
             darkMode
               ? 'bg-gray-800 border-gray-600'
