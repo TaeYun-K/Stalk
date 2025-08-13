@@ -66,16 +66,39 @@ public class VideoRecordingController {
         }
     }
 
-    @Operation(summary = "녹화 시작", description = "COMPOSED(PIP)로 녹화를 시작. 서버가 CAMERA+SCREEN 스트림을 인지할 때까지 대기 후 시작합니다.")
+    @Operation(
+            summary = "녹화 시작",
+            description = "COMPOSED(PIP) 녹화를 시작합니다. 서버가 CAMERA+SCREEN 스트림을 인지할 때까지 대기 후 시작하며, 이미 시작된 경우 멱등적으로 성공으로 처리합니다."
+    )
     @PostMapping("/start/{sessionId}")
     public ResponseEntity<BaseResponse<Void>> startRecording(
             @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
             @Parameter(description = "상담 ID") @RequestParam Long consultationId) {
         try {
-            // ✅ 1) 서버가 CAM+SCREEN을 실제로 보고 있을 때까지 대기
+            // 0) 서버 상태 동기화 + 세션/모드 검증
+            openVidu.fetch();
+            Session session = openVidu.getActiveSessions().stream()
+                    .filter(s -> s.getSessionId().equals(sessionId))
+                    .findFirst().orElse(null);
+            if (session == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
+            }
+            if (session.getProperties().mediaMode() != MediaMode.ROUTED) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR, "세션이 ROUTED 모드가 아니어서 COMPOSED 녹화가 불가합니다."));
+            }
+
+            // 1) 이미 녹화 중이면 멱등적으로 성공
+            if (session.isBeingRecorded()) {
+                log.info("Recording already active for {}", sessionId);
+                return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
+            }
+
+            // 2) 서버가 CAM+SCREEN 모두 인지할 때까지 대기
             waitUntilServerSees(sessionId, Set.of("CAMERA", "SCREEN"), WAIT_TIMEOUT_MS, WAIT_INTERVAL_MS);
 
-            // ✅ 2) 녹화 시작 (COMPOSED + PICTURE_IN_PICTURE)
+            // 3) 녹화 시작
             RecordingProperties properties = new RecordingProperties.Builder()
                     .outputMode(Recording.OutputMode.COMPOSED)
                     .recordingLayout(RecordingLayout.PICTURE_IN_PICTURE)
@@ -86,15 +109,34 @@ public class VideoRecordingController {
 
             Recording recording = openVidu.startRecording(sessionId, properties);
 
-            // ✅ 3) DB 등 사후 처리
+            // 4) 사후 처리
             recordingService.saveStartedRecording(recording, consultationId);
 
             return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
+
         } catch (TimeoutException te) {
             log.warn("⏱️ 녹화 시작 대기 타임아웃: {}", te.getMessage());
             return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
                     .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR, "CAMERA/SCREEN 스트림이 서버에 인식되지 않았습니다."));
+        } catch (OpenViduHttpException e) {
+            // 409: 이미 녹화중이거나(경쟁호출), 다른 사유로 start 불가
+            if (e.getStatus() == 409) {
+                try {
+                    openVidu.fetch();
+                    boolean nowRecording = openVidu.getActiveSessions().stream()
+                            .anyMatch(s -> s.getSessionId().equals(sessionId) && s.isBeingRecorded());
+                    if (nowRecording) {
+                        log.info("409 received but recording is active for {}", sessionId);
+                        return ResponseEntity.ok(new BaseResponse<>(BaseResponseStatus.SUCCESS));
+                    }
+                } catch (Exception ignore) {}
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR, "녹화를 시작할 수 없습니다(중복 또는 상태 충돌)."));
+            }
+            log.error("🔴 녹화 시작 실패(status={}): {}", e.getStatus(), e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(new BaseResponse<>(BaseResponseStatus.INTERNAL_SERVER_ERROR));
         } catch (Exception e) {
             log.error("🔴 녹화 시작 실패: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
