@@ -89,6 +89,7 @@ const ProductsPage = () => {
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const [drawingMode] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   // Handle window resize
   useEffect(() => {
@@ -98,6 +99,16 @@ const ProductsPage = () => {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarChange = (event: CustomEvent) => {
+      setSidebarExpanded(event.detail.expanded);
+    };
+
+    window.addEventListener('sidebarStateChange', handleSidebarChange as EventListener);
+    return () => window.removeEventListener('sidebarStateChange', handleSidebarChange as EventListener);
   }, []);
 
   // Use custom hooks for data fetching
@@ -670,13 +681,24 @@ const ProductsPage = () => {
   };
 
   // Calculate dynamic width to prevent sidebar cropping
-  // Sidebar is 64px when collapsed, we add extra space for comfort
+  // Sidebar is 64px when collapsed, 320px when expanded on desktop, 256px on mobile
   // Use full width only on mobile (< 768px), keep margin on tablets and desktop
+  const getSidebarWidth = () => {
+    if (windowWidth < 768) {
+      // Mobile: collapsed 56px (w-14), expanded 256px (w-64)
+      return sidebarExpanded ? 256 + 56 : 56; // expanded panel + collapsed sidebar
+    } else {
+      // Desktop: collapsed 64px (w-16), expanded 320px (w-80) 
+      return sidebarExpanded ? 320 + 64 : 80; // expanded panel + collapsed sidebar + padding
+    }
+  };
+
   const wrapperStyle = windowWidth >= 768
     ? {
-        width: `${windowWidth - 80}px`, // Subtract sidebar width
-        maxWidth: `${windowWidth - 80}px`,
-        overflow: 'hidden'
+        width: `${windowWidth - getSidebarWidth()}px`,
+        maxWidth: `${windowWidth - getSidebarWidth()}px`,
+        overflow: 'hidden',
+        transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' // Smoother transition with easing
       }
     : {
         width: '100%',
