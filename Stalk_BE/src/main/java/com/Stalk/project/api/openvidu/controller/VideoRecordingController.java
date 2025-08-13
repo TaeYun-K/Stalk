@@ -101,7 +101,9 @@ public class VideoRecordingController {
             // 3) 녹화 시작
             RecordingProperties properties = new RecordingProperties.Builder()
                     .outputMode(Recording.OutputMode.COMPOSED)
-                    .recordingLayout(RecordingLayout.PICTURE_IN_PICTURE)
+                    .recordingLayout(RecordingLayout.BEST_FIT)
+                    .resolution("1280x720")
+                    .frameRate(30)
                     .name("recording_" + sessionId)
                     .hasAudio(true)
                     .hasVideo(true)
