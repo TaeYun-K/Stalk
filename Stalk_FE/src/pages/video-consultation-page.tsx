@@ -331,6 +331,12 @@ const VideoConsultationPage: React.FC = () => {
 
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
+          const meta = parseOvData(event.stream.connection.data); 
+          if (meta?.kind === 'screen') {
+            console.log('[OV] skip subscribe for recording-only screen stream');
+            return;
+          }
+  
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscriber 스트림:', subscriber.stream.getMediaStream());
