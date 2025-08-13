@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 @Getter
 @Setter
@@ -17,7 +18,7 @@ import java.util.List;
 public class AdvisorProfileUpdateRequestDto {
 
     @Schema(description = "프로필 이미지 URL", example = "https://example.com/new-profile.jpg")
-    private String profileImageUrl;
+    private MultipartFile profileImageUrl;
 
     @Schema(description = "공개 연락처", example = "010-9876-5432")
     private String publicContact;
