@@ -63,6 +63,7 @@ const Sidebar: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [knowledgePosts, setKnowledgePosts] = useState<KnowledgePost[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
 
   const getAllMenuItems = (): MenuItem[] => [
     {
@@ -108,8 +109,8 @@ const Sidebar: React.FC = () => {
       // ADMIN은 알림과 자격인증만 보이게
       return item.id === "notifications" || item.id === "certification";
     } else {
-      // USER, ADVISOR는 자격인증을 제외한 모든 메뉴
-      return item.id !== "certification";
+      // USER, ADVISOR는 자격인증과 보유종목을 제외
+      return item.id !== "certification" && item.id !== "holdings";
     }
   });
 
@@ -496,83 +497,31 @@ const Sidebar: React.FC = () => {
     return menuItems.find((item) => item.id === selectedMenu)?.label || "알림";
   };
 
-  // Push content style for body and navbar
+  // Check if mobile view
   useEffect(() => {
-    // 홈페이지에서는 margin을 적용하지 않음
-    if (isHomePage) return;
-
-    const navbar = document.querySelector("nav");
-
-    // 초기 렌더링 시에도 collapsed 상태에 맞는 margin 설정
-    if (!isCollapsed) {
-      document.body.style.marginRight = "384px"; // 64px (collapsed sidebar) + 320px (panel width: w-80)
-      document.body.style.transition = "margin-right 0.3s ease";
-      if (navbar) {
-        navbar.style.marginRight = "384px";
-        navbar.style.transition = "margin-right 0.3s ease";
-      }
-    } else {
-      document.body.style.marginRight = "64px"; // 64px (collapsed sidebar width)
-      document.body.style.transition = "margin-right 0.3s ease";
-      if (navbar) {
-        navbar.style.marginRight = "64px";
-        navbar.style.transition = "margin-right 0.3s ease";
-      }
-    }
-
-    return () => {
-      document.body.style.marginRight = "0";
-      document.body.style.transition = "";
-      if (navbar) {
-        navbar.style.marginRight = "0";
-        navbar.style.transition = "";
-      }
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
     };
-  }, [isCollapsed, isHomePage]);
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  // 컴포넌트 마운트 시 초기 margin 설정
+  // Remove all margin adjustments - let the layout handle spacing naturally
   useEffect(() => {
-    // 홈페이지에서는 margin을 적용하지 않음
-    if (isHomePage) return;
-
-    const navbar = document.querySelector("nav");
-
-    // 사이드바가 collapsed 상태일 때의 초기 margin 설정
-    document.body.style.marginRight = "64px";
-    document.body.style.transition = "margin-right 0.3s ease";
-    if (navbar) {
-      navbar.style.marginRight = "64px";
-      navbar.style.transition = "margin-right 0.3s ease";
-    }
-
-    // 컴포넌트 언마운트 시 cleanup
-    return () => {
-      document.body.style.marginRight = "0";
-      document.body.style.transition = "";
-      if (navbar) {
-        navbar.style.marginRight = "0";
-        navbar.style.transition = "";
-      }
-    };
-  }, [isHomePage]); // isHomePage 의존성 추가
-
-  // 페이지 이동 시 navbar margin 재설정
-  useEffect(() => {
-    // 홈페이지에서는 margin을 적용하지 않음
-    if (isHomePage) return;
-
+    // Clean up any previous margin settings
     const navbar = document.querySelector("nav");
     if (navbar) {
-      // 현재 collapsed 상태에 맞는 margin 설정
-      if (!isCollapsed) {
-        navbar.style.marginRight = "384px";
-        navbar.style.transition = "margin-right 0.3s ease";
-      } else {
-        navbar.style.marginRight = "64px";
-        navbar.style.transition = "margin-right 0.3s ease";
-      }
+      navbar.style.marginRight = "";
+      navbar.style.transition = "";
     }
-  }); // 의존성 배열 없이 모든 렌더링에서 실행
+    document.body.style.marginRight = "";
+    document.body.style.transition = "";
+  }, []);
+
+
 
   // 외부 클릭 감지하여 사이드바 닫기
   useEffect(() => {
@@ -599,7 +548,9 @@ const Sidebar: React.FC = () => {
   return (
     <>
       {/* Collapsed Sidebar */}
-      <div className="sidebar-container fixed right-0 top-0 h-full bg-white border-l border-gray-200 w-20 z-[9999] flex flex-col">
+      <div className={`sidebar-container fixed right-0 top-0 h-full bg-white border-l border-gray-200 z-[9999] flex flex-col ${
+        isMobile ? 'w-14' : 'w-16'
+      }`}>
         {/* Toggle Button */}
         <div className="py-4 flex justify-center">
           <button
@@ -664,7 +615,9 @@ const Sidebar: React.FC = () => {
 
       {/* Expanded Content Panel */}
       {!isCollapsed && (
-        <div className="sidebar-container fixed right-20 top-0 h-full bg-white shadow-xl border-l border-gray-200 w-80 z-[9998]">
+        <div className={`sidebar-container fixed top-0 h-full bg-white shadow-xl border-l border-gray-200 z-[9998] ${
+          isMobile ? 'right-14 w-64' : 'right-16 w-80'
+        }`}>
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">
               {getCurrentMenuLabel()}

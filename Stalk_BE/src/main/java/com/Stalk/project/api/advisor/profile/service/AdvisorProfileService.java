@@ -8,6 +8,7 @@ import com.Stalk.project.api.advisor.profile.dto.in.CareerEntryDto;
 import com.Stalk.project.api.advisor.profile.dto.out.AdvisorProfileResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.ApprovalHistoryResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.CertificateApprovalResponseDto;
+import com.Stalk.project.api.user.service.FileStorageService;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 public class AdvisorProfileService {
 
     private final AdvisorProfileMapper advisorProfileMapper;
+    private final FileStorageService fileStorageService;
 
     // ===== 프로필 등록 =====
 
@@ -47,6 +49,8 @@ public class AdvisorProfileService {
         validateCareerEntriesForCreate(request.getCareerEntries());
 
         try {
+            String profileImageUrl = fileStorageService.storeFile(request.getProfileImageUrl());
+
             // 4. 프로필 상세 정보 등록
             advisorProfileMapper.insertAdvisorDetailInfo(advisorId, request);
 
@@ -92,6 +96,10 @@ public class AdvisorProfileService {
         }
 
         try {
+            if(request.getProfileImageUrl()!=null) {
+                String profileImageUrl = fileStorageService.storeFile(request.getProfileImageUrl());
+            }
+
             // 4. 프로필 기본 정보 수정
             updateProfileBasicInfo(advisorId, request);
 

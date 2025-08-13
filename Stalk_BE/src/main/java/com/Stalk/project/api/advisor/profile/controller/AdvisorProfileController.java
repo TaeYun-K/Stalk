@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -36,7 +37,7 @@ public class AdvisorProfileController {
 
     // ===== 전문가 상세 정보 등록 =====
 
-    @PostMapping("/profile")
+    @PostMapping(value = "/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
         summary = "전문가 상세 정보 등록",
         description = "승인된 전문가가 상세 프로필 정보를 등록합니다. 경력 정보는 최소 1개 이상 필수입니다."
@@ -49,7 +50,7 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<AdvisorProfileResponseDto> createAdvisorProfile(
-        @Valid @RequestBody AdvisorProfileCreateRequestDto request) {
+        @Valid @ModelAttribute AdvisorProfileCreateRequestDto request) {
 
         log.info("POST /api/advisors/profile - Creating advisor profile");
 
@@ -83,7 +84,7 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<AdvisorProfileResponseDto> updateAdvisorProfile(
-        @Valid @RequestBody AdvisorProfileUpdateRequestDto request) {
+        @Valid @ModelAttribute AdvisorProfileUpdateRequestDto request) {
 
         log.info("PUT /api/advisors/profile - Updating advisor profile");
 
