@@ -20,9 +20,6 @@ public class SignupService {
     private final EmailVerificationMapper emailVerificationMapper;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${file.upload-dir}")
-    private String uploadDir;
-
     public SignupResponse register(SignupRequest req) {
         // 중복 검사
         if (userMapper.findByUserId(req.getUserId()) != null) {
@@ -58,7 +55,7 @@ public class SignupService {
         user.setNickname(req.getNickname());
         user.setLoginType("LOCAL");
         user.setRole("USER");
-        user.setImage(uploadDir + "/profile_default.png");
+        user.setImage("/uploads/profile_default.png");
         user.setIsVerified(true);
         user.setTermsAgreed(req.getAgreedPrivacy());
         user.setIsActive(true);
