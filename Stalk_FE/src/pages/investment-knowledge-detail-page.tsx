@@ -82,8 +82,7 @@ const KnowledgeBoardPage = () => {
     }
   };
 
-  const handleDeletePost = (_postId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeletePost = (_postId: number) => {
     setIsDeleteModalOpen(true);
   };
 
@@ -99,8 +98,7 @@ const KnowledgeBoardPage = () => {
     }
   };
 
-  const handleEditPost = (postId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleEditPost = (postId: number) => {
     navigate(`/write-post?edit=${postId}`);
   };
 
@@ -217,14 +215,14 @@ const KnowledgeBoardPage = () => {
         return;
       }
       const data = await response.json();
-      const advisors = data?.result?.content ?? [];
-      const matched = advisors.find((a: any) => a?.name === comment.authorName);
+      const advisors: Array<{ id?: number; name?: string }> = data?.result?.content ?? [];
+      const matched = advisors.find((a) => a?.name === comment.authorName);
       if (matched?.id) {
         navigate(`/advisors-detail/${matched.id}`);
       } else {
         navigate("/advisors-list");
       }
-    } catch (e) {
+    } catch {
       navigate("/advisors-list");
     }
   };
@@ -300,13 +298,21 @@ const KnowledgeBoardPage = () => {
           {/* Right Content */}
           <div className="pt-24 flex-1">
             <div className="mb-6 flex flex-col justify-start gap-3">
-              <span
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg px-3 py-1"
+                >
+                  &lt;
+                </button>
+                <span
                 className={`text-left w-fit text-sm rounded-full px-4 py-1 ${getCategoryBadgeClass(
                   postDetail.category
                 )}`}
-              >
-                #{getCategoryLabel(postDetail.category)}
-              </span>
+                >
+                  #{getCategoryLabel(postDetail.category)}
+                </span>
+              </div>
               <h2 className="text-left text-2xl font-semibold text-gray-900">
                 {postDetail.title}
               </h2>
@@ -340,7 +346,7 @@ const KnowledgeBoardPage = () => {
                 </div>
                 <div className="flex flex-row gap-4">
                   <span className="text-sm text-gray-500">
-                    조회수 {postDetail.viewCount}
+                    조회수 {postDetail.viewCount + 1}
                   </span>
                   <div className="flex space-x-2">
                     {/* 게시글 수정/삭제 버튼은 필요 시 소유자/관리자에만 노출 */}
@@ -350,17 +356,13 @@ const KnowledgeBoardPage = () => {
                           (currentUser.name ?? currentUser.userId)) && (
                         <>
                           <button
-                            onClick={(e) =>
-                              handleEditPost(postDetail.postId, e)
-                            }
+                            onClick={() => handleEditPost(postDetail.postId)}
                             className="text-sm text-blue-600 hover:text-blue-800"
                           >
                             수정
                           </button>
                           <button
-                            onClick={(e) =>
-                              handleDeletePost(postDetail.postId, e)
-                            }
+                            onClick={() => handleDeletePost(postDetail.postId)}
                             className="text-sm text-red-600 hover:text-red-800"
                           >
                             삭제
