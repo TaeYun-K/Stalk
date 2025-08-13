@@ -608,11 +608,29 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
+  // 기간 변경 하는 핸들러
   const handlePeriodChange = (period: number) => {
     console.log('handlePeriodChange called with period:', period);
     setChartPeriod(period);
-    // You can also signal this change if needed
+
+    // 현재 선택/공유 중인 티커 기준으로 chart:change 브로드캐스트
+    const info = {
+      ticker: currentChart?.ticker || selectedStock?.ticker || '',
+      period: String(period),
+      name: selectedStock?.name || currentChart?.name || ''
+    };
+
+    // 로컬 state도 동기화
+    setCurrentChart(prev => prev ? { ...prev, period: String(period) } : info);
+
     if (session) {
+      // 권장: chart:change만 보내도 충분 (수신측은 이걸로만 처리하고 있음)
+      session.signal({
+        type: 'chart:change',
+        data: JSON.stringify(info)
+      }).catch(err => console.error('Chart change signaling failed', err));
+
+      // (선택) 하위 호환: 기존 chart:period도 함께 보낼 거면 아래 유지
       session.signal({
         type: 'chart:period',
         data: JSON.stringify({ period })
