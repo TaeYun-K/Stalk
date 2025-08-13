@@ -63,9 +63,20 @@ export const useStockData = (
         // Let's default to KOSDAQ for 1xxxxx range as many tech companies are there
         marketType = ticker.startsWith('1') ? 'KOSDAQ' : 'KOSPI';
       }
-      const response = await fetch(
+      let response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${marketType}`
       );
+
+      // 404인 경우 다른 마켓 시도
+      if (response.status === 404) {
+        const alternateMarket = marketType === 'KOSPI' ? 'KOSDAQ' : 'KOSPI';
+        response = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/krx/stock/${ticker}?market=${alternateMarket}`
+        );
+        if (response.ok) {
+          marketType = alternateMarket; // 성공한 마켓으로 업데이트
+        }
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -120,7 +131,10 @@ export const useStockData = (
         throw new Error('주식 데이터를 찾을 수 없습니다.');
       }
     } catch (err) {
-      console.error('Error fetching stock data:', err);
+      // 실제 오류만 로그 (404는 예상된 동작이므로 제외)
+      if (err instanceof Error && !err.message.includes('404')) {
+        console.error('Error fetching stock data:', err);
+      }
       setError(err instanceof Error ? err.message : '주식 데이터를 불러올 수 없습니다.');
     } finally {
       setIsLoading(false);

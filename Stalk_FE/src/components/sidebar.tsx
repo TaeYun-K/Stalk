@@ -509,17 +509,6 @@ const Sidebar: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Remove all margin adjustments - let the layout handle spacing naturally
-  useEffect(() => {
-    // Clean up any previous margin settings
-    const navbar = document.querySelector("nav");
-    if (navbar) {
-      navbar.style.marginRight = "";
-      navbar.style.transition = "";
-    }
-    document.body.style.marginRight = "";
-    document.body.style.transition = "";
-  }, []);
 
 
 

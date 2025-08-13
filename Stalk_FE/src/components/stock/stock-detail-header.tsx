@@ -101,7 +101,6 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
       }
 
       const responseData = await response.json();
-      console.log('주식 상세 정보:', responseData);
 
       // Handle both wrapped {success, data} format and direct object format
       let stockInfo;
@@ -136,19 +135,6 @@ const StockDetailHeader: React.FC<StockDetailHeaderProps> = ({
           volume: formatVolume(parseInt(stockInfo.ACC_TRDVOL?.replace(/,/g, '') || stockInfo.volume?.replace(/,/g, '') || '0'))
         });
 
-        // Debug logging
-        console.log(`📊 Stock data for ${ticker}:`, {
-          raw: stockInfo,
-          parsed: {
-            price: currentPrice,
-            open: openPrice,
-            high: highPrice,
-            low: lowPrice,
-            change: priceChange,
-            changeRate: changePct,
-            prevClose: currentPrice - priceChange
-          }
-        });
       }
     } catch (error) {
       console.error('주식 상세 정보 로드 오류:', error);
