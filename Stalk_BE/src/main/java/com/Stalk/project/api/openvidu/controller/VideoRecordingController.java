@@ -44,7 +44,7 @@ public class VideoRecordingController {
     @PostMapping("/sessions/{sessionId}/connections/screen")
     public ResponseEntity<BaseResponse<Map<String, String>>> createScreenShareToken(
         @Parameter(description = "OpenVidu 세션 ID") @PathVariable String sessionId,
-        @RequestParam Long userId, @RequestParam String name
+        @RequestParam String userId, @RequestParam String name
     ) {
         try {
             // 세션 존재 확인 (없으면 404)
@@ -54,8 +54,6 @@ public class VideoRecordingController {
                     .body(new BaseResponse<>(BaseResponseStatus.NOT_FOUND_SESSION, "세션을 찾을 수 없습니다."));
             }
 
-            if (userId == null) userId = -1L;
-            if (name == null) name = "unknown";
             String dataJson = String.format("{\"kind\":\"screen\",\"ownerId\":\"%s\",\"ownerName\":\"%s\"}", userId, name);
 
             ConnectionProperties props = new ConnectionProperties.Builder()
