@@ -72,16 +72,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
    */
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    /*
-     * 로그인, 리프레시, 회원가입 등 Auth 관련 엔드포인트 전체 스킵
-     * 로그인이나 회원가입 같은 기능은 아직 JWT 토큰이 발급되지 않은 상태에서 호출되므로, 토큰을 검증하는 이 필터가 동작할 필요 x
-     */
     String uri = request.getRequestURI();
 
     return uri.startsWith("/api/auth/")
         || uri.startsWith("/api/krx/")
         || uri.startsWith("/api/community/")
-        || uri.startsWith("/api/advisors/");
+        || uri.equals("/api/advisors")  // 목록 조회만
+        || uri.matches("/api/advisors/\\d+");  // 상세 조회만 (숫자 ID)
   }
 
   @Override
