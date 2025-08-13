@@ -74,6 +74,7 @@ interface ChatMessage {
 interface ChartInfo {
   ticker: string;
   period: string;
+  name?: string;
 }
 
 type HoveredButton =
@@ -636,7 +637,10 @@ const VideoConsultationPage: React.FC = () => {
     if (!selectedStock?.ticker) return;
 
     if (currentChart?.ticker !== selectedStock.ticker) {
-      const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7' };
+      const info = { ticker: 
+        selectedStock.ticker, period: currentChart?.period ?? '7', 
+        name: selectedStock.name || currentChart?.name || '' };
+      console.log('chartinfo : ' , info);
       setCurrentChart(info);
       session.signal({
         type: 'chart:change',
@@ -669,10 +673,14 @@ const VideoConsultationPage: React.FC = () => {
   useEffect(() => {
     if (!session) return;
     const onSyncReq = async () => {
-      if (currentChart) {
+      if (currentChart) {      
+        const chartWithName = {
+          ...currentChart,
+          name: currentChart.name || selectedStock?.name || currentChart.ticker
+        };
         await session.signal({
           type: 'chart:sync_state',
-          data: JSON.stringify(currentChart),
+          data: JSON.stringify(chartWithName),
         });
       }
     };

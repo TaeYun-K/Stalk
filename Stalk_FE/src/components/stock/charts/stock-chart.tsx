@@ -90,6 +90,7 @@ type ChartType = 'line';
 type ChartInfo = {
   ticker: string;
   period: string;
+  name: string;
 };
 
 const REAL_TIME_UPDATE_INTERVAL_MS = 10000;
@@ -204,8 +205,32 @@ const StockChart: React.FC<StockChartProps> = ({
   const stochasticChartRef = useRef<any>(null);
   const konvaStage = useRef<Konva.Stage | null>(null);
 
+
+  const getCurrentName = () =>
+  sharedChart?.name || chartInfo?.name || selectedStock?.name || '';
+
   const getCurrentTicker = () =>
   sharedChart?.ticker || chartInfo?.ticker || selectedStock?.ticker || '';
+
+  // name을 함께 보내도록 하기 위한 헬퍼
+  const broadcastChartChange = (override?: Partial<ChartInfo>) => {
+    if (!session) return;
+    const info: ChartInfo = {
+      ticker: override?.ticker ?? getCurrentTicker(),
+      period: override?.period ?? period,
+      // 로컬에서 보이는 이름을 ‘무조건’ 포함 (없으면 ticker로 대체)
+      name: (override?.name ?? getCurrentName() ?? '').trim() || getCurrentTicker(),
+    };
+    if (!info.ticker || !info.period) return;
+
+    session.signal({
+      type: 'chart:change',
+      data: JSON.stringify(info),
+    }).catch(console.error);
+
+    // 내 화면의 sharedChart도 동기화 (표시 일관성)
+    setSharedChart(info);
+  };
 
   const chartKey = { ticker: getCurrentTicker(), period };
 
@@ -315,12 +340,16 @@ const StockChart: React.FC<StockChartProps> = ({
       !sharedChart?.ticker && !chartInfo?.ticker && !selectedStock?.ticker;
 
     if (noLocalChart) {
-      session.signal({
-        type: 'chart:sync_request',
-        data: JSON.stringify({ ts: Date.now() }),
-      }).catch(console.error);
+      // 바로 보내도 되지만, 확실히 하기 위해 한 틱 뒤에 보냄
+      const id = setTimeout(() => {
+        session.signal({
+          type: 'chart:sync_request',
+          data: JSON.stringify({ ts: Date.now() }),
+        }).catch(console.error);
+      }, 0);
+      return () => clearTimeout(id);
     }
-  }, [session]);
+  }, [session, sharedChart?.ticker, chartInfo?.ticker, selectedStock?.ticker]);
 
   // ✅ chart:sync_request 들어오면 현재 차트 info 응답
   useEffect(() => {
@@ -330,7 +359,7 @@ const StockChart: React.FC<StockChartProps> = ({
       try {
         // 내가 가지고 있는 현재 차트 상태
         const ticker = getCurrentTicker();
-        const info = { ticker, period };
+        const info = { ticker, period, name: getCurrentName() };
 
         // 내가 아직 차트를 안 보고 있으면 응답할 게 없으니 무시
         if (!info.ticker || !info.period) return;
@@ -363,6 +392,9 @@ const StockChart: React.FC<StockChartProps> = ({
         if (!info?.ticker || !info?.period) return;
         setSharedChart(info);
         setPeriod(info.period);
+
+        console.log('[chart] apply', info);
+
         fetchChartData(false, { ticker: info.ticker, period: info.period });
       } catch (err) { console.error('chart:change payload error', err); }
     };
@@ -805,6 +837,11 @@ const StockChart: React.FC<StockChartProps> = ({
     setError(null);
 
     try {
+      console.log('[fetch] start', {
+        ticker: override?.ticker ?? getCurrentTicker(),
+        period: override?.period ?? period
+      }); 
+
       // More comprehensive market type detection - same logic as in use-stock-data.ts
       const ticker = override?.ticker ?? getCurrentTicker();
       let marketType: string;
@@ -1412,6 +1449,7 @@ const StockChart: React.FC<StockChartProps> = ({
             {
               label: 'MACD',
               data: macdLine,
+              type: 'line' as const,
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'transparent',
               tension: 0.1,
@@ -2447,7 +2485,7 @@ const StockChart: React.FC<StockChartProps> = ({
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {selectedStock?.name || ticker}
+                      {getCurrentName() || ticker}
                     </h2>
                     <span className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
                       darkMode
