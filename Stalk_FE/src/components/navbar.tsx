@@ -4,16 +4,19 @@ import { useAuth } from '@/context/AuthContext';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
 
+
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   // const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
+
   const [searchQuery, setSearchQuery] = useState<string>('');
   // const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
+  const [rightGap, setRightGap] = useState<number>(64); // 사이드바와 겹침 방지를 위한 우측 여백(px)
   
   // Check if we're on the products page for glassmorphism effects
   const isProductsPage = location.pathname === '/products';
@@ -46,6 +49,36 @@ const Navbar: React.FC = () => {
       setUserProfileImage('');
     }
   }, [isLoggedIn]);
+
+  // 사이드바 상태에 따라 우측 여백 동기화 (홈 전용 네비 로직을 공용 네비에 적용)
+  useEffect(() => {
+    const computeRightGap = () => {
+      // 화면에 고정된 사이드바 컨테이너들의 실제 렌더 폭을 모두 합산
+      const containers = Array.from(document.querySelectorAll('.sidebar-container.fixed')) as HTMLElement[];
+      const totalWidth = containers.reduce((sum, el) => sum + (el.getBoundingClientRect()?.width || 0), 0);
+      setRightGap(totalWidth > 0 ? Math.round(totalWidth) : 0);
+    };
+
+    // 초기 계산
+    computeRightGap();
+
+    // 클릭/리사이즈/스크롤 등 레이아웃 변화 시 재계산
+    const handleRecalc = () => computeRightGap();
+    window.addEventListener('click', handleRecalc, true);
+    window.addEventListener('resize', handleRecalc);
+    window.addEventListener('scroll', handleRecalc, { passive: true });
+
+    // DOM 변경 감지 (사이드바 패널 mount/unmount, 클래스 변화 등)
+    const observer = new MutationObserver(computeRightGap);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+
+    return () => {
+      window.removeEventListener('click', handleRecalc, true);
+      window.removeEventListener('resize', handleRecalc);
+      window.removeEventListener('scroll', handleRecalc);
+      observer.disconnect();
+    };
+  }, []);
 
   // 검색 함수
   const handleSearch = (): void => {
@@ -80,7 +113,7 @@ const Navbar: React.FC = () => {
           ? 'bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-xl border-b border-white/20 shadow-lg/50' 
           : 'bg-white border-b border-gray-200 shadow-md'
       }`}>
-      <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16">
+      <div className="justify-between mx-auto px-4 sm:px-10 lg:px-16" style={{ marginRight: rightGap }}>
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
@@ -96,7 +129,7 @@ const Navbar: React.FC = () => {
 
           {/* Navigation Menu */}
           
-            <div className="hidden md:flex items-center space-x-8">
+            <div className="hidden md:flex items-center space-x-10">
               <button 
                 onClick={() => navigate('/advisors-list')}
                 className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
@@ -152,9 +185,9 @@ const Navbar: React.FC = () => {
             {/* User Actions */}
             {isLoggedIn ? (
               <div className="relative">
-                <button
-                  onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex items-center space-x-2 bg-white hover:bg-gray-50 duration-300"
+                <button 
+                  onClick={() => setShowProfileMenu(!showProfileMenu)} 
+                  className="w-11 h-11 rounded-full overflow-hidden hover:shadow-modern transition-all duration-300 hover:scale-105"
                 >
                   {userProfileImage ? (
                     <img
@@ -286,14 +319,7 @@ const Navbar: React.FC = () => {
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => navigate('/login')}
-                className={`${
-                  isProductsPage
-                    ? 'bg-gradient-to-r from-blue-500/90 to-blue-600/90 hover:from-blue-600 hover:to-blue-700 backdrop-blur-sm shadow-lg/60'
-                    : 'bg-blue-500 hover:bg-blue-600 shadow-md'
-                } text-white font-semibold px-6 py-2.5 rounded-full text-sm transition-all duration-300 transform hover:scale-105`}
-              >
+              <button onClick={() => navigate('/login')} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-6 py-2.5 rounded-2xl text-sm transition-all duration-300 transform hover:scale-105">
                 로그인
               </button>
             )}
