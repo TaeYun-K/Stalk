@@ -332,7 +332,8 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           const meta = parseOvData(event.stream.connection.data); 
-          if (meta?.kind === 'screen') {
+          const myId = userInfo?.userId;
+          if (meta?.kind === 'screen' && meta?.ownerId === myId) {
             console.log('[OV] skip subscribe for recording-only screen stream');
             return;
           }
@@ -1555,7 +1556,12 @@ const VideoConsultationPage: React.FC = () => {
             <div className="h-full grid grid-cols-2 gap-2">
                 {/* 구독자 비디오 렌더링 */}
                 {subscribers.length > 0 ? (
-                  subscribers.map((subscriber, index) => {
+                  subscribers
+                  .filter(sub => {
+                    const meta = parseOvData(sub.stream.connection.data);
+                    return !(meta?.kind === 'screen' && meta?.ownerId === userInfo?.userId);
+                  })
+                  .map((subscriber, index) => {
                     const name = getParticipantName(subscriber);
                     const role = getParticipantRole(subscriber);
                     const roleName = getRoleDisplayName(role);
