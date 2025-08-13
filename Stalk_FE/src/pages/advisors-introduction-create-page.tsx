@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import advisorService from "@/services/advisorService";
+// import advisorService from "@/services/advisorService"; // ❌ 더 이상 사용 안 함
+import AuthService from "@/services/authService"; // ⬅️ 토큰 가져오기 용
 import AdvisorTimeTable from "@/components/AdvisorTimeTable";
 
 interface CareerEntry {
@@ -16,14 +17,14 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
   // 인적 사항
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
-  const [profileImageUrl, setProfileImageUrl] = useState<string>("");
+  const [profileImageUrl, setProfileImageUrl] = useState<string>(""); // 미리보기 용
   const [expertContact, setExpertContact] = useState<string>("");
 
   // 영업관리
-  const [experTitle, setExpertTitle] = useState<string>(""); // 간단한 소개
-  const [expertIntroduction, setExpertIntroduction] = useState<string>(""); // 상세한 소개
-  const [preferredTradeStyle, setPreferredTradeStyle] = useState<string>(""); // 선호하는 거래 스타일
-  const [consultationFee, setConsultationFee] = useState<string>(""); // 상담료 (API 연결 준비용)
+  const [experTitle, setExpertTitle] = useState<string>(""); // 간단한 소개(shortIntro)
+  const [expertIntroduction, setExpertIntroduction] = useState<string>(""); // 상세 소개(longIntro)
+  const [preferredTradeStyle, setPreferredTradeStyle] = useState<string>(""); // SHORT | MID_SHORT | MID | MID_LONG | LONG
+  const [consultationFee, setConsultationFee] = useState<string>(""); // optional
 
   // 경력사항
   const [careerEntries, setCareerEntries] = useState<CareerEntry[]>([]);
@@ -38,23 +39,15 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
 
   // 전화번호 포맷팅 함수
   const formatPhoneNumber = (value: string) => {
-    // 숫자만 추출
     const numbers = value.replace(/[^\d]/g, "");
-
-    // 11자리 이하로 제한
     const limitedNumbers = numbers.slice(0, 11);
-
-    // 전화번호 형식으로 변환
-    if (limitedNumbers.length <= 3) {
-      return limitedNumbers;
-    } else if (limitedNumbers.length <= 7) {
+    if (limitedNumbers.length <= 3) return limitedNumbers;
+    if (limitedNumbers.length <= 7)
       return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(3)}`;
-    } else {
-      return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(
-        3,
-        7
-      )}-${limitedNumbers.slice(7)}`;
-    }
+    return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(
+      3,
+      7
+    )}-${limitedNumbers.slice(7)}`;
   };
 
   // 전화번호 입력 핸들러
@@ -70,46 +63,32 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
   const [editingCareerData, setEditingCareerData] =
     useState<CareerEntry | null>(null);
 
-  // 날짜 포맷팅 함수
+  // 날짜 포맷팅 함수 (입력용: YYYY.MM.DD)
   const formatDate = (value: string) => {
-    // 숫자만 추출
     const numbers = value.replace(/[^\d]/g, "");
-
-    // 8자리 이하로 제한
     const limitedNumbers = numbers.slice(0, 8);
-
-    // 날짜 형식으로 변환
-    if (limitedNumbers.length <= 4) {
-      return limitedNumbers;
-    } else if (limitedNumbers.length <= 6) {
+    if (limitedNumbers.length <= 4) return limitedNumbers;
+    if (limitedNumbers.length <= 6)
       return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(4)}`;
-    } else {
-      return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(
-        4,
-        6
-      )}.${limitedNumbers.slice(6)}`;
-    }
+    return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(
+      4,
+      6
+    )}.${limitedNumbers.slice(6)}`;
   };
 
-  // 날짜 유효성 검사 함수
+  // 날짜 유효성 검사
   const isValidDate = (dateString: string) => {
     const regex = /^\d{4}\.\d{2}\.\d{2}$/;
     if (!regex.test(dateString)) return false;
-
-    const parts = dateString.split(".");
-    const year = parseInt(parts[0]);
-    const month = parseInt(parts[1]);
-    const day = parseInt(parts[2]);
-
-    if (year < 1900 || year > 2100) return false;
-    if (month < 1 || month > 12) return false;
-    if (day < 1 || day > 31) return false;
-
-    const date = new Date(year, month - 1, day);
+    const [y, m, d] = dateString.split(".").map((n) => parseInt(n, 10));
+    if (y < 1900 || y > 2100) return false;
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > 31) return false;
+    const date = new Date(y, m - 1, d);
     return (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
+      date.getFullYear() === y &&
+      date.getMonth() === m - 1 &&
+      date.getDate() === d
     );
   };
 
@@ -119,39 +98,58 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
     setter(formattedValue);
   };
 
-  // 파일 업로드 핸들러
+  // 파일 업로드 핸들러 (미리보기 포함)
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setProfileImage(file);
       setFileName(file.name);
+      try {
+        const preview = URL.createObjectURL(file);
+        setProfileImageUrl(preview);
+      } catch {
+        // 미리보기 실패는 무시
+      }
     }
   };
 
   const handleFileDelete = () => {
     setProfileImage(null);
     setFileName("");
+    setProfileImageUrl("");
   };
 
   // 경력사항 추가/삭제
   const addCareerEntry = () => {
+    // 생성 시 endedAt은 **null 허용** → endDate는 비워도 추가 가능
     if (
       newCareerEntry.startDate &&
-      newCareerEntry.endDate &&
       newCareerEntry.company &&
       newCareerEntry.position
     ) {
+      // (선택) 날짜 유효성 기본 체크
+      if (!isValidDate(newCareerEntry.startDate)) {
+        alert("시작일 형식이 올바르지 않습니다. (YYYY.MM.DD)");
+        return;
+      }
+      if (newCareerEntry.endDate && !isValidDate(newCareerEntry.endDate)) {
+        alert("종료일 형식이 올바르지 않습니다. (YYYY.MM.DD)");
+        return;
+      }
+
       const newEntry: CareerEntry = {
         id: Date.now().toString(),
         ...newCareerEntry,
       };
-      setCareerEntries([...careerEntries, newEntry]);
+      setCareerEntries((prev) => [...prev, newEntry]);
       setNewCareerEntry({
         startDate: "",
         endDate: "",
         company: "",
         position: "",
       });
+    } else {
+      alert("회사명, 직무/직책, 시작일은 필수입니다.");
     }
   };
 
@@ -183,105 +181,116 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
   };
 
   // 각 항목별 입력 완료 상태 확인 함수들
-  const isProfileImageComplete = () => {
-    return profileImage !== null;
-  };
+  const isProfileImageComplete = () => profileImage !== null; // 파일은 옵션이지만 UI 상태용
+  const isContactComplete = () => expertContact.trim() !== "";
+  const isCareerComplete = () => careerEntries.length > 0;
+  const isTitleComplete = () => experTitle.trim() !== "";
+  const isIntroductionComplete = () => expertIntroduction.trim() !== "";
+  const isPreferredTradeStyleComplete = () => preferredTradeStyle !== "";
+  const isConsultationFeeComplete = () => consultationFee.trim() !== "";
+  const checkOperatingHoursComplete = () => isOperatingHoursComplete;
 
-  const isContactComplete = () => {
-    return expertContact.trim() !== "";
-  };
-
-  const isCareerComplete = () => {
-    return careerEntries.length > 0;
-  };
-
-  const isTitleComplete = () => {
-    return experTitle.trim() !== "";
-  };
-
-  const isIntroductionComplete = () => {
-    return expertIntroduction.trim() !== "";
-  };
-
-  const isPreferredTradeStyleComplete = () => {
-    return preferredTradeStyle !== "";
-  };
-
-  const isConsultationFeeComplete = () => {
-    return consultationFee.trim() !== "";
-  };
-
-  const checkOperatingHoursComplete = () => {
-    return isOperatingHoursComplete;
-  };
-
-  // 전체 등록 처리 함수
+  // 전체 등록 처리 함수 (multipart/form-data)
   const handleSubmitAll = async () => {
     try {
-      console.log("Starting registration process...");
+      console.log("Starting registration process (multipart)...");
 
-      // 필수 필드 검증
-      if (!experTitle.trim()) {
+      // 토큰 확인
+      const token =
+        AuthService.getAccessToken?.() || localStorage.getItem("accessToken");
+      if (!token) {
+        alert("로그인이 필요합니다. 다시 로그인해주세요.");
+        navigate("/login");
+        return;
+      }
+
+      // 필수 필드 검증 (업데이트와 동일한 규약)
+      if (!isTitleComplete()) {
         alert("전문가 제목(간단 소개)을 입력해주세요.");
         return;
       }
-      if (careerEntries.length === 0) {
+      if (!isIntroductionComplete()) {
+        alert("상세 소개를 입력해주세요.");
+        return;
+      }
+      if (!isContactComplete()) {
+        alert("공개 연락처를 입력해주세요.");
+        return;
+      }
+      if (!isPreferredTradeStyleComplete()) {
+        alert("선호 거래 스타일을 선택해주세요.");
+        return;
+      }
+      if (!isCareerComplete()) {
         alert("경력 정보를 최소 1개 이상 입력해주세요.");
         return;
       }
 
-      // 1. 프로필 이미지 업로드
-      let uploadedImageUrl = "";
+      // FormData 구성
+      const form = new FormData();
+
+      // 파일 (optional)
       if (profileImage) {
-        try {
-          const response = await advisorService.uploadProfileImage(
-            profileImage
-          );
-          uploadedImageUrl = response.fileUrl;
-          console.log("Profile image uploaded:", uploadedImageUrl);
-        } catch (error) {
-          console.error("Profile image upload failed:", error);
-          alert("프로필 이미지 업로드에 실패했습니다.");
-          return;
-        }
+        form.append("profileImage", profileImage, profileImage.name);
       }
 
-      // 2. 프로필 데이터 생성
-      const profileData = {
-        profileImageUrl: uploadedImageUrl,
-        publicContact: expertContact,
-        shortIntro: experTitle.trim(), // experTitle을 shortIntro에 매핑
-        longIntro: expertIntroduction,
-        preferredTradeStyle: preferredTradeStyle || "MID_LONG", // 기본값 설정
-        careerEntries: careerEntries.map((entry) => ({
-          action: "CREATE",
-          title: entry.company, // company를 title에 매핑
-          description: entry.position, // position을 description에 매핑
-          startedAt: entry.startDate.replace(/\./g, "-"),
-          endedAt: entry.endDate ? entry.endDate.replace(/\./g, "-") : null,
-        })),
-        consultationFee: consultationFee,
-      };
+      // 텍스트 파트
+      form.append("publicContact", expertContact);
+      form.append("shortIntro", experTitle.trim());
+      form.append("longIntro", expertIntroduction.trim());
+      form.append("preferredTradeStyle", preferredTradeStyle || "MID_LONG"); // 기본값 허용
+      if (consultationFee !== "")
+        form.append("consultationFee", consultationFee);
 
-      console.log("Submitting profile data:", profileData);
+      // JSON 배열 파트 (application/json)
+      const careerPayload = careerEntries.map((e) => ({
+        action: "CREATE",
+        title: e.company,
+        description: e.position,
+        startedAt: e.startDate.replace(/\./g, "-"),
+        endedAt: e.endDate ? e.endDate.replace(/\./g, "-") : null,
+      }));
+      form.append(
+        "careerEntries",
+        new Blob([JSON.stringify(careerPayload)], { type: "application/json" })
+      );
 
-      // 3. 프로필 데이터 전송
-      const response = await advisorService.createProfile(profileData);
-      console.log("Profile created successfully:", response);
-      const expertId = response.id; // 응답에서 전문가 ID를 가져와야 함 (API 응답 구조에 따라 달라질 수 있음)
+      // 전송 (Content-Type 수동 지정 ❌, Authorization만 추가)
+      const res = await fetch("/api/advisors/profile", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        let msg = "등록에 실패했습니다.";
+        try {
+          const err = await res.json();
+          msg = err?.message || msg;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(msg);
+      }
+
+      const payload = await res.json();
+      // 서버 BaseResponse 규약에 맞춰 추출
+      const result = payload?.result ?? payload?.data ?? payload;
+      const expertId =
+        result?.id ?? result?.advisorId ?? result?.profileId ?? null;
 
       alert("전문가 프로필이 성공적으로 등록되었습니다.");
 
-      // 5. 전문가 상세 페이지로 이동
-      if (expertId) {
-        navigate(`/expert-detail/${expertId}`);
-      } else {
-        // expertId가 없는 경우, 목록 페이지나 마이페이지 등으로 이동
-        navigate("/advisors-list");
-      }
+      // 상세 페이지로 이동 (id 없으면 목록으로)
+      if (expertId) navigate(`/expert-detail/${expertId}`);
+      else navigate("/advisors-list");
     } catch (error) {
       console.error("Registration error:", error);
-      alert("등록 중 오류가 발생했습니다. 다시 시도해주세요.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "등록 중 오류가 발생했습니다. 다시 시도해주세요."
+      );
     }
   };
 

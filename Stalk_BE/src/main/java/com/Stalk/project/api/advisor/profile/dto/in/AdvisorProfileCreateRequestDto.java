@@ -20,8 +20,10 @@ import org.springframework.web.multipart.MultipartFile;
 @Schema(description = "전문가 프로필 등록 요청 DTO")
 public class AdvisorProfileCreateRequestDto {
 
+    private String profileImageUrl;       // 저장용(서비스에서 세팅)
+
     @Schema(description = "프로필 이미지 URL", example = "https://example.com/profile.jpg")
-    private MultipartFile profileImageUrl;
+    private MultipartFile profileImage;     // 프론트에서 입력받는 용도
 
     @Schema(description = "공개 연락처", example = "010-1234-5678")
     private String publicContact;
