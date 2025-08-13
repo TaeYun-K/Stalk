@@ -89,6 +89,7 @@ const ProductsPage = () => {
   const { addToWatchlist, removeFromWatchlist, isInWatchlist } = useWatchlist();
   const [drawingMode] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   // Handle window resize
   useEffect(() => {
@@ -98,6 +99,16 @@ const ProductsPage = () => {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarChange = (event: CustomEvent) => {
+      setSidebarExpanded(event.detail.expanded);
+    };
+
+    window.addEventListener('sidebarStateChange', handleSidebarChange as EventListener);
+    return () => window.removeEventListener('sidebarStateChange', handleSidebarChange as EventListener);
   }, []);
 
   // Use custom hooks for data fetching
@@ -189,13 +200,12 @@ const ProductsPage = () => {
       // Show optimistic UI immediately to reduce perceived loading time
       setRealtimePriceData({
         ticker: selectedTicker,
-        name: `Loading ${selectedTicker}...`,
+        name: `로딩 중 ${selectedTicker}...`,
         closePrice: "0",
         priceChange: "0",
         changeRate: "0",
         volume: "0",
       });
-      // no spinner state here
 
       // Common headers used across attempts (outside try/catch for broader scope)
       // use module-level BASE_HEADERS constant
@@ -218,11 +228,8 @@ const ProductsPage = () => {
         // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
 
-        console.log(
-          `🎯 Smart guess: trying ${smartGuess} first for ${selectedTicker}`
-        );
 
-        // Strategy 1: Try smart guess first (fastest for correct guesses)
+        // 예상 마켓 먼저 시도
         let response;
         let stockData;
 
@@ -231,38 +238,19 @@ const ProductsPage = () => {
             import.meta.env.VITE_API_URL
           }/api/krx/stock/${selectedTicker}?market=${smartGuess}&_t=${timestamp}`;
           response = await axios.get(smartUrl, { headers: BASE_HEADERS });
-          console.log(
-            `✅ Smart guess SUCCESS: ${selectedTicker} found in ${smartGuess} market`
-          );
         } catch (smartGuessError: any) {
-          // Only log error if it's not a 404 (expected for wrong market)
-          if (smartGuessError.response?.status !== 404) {
-            console.error(
-              `⚠️ Unexpected error for ${smartGuess}:`,
-              smartGuessError.message
-            );
-          } else {
-            console.log(
-              `📍 ${selectedTicker} not in ${smartGuess}, trying ${otherMarket}...`
-            );
-          }
+          // 404는 예상된 동작이므로 로그하지 않음
 
-          // Strategy 2: Try the other market
+          // 다른 마켓 시도
           try {
             const fallbackUrl = `${
               import.meta.env.VITE_API_URL
             }/api/krx/stock/${selectedTicker}?market=${otherMarket}&_t=${timestamp}`;
             response = await axios.get(fallbackUrl, { headers: BASE_HEADERS });
-            console.log(
-              `✅ Fallback SUCCESS: ${selectedTicker} found in ${otherMarket} market`
-            );
           } catch (fallbackError: any) {
-            if (fallbackError.response?.status === 404) {
-              console.warn(
-                `⚠️ Stock ${selectedTicker} not found in either market`
-              );
-            } else {
-              console.error(`❌ Unexpected error:`, fallbackError.message);
+            // 404는 예상된 동작, 다른 오류만 로그
+            if (fallbackError.response?.status !== 404) {
+              console.error(`Unexpected error:`, fallbackError.message);
             }
             throw new Error("Both individual attempts failed");
           }
@@ -335,30 +323,23 @@ const ProductsPage = () => {
               ).toString(),
           };
 
-          // Debug logging for IT Chem
-          if (selectedTicker === "309710") {
-            console.log(`🔍 IT Chem API response:`, stockData);
-            console.log(`📊 Mapped data:`, mappedData);
-          }
 
           // Only set the data if it's for the correct ticker
           if (returnedTicker === selectedTicker) {
             setRealtimePriceData(mappedData);
-            return; // Success, no need for fallback
+            return; // 성공
           } else {
             console.error("Skipping wrong ticker data, will try fallback");
-            // Continue to fallback below
+            // 다음 시도로 계속
           }
         } else {
-          console.log("No stock data in response, trying fallback");
+          // No stock data in response, trying fallback
         }
       } catch (err) {
-        console.error("Primary API failed:", err);
       }
 
-      // 🔄 ENHANCED FALLBACK: Multiple endpoint strategy with timeout
+      // 대체 마켓 시도
       try {
-        console.log(`🔄 Trying enhanced fallback for ${selectedTicker}...`);
 
         const smartGuess =
           selectedTicker.startsWith("3") ||
@@ -369,7 +350,7 @@ const ProductsPage = () => {
             : "KOSPI";
         const otherMarket = smartGuess === "KOSPI" ? "KOSDAQ" : "KOSPI";
 
-        // Strategy 3: Parallel API calls with Promise.race for speed
+        // 병렬 API 호출
         const createApiCall = (market: string) =>
           axios.get(
             `${
@@ -385,15 +366,9 @@ const ProductsPage = () => {
         try {
           // Try smart guess first
           dailyResponse = await createApiCall(smartGuess);
-          console.log(
-            `🚀 Enhanced fallback SUCCESS: ${selectedTicker} from ${smartGuess}`
-          );
         } catch {
           // Try other market
           dailyResponse = await createApiCall(otherMarket);
-          console.log(
-            `🚀 Enhanced fallback SUCCESS: ${selectedTicker} from ${otherMarket}`
-          );
         }
 
         // Handle both wrapped and direct format
@@ -436,7 +411,7 @@ const ProductsPage = () => {
               stockName = searchResponse.data.data[0].name;
             }
           } catch (searchErr) {
-            console.error("Failed to get stock name:", searchErr);
+            // 종목명 검색 실패는 치명적이지 않음 - 로그 제거
           }
 
           // If still no name, try from the ranking list
@@ -452,7 +427,7 @@ const ProductsPage = () => {
           // Last resort - use ticker but mark it
           if (!stockName) {
             stockName = `종목 ${selectedTicker}`;
-            console.warn("Could not find stock name, using ticker");
+            // 종목명을 찾지 못한 경우 - 정상 폴백이므로 로그 제거
           }
 
           const fallbackData = {
@@ -478,13 +453,8 @@ const ProductsPage = () => {
           setRealtimePriceData(fallbackData);
         }
       } catch (fallbackErr) {
-        console.error("Enhanced fallback failed:", fallbackErr);
-
-        // 🚁 ULTIMATE STRATEGY: Parallel requests with Promise.race
+        // 병렬 요청으로 재시도
         try {
-          console.log(
-            `🚁 Last resort: Parallel requests for ${selectedTicker}...`
-          );
 
           const kospiPromise = axios.get(
             `${
@@ -505,7 +475,7 @@ const ProductsPage = () => {
             }
           );
 
-          // Winner takes all - first successful response wins
+          // 먼저 성공한 응답 사용
           const winnerResponse: any = await Promise.race([
             kospiPromise.catch((err) => ({
               error: "KOSPI failed",
@@ -518,9 +488,6 @@ const ProductsPage = () => {
           ]);
 
           if (!("error" in winnerResponse) && (winnerResponse as any).data) {
-            console.log(
-              `🏆 PARALLEL SUCCESS: ${selectedTicker} data retrieved!`
-            );
 
             const data =
               (winnerResponse as any).data.data || (winnerResponse as any).data;
@@ -562,13 +529,13 @@ const ProductsPage = () => {
                 )
               ).toString(),
             });
-            return; // Success!
+            return; // 성공
           }
         } catch (parallelErr) {
-          console.error("Even parallel requests failed:", parallelErr);
         }
 
-        // 🆘 GRACEFUL DEGRADATION: Show minimal UI
+        // KOSPI와 KOSDAQ 모두에서 찾지 못함
+        console.error(`주식 ${selectedTicker}을(를) KOSPI와 KOSDAQ 모두에서 찾을 수 없습니다.`);
         setRealtimePriceData({
           ticker: selectedTicker,
           name: `Stock ${selectedTicker}`,
@@ -577,8 +544,6 @@ const ProductsPage = () => {
           changeRate: "0",
           volume: "0",
         });
-      } finally {
-        // no-op
       }
     };
 
@@ -716,14 +681,25 @@ const ProductsPage = () => {
   };
 
   // Calculate dynamic width to prevent sidebar cropping
-  // Sidebar is 64px when collapsed, we add extra space for comfort
+  // Sidebar is 64px when collapsed, 320px when expanded on desktop, 256px on mobile
   // Use full width only on mobile (< 768px), keep margin on tablets and desktop
-  const wrapperStyle = windowWidth >= 768 
-    ? { 
-        width: `${windowWidth - 80}px`, // Subtract sidebar width
-        maxWidth: `${windowWidth - 80}px`,
-        overflow: 'hidden'
-      } 
+  const getSidebarWidth = () => {
+    if (windowWidth < 768) {
+      // Mobile: collapsed 56px (w-14), expanded 256px (w-64)
+      return sidebarExpanded ? 256 + 56 : 56; // expanded panel + collapsed sidebar
+    } else {
+      // Desktop: collapsed 64px (w-16), expanded 320px (w-80) 
+      return sidebarExpanded ? 320 + 64 : 80; // expanded panel + collapsed sidebar + padding
+    }
+  };
+
+  const wrapperStyle = windowWidth >= 768
+    ? {
+        width: `${windowWidth - getSidebarWidth()}px`,
+        maxWidth: `${windowWidth - getSidebarWidth()}px`,
+        overflow: 'hidden',
+        transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' // Smoother transition with easing
+      }
     : {
         width: '100%',
         maxWidth: '100%'

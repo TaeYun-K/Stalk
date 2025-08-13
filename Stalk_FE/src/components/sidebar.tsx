@@ -186,37 +186,58 @@ const Sidebar: React.FC = () => {
       return;
     }
 
-    if (selectedMenu === menuId && !isCollapsed) {
-      setIsCollapsed(true);
-    } else {
-      setSelectedMenu(menuId);
-      setIsCollapsed(false);
+    const willCollapse = selectedMenu === menuId && !isCollapsed;
+    const willExpand = !willCollapse && isCollapsed;
+    
+    // 먼저 이벤트를 발생시켜서 다른 컴포넌트가 준비할 시간을 줌
+    window.dispatchEvent(new CustomEvent('sidebarStateChange', {
+      detail: { expanded: !willCollapse }
+    }));
 
-      // 메뉴별 데이터 로드
-      switch (menuId) {
-        case "notifications":
-          loadNotifications();
-          break;
-        case "reservations":
-          loadReservations();
-          break;
-        case "knowledge-board":
-          loadKnowledgePosts();
-          break;
+    // 약간의 딜레이 후 실제 상태 변경
+    setTimeout(() => {
+      if (willCollapse) {
+        setIsCollapsed(true);
+      } else {
+        setSelectedMenu(menuId);
+        setIsCollapsed(false);
+
+        // 메뉴별 데이터 로드
+        switch (menuId) {
+          case "notifications":
+            loadNotifications();
+            break;
+          case "reservations":
+            loadReservations();
+            break;
+          case "knowledge-board":
+            loadKnowledgePosts();
+            break;
+        }
       }
-    }
+    }, 50); // 50ms 딜레이로 부드러운 전환
   };
 
   const handleToggleSidebar = () => {
-    if (isCollapsed) {
-      // 사이드바가 닫혀있으면 알림으로 열기
-      setSelectedMenu("notifications");
-      setIsCollapsed(false);
-      loadNotifications(); // 알림 데이터 로드
-    } else {
-      // 사이드바가 열려있으면 닫기
-      setIsCollapsed(true);
-    }
+    const willExpand = isCollapsed;
+    
+    // 먼저 이벤트를 발생시켜서 다른 컴포넌트가 준비할 시간을 줌
+    window.dispatchEvent(new CustomEvent('sidebarStateChange', {
+      detail: { expanded: willExpand }
+    }));
+
+    // 약간의 딜레이 후 실제 상태 변경 (smooth transition을 위해)
+    setTimeout(() => {
+      if (isCollapsed) {
+        // 사이드바가 닫혀있으면 알림으로 열기
+        setSelectedMenu("notifications");
+        setIsCollapsed(false);
+        loadNotifications(); // 알림 데이터 로드
+      } else {
+        // 사이드바가 열려있으면 닫기
+        setIsCollapsed(true);
+      }
+    }, 50); // 50ms 딜레이로 부드러운 전환
   };
 
   const scrollToTop = () => {
@@ -509,17 +530,6 @@ const Sidebar: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Remove all margin adjustments - let the layout handle spacing naturally
-  useEffect(() => {
-    // Clean up any previous margin settings
-    const navbar = document.querySelector("nav");
-    if (navbar) {
-      navbar.style.marginRight = "";
-      navbar.style.transition = "";
-    }
-    document.body.style.marginRight = "";
-    document.body.style.transition = "";
-  }, []);
 
 
 
