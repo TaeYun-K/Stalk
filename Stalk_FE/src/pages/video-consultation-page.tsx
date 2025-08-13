@@ -96,21 +96,25 @@ const DEFAULT_VIDEO_CONFIG = {
 // ✅ OV connection.data 안전 파서 (JSON/legacy 모두 흡수)
 function parseOvData(raw: string): any {
   if (!raw) return {};
+  // 1) 구조화된 JSON 시도
   try {
     const obj = JSON.parse(raw);
-    // { serverData: "...json..." } 케이스
-    if (obj?.serverData && typeof obj.serverData === 'string') {
-      try { return JSON.parse(obj.serverData); } catch { /* noop */ }
+    // clientData가 문자열(JSON)로 온 케이스
+    if (obj?.clientData && typeof obj.clientData === 'string') {
+      try { return JSON.parse(obj.clientData); } catch {}
     }
-    // 바로 { ownerId, ... } 케이스
-    if (obj && obj.ownerId) return obj;
-  } catch { /* fallthrough */ }
-
-  // "clientData=...&serverData=..." 같은 포맷 방어
-  const m = /serverData=([^,&]+)/.exec(raw);
-  if (m) {
-    try { return JSON.parse(decodeURIComponent(m[1])); } catch { /* noop */ }
-  }
+    // serverData가 문자열(JSON)로 온 케이스
+    if (obj?.serverData && typeof obj.serverData === 'string') {
+      try { return JSON.parse(obj.serverData); } catch {}
+    }
+    // 이미 전개된 형태 { ownerId, kind, ... }
+    if (obj && (obj.ownerId || obj.kind)) return obj;
+  } catch {}
+  // 2) 레거시 key=value 포맷 방어
+  const mClient = /clientData=([^,&]+)/.exec(raw);
+  if (mClient) { try { return JSON.parse(decodeURIComponent(mClient[1])); } catch {} }
+  const mServer = /serverData=([^,&]+)/.exec(raw);
+  if (mServer) { try { return JSON.parse(decodeURIComponent(mServer[1])); } catch {} }
   return {};
 }
 
@@ -332,8 +336,9 @@ const VideoConsultationPage: React.FC = () => {
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
           const meta = parseOvData(event.stream.connection.data); 
-          const myId = userInfo?.userId;
-          if (meta?.kind === 'screen' && meta?.ownerId === myId) {
+          const isScreen = event.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+          const mine = meta?.ownerId && meta.ownerId === userInfo?.userId;
+          if (isScreen && mine) {
             console.log('[OV] skip subscribe for recording-only screen stream');
             return;
           }
@@ -1559,7 +1564,9 @@ const VideoConsultationPage: React.FC = () => {
                   subscribers
                   .filter(sub => {
                     const meta = parseOvData(sub.stream.connection.data);
-                    return !(meta?.kind === 'screen' && meta?.ownerId === userInfo?.userId);
+                    const isScreen = sub.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+                    const mine = meta?.ownerId === userInfo?.userId;
+                    return !(isScreen && mine);
                   })
                   .map((subscriber, index) => {
                     const name = getParticipantName(subscriber);
