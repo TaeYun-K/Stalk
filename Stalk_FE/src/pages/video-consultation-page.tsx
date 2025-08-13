@@ -145,6 +145,11 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] = useState<boolean>(true);
 
+  // 녹화 관련 상태
+  const [screenOv, setScreenOv] = useState<OpenVidu | null>(null);
+  const [screenSession, setScreenSession] = useState<Session | null>(null);
+  const [screenPublisher, setScreenPublisher] = useState<Publisher | null>(null);
+
 
   // 참가자 역할 구분을 위한 함수
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -737,29 +742,91 @@ const VideoConsultationPage: React.FC = () => {
     return () => { session.off('signal:chart:drawingMode', onDrawingMode); };
   }, [session]);
 
+  // 이미 화면공유(본인/상대) 존재하는지 체크
+  const hasAnyScreen = (sess?: Session | null) =>
+    !!sess?.streamManagers?.some((sm: any) => sm?.stream?.typeOfVideo === "SCREEN");
+
+  // 화면공유 세션/퍼블리셔 정리 (종료 시 호출)
+  const cleanupScreenShare = () => {
+    try {
+      screenPublisher?.stream?.getMediaStream()?.getTracks()?.forEach(t => t.stop());
+    } catch {}
+    try {
+      screenSession?.disconnect();
+    } catch {}
+    setScreenPublisher(null);
+    setScreenSession(null);
+    setScreenOv(null);
+  };
+
   // 녹화 시작
   const handleStartRecording = async () => {
-    if (!ovSessionId || !consultationId) {
+    if (!ovSessionId || !consultationId || !session) {
       alert("세션 정보가 없습니다.");
       return;
     }
+    if (isRecording) return; // 중복 클릭 방지
+
     try {
       const token = AuthService.getAccessToken();
-      await axios.post(
-        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
+
+      // 1) 화면공유 토큰 발급 (두 번째 Connection용)
+      //    - 이미 누군가 화면공유 중이면 이 단계는 생략해도 됨
+      if (!hasAnyScreen(session)) {
+        const tokenRes = await axios.post(
+          `/api/recordings/sessions/${encodeURIComponent(ovSessionId)}/connections/screen`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const screenToken = tokenRes?.data?.data?.token as string | undefined;
+        if (!screenToken) throw new Error("화면공유 토큰 발급 실패");
+
+        // 2) 두 번째 OV/Session 생성 및 연결
+        const ov2 = new OpenVidu();
+        const sess2 = ov2.initSession();
+        await sess2.connect(screenToken);
+        setScreenOv(ov2);
+        setScreenSession(sess2);
+
+        // 3) 화면공유 퍼블리시 (이 클릭 컨텍스트 안에서 실행되어야 함)
+        //    사용자가 브라우저 선택 팝업에서 취소하면 throw → 아래 catch로 이동
+        const pub = await ov2.initPublisherAsync(undefined, {
+          videoSource: "screen",
+          mirror: false,
+          // audioSource: "screen" // 필요 시 브라우저 지원 여부 확인 후 사용
+        });
+        await sess2.publish(pub);
+        setScreenPublisher(pub);
+        console.log("[recording] screen published on second connection");
+      } else {
+        console.log("[recording] some screen share already present → skip creating second connection");
+      }
+
+      // 4) 서버 녹화 시작 (COMPOSED + PIP/CUSTOM은 서버 설정대로)
+      const recRes = await axios.post(
+        `/api/recordings/start/${encodeURIComponent(ovSessionId)}?consultationId=${encodeURIComponent(
+          String(consultationId)
+        )}`,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
-      setRecordingId(ovSessionId);
+
+      const recId = (recRes?.data?.data?.recordingId as string) || ovSessionId; // fallback
+      setRecordingId(recId);
       setIsRecording(true);
-    } catch (e) {
-      alert("녹화 시작에 실패했습니다.");
-      console.error(e);
+      // toast.success?.("녹화를 시작했어요. (화면+웹캠)");
+
+    } catch (e: any) {
+      // 사용자가 화면 선택 팝업 취소한 경우 NotAllowedError 가능
+      if (e?.name === "NotAllowedError" || String(e?.message || "").includes("Permission")) {
+        alert("화면 공유가 취소되어 녹화를 시작하지 않았습니다.");
+      } else {
+        alert("녹화 시작에 실패했습니다.");
+      }
+      console.error("[recording] start failed:", e);
+
+      // 화면공유 세션이 일부만 열렸다면 정리
+      cleanupScreenShare();
     }
   };
 
@@ -769,24 +836,53 @@ const VideoConsultationPage: React.FC = () => {
       alert("녹화 ID가 없습니다.");
       return;
     }
+    if (!isRecording) return;
+
     try {
       const token = AuthService.getAccessToken();
-      await axios.post(
-        `/api/recordings/stop/${recordingId}`,
+
+      const stopUrl = consultationId
+        ? `/api/recordings/stop/${encodeURIComponent(recordingId)}?consultationId=${encodeURIComponent(
+            String(consultationId)
+          )}`
+        : `/api/recordings/stop/${encodeURIComponent(recordingId)}`;
+
+      const res = await axios.post(
+        stopUrl,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      const url = res?.data?.data?.url as string | undefined;
+      const durationSec = res?.data?.data?.durationSec as number | undefined;
+      const sizeBytes = res?.data?.data?.sizeBytes as number | undefined;
+
+      // 화면공유 전용 Connection 정리
+      try {
+        screenPublisher?.stream?.getMediaStream()?.getTracks()?.forEach(t => t.stop());
+      } catch {}
+      try {
+        screenSession?.disconnect();
+      } catch {}
+      setScreenPublisher(null);
+      setScreenSession(null);
+      setScreenOv(null);
+
+      // UI 상태 초기화
       setIsRecording(false);
       setRecordingId(null);
+
+      if (url) {
+        console.log("[recording] saved:", { url, durationSec, sizeBytes });
+        // 필요 시 자동 다운로드
+        // window.open(url, "_blank");
+      }
     } catch (e) {
       alert("녹화 종료에 실패했습니다.");
       console.error(e);
     }
   };
+
 
     // 상담 종료 함수
   const leaveSession = async (): Promise<void> => {

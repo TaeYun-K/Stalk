@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
-import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
@@ -28,11 +27,11 @@ const HomePageNavbar: React.FC = () => {
       if (data.result?.profileImage) {
         setUserProfileImage(data.result.profileImage);
       } else {
-        setUserProfileImage(profileDefault);
+        setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
       }
     } catch (error) {
       console.error('프로필 이미지 로드 실패:', error);
-      setUserProfileImage(profileDefault);
+      setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
     }
   };
 
@@ -198,12 +197,12 @@ const HomePageNavbar: React.FC = () => {
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.src = profileDefault;
+                        e.currentTarget.src = `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
                       }}
                     />
                   ) : (
                     <img
-                      src={profileDefault}
+                      src={`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`}
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(_e) => {
@@ -240,6 +239,20 @@ const HomePageNavbar: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>상담 내역</span>
+                      </button>
+                    )}
+                    {userRole !== 'ADMIN' && (
+                      <button
+                        onClick={() => {
+                          navigate('/my-reviews');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81H7.03a1 1 0 00.95-.69l1.07-3.292z" />
+                        </svg>
+                        <span>내 리뷰</span>
                       </button>
                     )}
                     {/* (ADMIN만 보이는 관리자 페이지 버튼) */}
