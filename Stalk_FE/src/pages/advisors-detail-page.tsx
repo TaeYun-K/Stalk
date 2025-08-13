@@ -1053,6 +1053,15 @@ const AdvisorsDetailPage: React.FC = () => {
                   더보기
                 </button>
               )}
+              {/* 전문가 리뷰 상세 페이지 이동 버튼 */}
+              {id && (
+                <button
+                  onClick={() => navigate(`/advisors/${parseInt(id)}/reviews`)}
+                  className="mt-4 ml-3 text-blue-600 bg-blue-50 py-3 px-6 rounded-full hover:bg-blue-100 hover:text-blue-700 font-medium transition-colors"
+                >
+                  리뷰 전체 보기
+                </button>
+              )}
             </section>
           </div>
 

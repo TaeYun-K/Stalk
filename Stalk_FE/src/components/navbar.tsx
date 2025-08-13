@@ -3,8 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
-import newsIcon from '@/assets/images/icons/news_icon.png';
-import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
+// import newsIcon from '@/assets/images/icons/news_icon.png';
+// import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 
 
@@ -14,9 +14,8 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  // const [communityMenuTimeout, setCommunityMenuTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   
@@ -218,6 +217,20 @@ const Navbar: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>상담 내역</span>
+                      </button>
+                    )}
+                    {userRole !== 'ADMIN' && (
+                      <button
+                        onClick={() => {
+                          navigate('/my-reviews');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81H7.03a1 1 0 00.95-.69l1.07-3.292z" />
+                        </svg>
+                        <span>내 리뷰</span>
                       </button>
                     )}
                     {userRole !== 'ADMIN' && userRole !== 'ADVISOR' && (
