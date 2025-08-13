@@ -17,8 +17,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Schema(description = "전문가 프로필 수정 요청 DTO")
 public class AdvisorProfileUpdateRequestDto {
 
+    // 업로드할 때만 쓰는 필드 (프론트에서 FormData로 넘어옴)
+    private MultipartFile profileImage;
+
     @Schema(description = "프로필 이미지 URL", example = "https://example.com/new-profile.jpg")
-    private MultipartFile profileImageUrl;
+    private String profileImageUrl;
 
     @Schema(description = "공개 연락처", example = "010-9876-5432")
     private String publicContact;
