@@ -124,36 +124,27 @@ function parseOvData(raw: string): any {
   return {};
 }
 
-// ✅ 메인(session)에서 "해당 connectionId의 SCREEN 스트림"이 생길 때까지 대기
-function waitForScreenOnServer(mainSession: Session, targetConnId: string, timeoutMs = 5000) {
-  return new Promise<void>((resolve, reject) => {
-    const on = (e: any) => {
-      const isTarget =
-        e?.stream?.typeOfVideo === 'SCREEN' &&
-        e?.stream?.connection?.connectionId === targetConnId;
-      if (isTarget) {
-        mainSession.off('streamCreated', on);
-        resolve();
-      }
-    };
-    const to = setTimeout(() => {
-      mainSession.off('streamCreated', on);
-      reject(new Error('Timeout: screen stream not arrived'));
-    }, timeoutMs);
-
-    mainSession.on('streamCreated', (e: any) => {
-      try {
-        const isTarget =
-          e?.stream?.typeOfVideo === 'SCREEN' &&
-          e?.stream?.connection?.connectionId === targetConnId;
-        if (isTarget) {
-          clearTimeout(to);
-          mainSession.off('streamCreated', on);
-          resolve();
-        }
-      } catch { /* noop */ }
-    });
-  });
+// 서버가 CAM/SCREEN을 실제로 보고 있는지 폴링
+async function waitForStreamsOnServer(
+  sessionId: string,
+  {
+    needCamera = true,
+    needScreen = true,
+    timeoutMs = 8000,
+    intervalMs = 300,
+  }: { needCamera?: boolean; needScreen?: boolean; timeoutMs?: number; intervalMs?: number } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { data } = await axios.get(`/api/openvidu/sessions/${encodeURIComponent(sessionId)}`);
+    const conns = data?.connections?.content ?? [];
+    const types = conns.flatMap((c: any) => (c.publishers ?? []).map((p: any) => p.typeOfVideo));
+    const hasCam = types.includes('CAMERA');
+    const hasScreen = types.includes('SCREEN');
+    if ((!needCamera || hasCam) && (!needScreen || hasScreen)) return;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error('Timeout: CAM/SCREEN not visible in OpenVidu server');
 }
 
 const TIMER_INTERVAL_MS = 1000;
@@ -950,9 +941,16 @@ const VideoConsultationPage: React.FC = () => {
           // audioSource: "screen" // 브라우저 지원 시 필요하면 ON
         });
         await sess2.publish(pub);
-        await waitForScreenOnServer(session, sess2.connection.connectionId);
         setScreenPublisher(pub);
         console.log("[recording] screen published on second connection");
+
+        // 트랙이 live인지 즉시 확인
+        const vt = pub.stream.getMediaStream()?.getVideoTracks?.()[0];        
+        if (!vt || vt.readyState !== 'live') {
+          throw new Error('Screen track not live');
+        }
+
+        await waitForStreamsOnServer(ovSessionId, { needCamera: true, needScreen: true, timeoutMs: 8000, intervalMs: 300 });
 
         // (선택) 레이스 방지용 짧은 대기
         await new Promise((r) => setTimeout(r, 120));
