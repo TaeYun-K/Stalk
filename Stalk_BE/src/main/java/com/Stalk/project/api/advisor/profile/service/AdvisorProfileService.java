@@ -76,34 +76,39 @@ public class AdvisorProfileService {
     }
 
     // ===== 프로필 수정 =====
-
     @Transactional
-    public AdvisorProfileResponseDto updateAdvisorProfile(Long advisorId, AdvisorProfileUpdateRequestDto request) {
+    public AdvisorProfileResponseDto updateAdvisorProfile(
+        Long advisorId,
+        AdvisorProfileUpdateRequestDto request
+    ) {
         log.info("Updating advisor profile for advisorId: {}", advisorId);
 
-        // 1. 전문가 승인 여부 확인
+        // 1) 전문가 승인 여부 확인
         validateApprovedAdvisor(advisorId);
 
-        // 2. 프로필 존재 여부 확인
+        // 2) 프로필 존재 여부 확인
         Boolean hasProfile = advisorProfileMapper.hasAdvisorDetailInfo(advisorId);
         if (!Boolean.TRUE.equals(hasProfile)) {
             throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_NOT_FOUND);
         }
 
-        // 3. 업데이트할 내용이 있는지 확인
+        // 3) 업데이트할 내용이 있는지 확인
         if (!request.hasAnyUpdates()) {
             throw new BaseException(BaseResponseStatus.NO_UPDATE_FIELDS);
         }
 
         try {
-            if(request.getProfileImageUrl()!=null) {
-                String profileImageUrl = fileStorageService.storeFile(request.getProfileImageUrl());
+            // 4) 이미지 처리: 새 파일이 들어온 경우에만 업로드 -> URL 세팅
+            if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
+                String uploadedUrl = fileStorageService.storeFile(request.getProfileImage());
+                request.setProfileImageUrl(uploadedUrl); // 이제 타입 에러 없음
+                request.setProfileImage(null); // DB 내려갈 때 MultipartFile 제거
             }
 
-            // 4. 프로필 기본 정보 수정
+            // 5) 프로필 기본 정보 수정 (여기서는 문자열/숫자 등 DB에 들어갈 값만 사용해야 함)
             updateProfileBasicInfo(advisorId, request);
 
-            // 5. 경력 정보 수정 처리
+            // 6) 경력 정보 변경 처리
             if (request.hasCareerChanges()) {
                 processCareerChanges(advisorId, request);
             }
@@ -118,6 +123,7 @@ public class AdvisorProfileService {
             throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_UPDATE_FAILED);
         }
     }
+
 
     // ===== 자격증 승인 요청 =====
 
