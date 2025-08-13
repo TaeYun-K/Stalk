@@ -124,6 +124,38 @@ function parseOvData(raw: string): any {
   return {};
 }
 
+// ✅ 메인(session)에서 "해당 connectionId의 SCREEN 스트림"이 생길 때까지 대기
+function waitForScreenOnServer(mainSession: Session, targetConnId: string, timeoutMs = 5000) {
+  return new Promise<void>((resolve, reject) => {
+    const on = (e: any) => {
+      const isTarget =
+        e?.stream?.typeOfVideo === 'SCREEN' &&
+        e?.stream?.connection?.connectionId === targetConnId;
+      if (isTarget) {
+        mainSession.off('streamCreated', on);
+        resolve();
+      }
+    };
+    const to = setTimeout(() => {
+      mainSession.off('streamCreated', on);
+      reject(new Error('Timeout: screen stream not arrived'));
+    }, timeoutMs);
+
+    mainSession.on('streamCreated', (e: any) => {
+      try {
+        const isTarget =
+          e?.stream?.typeOfVideo === 'SCREEN' &&
+          e?.stream?.connection?.connectionId === targetConnId;
+        if (isTarget) {
+          clearTimeout(to);
+          mainSession.off('streamCreated', on);
+          resolve();
+        }
+      } catch { /* noop */ }
+    });
+  });
+}
+
 const TIMER_INTERVAL_MS = 1000;
 
 
@@ -918,6 +950,7 @@ const VideoConsultationPage: React.FC = () => {
           // audioSource: "screen" // 브라우저 지원 시 필요하면 ON
         });
         await sess2.publish(pub);
+        await waitForScreenOnServer(session, sess2.connection.connectionId);
         setScreenPublisher(pub);
         console.log("[recording] screen published on second connection");
 
