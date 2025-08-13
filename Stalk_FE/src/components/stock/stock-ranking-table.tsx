@@ -1,4 +1,5 @@
 import React from 'react';
+import { useWatchlist } from '@/context/WatchlistContext';
 
 interface RankingStock {
   rank: number;
@@ -35,6 +36,7 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
   onStockSelect,
   darkMode = false
 }) => {
+  const { isInWatchlist } = useWatchlist();
 
   const handleStockClick = (stock: RankingStock) => {
     if (onStockClick) {
@@ -152,30 +154,35 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full table-fixed">
           <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
             <tr>
-              <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              <th className={`w-8 px-1 py-3 text-center text-xs font-medium tracking-wider ${
+                darkMode ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                
+              </th>
+              <th className={`w-14 px-2 py-3 text-center text-xs font-medium tracking-wider ${
                 darkMode ? 'text-gray-300' : 'text-gray-500'
               }`}>
                 순위
               </th>
-              <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+              <th className={`w-44 px-3 py-3 text-left text-xs font-medium tracking-wider ${
                 darkMode ? 'text-gray-300' : 'text-gray-500'
               }`}>
                 종목명
               </th>
-              <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
+              <th className={`w-24 px-3 py-3 text-right text-xs font-medium tracking-wider ${
                 darkMode ? 'text-gray-300' : 'text-gray-500'
               }`}>
                 현재가
               </th>
-              <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
+              <th className={`w-20 px-3 py-3 text-right text-xs font-medium tracking-wider ${
                 darkMode ? 'text-gray-300' : 'text-gray-500'
               }`}>
                 등락률
               </th>
-              <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${
+              <th className={`px-3 py-3 text-right text-xs font-medium tracking-wider ${
                 darkMode ? 'text-gray-300' : 'text-gray-500'
               }`}>
                 {rankingType === 'marketCap' ? '시가총액' : rankingType === 'tradeValue' ? '거래대금' : '거래량'}
@@ -196,33 +203,46 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
                     darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                   }`}
                 >
-                  <td className={`px-4 py-3 text-sm font-medium ${
+                  <td className={`w-8 px-1 py-3 text-center`}>
+                    {isInWatchlist(stock.ticker) && (
+                      <span className="text-yellow-500">
+                        <svg
+                          className="w-4 h-4 inline-block"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                      </span>
+                    )}
+                  </td>
+                  <td className={`w-14 px-2 py-3 text-center text-sm font-medium ${
                     darkMode ? 'text-gray-300' : 'text-gray-900'
                   }`}>
                     {stock.rank}
                   </td>
-                  <td className={`px-4 py-3 ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
-                    <div>
-                      <div className="text-sm font-medium">{stock.name}</div>
+                  <td className={`w-44 px-3 py-3 text-left ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <div className="truncate">
+                      <div className="text-sm font-medium truncate">{stock.name}</div>
                       <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                         {stock.ticker}
                       </div>
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-right text-sm ${
+                  <td className={`w-24 px-3 py-3 text-right text-sm ${
                     darkMode ? 'text-gray-300' : 'text-gray-900'
                   }`}>
                     {stock.price.toLocaleString()}원
                   </td>
-                  <td className={`px-4 py-3 text-right text-sm ${changeColor}`}>
+                  <td className={`w-20 px-3 py-3 text-right text-sm ${changeColor}`}>
                     <div className="flex items-center justify-end space-x-1">
-                      <span>{changeIcon}</span>
+                      <span className="text-xs">{changeIcon}</span>
                       <span>{Math.abs(stock.changeRate).toFixed(2)}%</span>
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-right text-sm ${
+                  <td className={`px-3 py-3 text-right text-sm ${
                     darkMode ? 'text-gray-300' : 'text-gray-900'
-                  }`}>
+                  } truncate`}>
                     {rankingType === 'marketCap' ? (stock.marketCap || '0') : rankingType === 'tradeValue' ? (stock.tradeValue || '0') : (stock.volume || '0')}
                   </td>
                 </tr>
