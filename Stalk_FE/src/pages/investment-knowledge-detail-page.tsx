@@ -47,17 +47,14 @@ const KnowledgeBoardPage = () => {
     loadComments();
   }, [postId]);
 
-  // 현재 사용자 정보 로드
+  // 현재 사용자 정보 로드 (새로고침 시에도 refresh 쿠키로 복구 시도)
   useEffect(() => {
     const loadCurrentUser = async () => {
       try {
-        if (AuthService.isLoggedIn()) {
-          const userProfile = await AuthService.getUserProfile();
-          setCurrentUser(userProfile);
-        } else {
-          setCurrentUser(null);
-        }
+        const userProfile = await AuthService.getUserProfile();
+        setCurrentUser(userProfile);
       } catch (e) {
+        // 비로그인 또는 토큰 복구 실패 시 null 유지
         setCurrentUser(null);
         console.error("사용자 정보 로드 실패:", e);
       }
