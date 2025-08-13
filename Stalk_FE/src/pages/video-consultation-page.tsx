@@ -96,25 +96,31 @@ const DEFAULT_VIDEO_CONFIG = {
 // ✅ OV connection.data 안전 파서 (JSON/legacy 모두 흡수)
 function parseOvData(raw: string): any {
   if (!raw) return {};
-  // 1) 구조화된 JSON 시도
+
+  // A. "clientDataJSON%/%serverDataJSON" 포맷 우선 처리
+  if (raw.includes('%/%')) {
+    const [clientPart] = raw.split('%/%');
+    try { return JSON.parse(clientPart); } catch {}
+  }
+
+  // B. 통짜 JSON 포맷 처리
   try {
     const obj = JSON.parse(raw);
-    // clientData가 문자열(JSON)로 온 케이스
     if (obj?.clientData && typeof obj.clientData === 'string') {
       try { return JSON.parse(obj.clientData); } catch {}
     }
-    // serverData가 문자열(JSON)로 온 케이스
     if (obj?.serverData && typeof obj.serverData === 'string') {
       try { return JSON.parse(obj.serverData); } catch {}
     }
-    // 이미 전개된 형태 { ownerId, kind, ... }
     if (obj && (obj.ownerId || obj.kind)) return obj;
   } catch {}
-  // 2) 레거시 key=value 포맷 방어
+
+  // C. 레거시 key=value 포맷 방어
   const mClient = /clientData=([^,&]+)/.exec(raw);
   if (mClient) { try { return JSON.parse(decodeURIComponent(mClient[1])); } catch {} }
   const mServer = /serverData=([^,&]+)/.exec(raw);
   if (mServer) { try { return JSON.parse(decodeURIComponent(mServer[1])); } catch {} }
+
   return {};
 }
 
@@ -177,6 +183,7 @@ const VideoConsultationPage: React.FC = () => {
   const isMyScreenActive = () => !!screenPublisher || !!screenSession;
   const screenConnectingRef = useRef(false);
   const isCleaningScreenRef = useRef(false);
+  const myScreenConnectionIdRef = useRef<string | null>(null);
 
   // 안전하게 트랙 정지
   const stopTracks = (pub?: Publisher | null) => {
@@ -225,6 +232,7 @@ const VideoConsultationPage: React.FC = () => {
       setScreenPublisher(null);
       setScreenSession(null);
       setScreenOv(null);
+      myScreenConnectionIdRef.current = null; 
       setIsScreenSharing(false);
 
     } finally {
@@ -338,7 +346,10 @@ const VideoConsultationPage: React.FC = () => {
           const meta = parseOvData(event.stream.connection.data); 
           const isScreen = event.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
           const mine = meta?.ownerId && meta.ownerId === userInfo?.userId;
-          if (isScreen && mine) {
+
+          const fromThisConnection = session.connection?.connectionId === event.stream.connection.connectionId;
+          const fromMySecondConn = myScreenConnectionIdRef.current === event.stream.connection.connectionId;
+          if (isScreen && (mine || fromThisConnection || fromMySecondConn))  {
             console.log('[OV] skip subscribe for recording-only screen stream');
             return;
           }
@@ -897,6 +908,7 @@ const VideoConsultationPage: React.FC = () => {
           screenToken,
           JSON.stringify({ ownerId: userId, ownerName: name, kind: 'screen' })
         );
+        myScreenConnectionIdRef.current = sess2.connection?.connectionId || null;
         setScreenOv(ov2);
         setScreenSession(sess2);
 
@@ -1566,7 +1578,8 @@ const VideoConsultationPage: React.FC = () => {
                     const meta = parseOvData(sub.stream.connection.data);
                     const isScreen = sub.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
                     const mine = meta?.ownerId === userInfo?.userId;
-                    return !(isScreen && mine);
+                    const fromMySecondConn = myScreenConnectionIdRef.current === sub.stream.connection.connectionId;
+                    return !(isScreen && (mine || fromMySecondConn));
                   })
                   .map((subscriber, index) => {
                     const name = getParticipantName(subscriber);
