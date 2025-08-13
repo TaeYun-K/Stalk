@@ -782,9 +782,9 @@ const VideoConsultationPage: React.FC = () => {
           { 
             headers: { Authorization: `Bearer ${token}` },
             params: {userId, name}
-         }
+          }
         );
-        const screenToken = tokenRes?.data?.data?.token as string | undefined;
+        const screenToken = tokenRes?.data?.result?.token ?? tokenRes?.data?.data?.token;
         if (!screenToken) throw new Error("화면공유 토큰 발급 실패");
 
         // 2) 두 번째 OV/Session 생성 및 연결
