@@ -171,6 +171,7 @@ const VideoConsultationPage: React.FC = () => {
   const [screenOv, setScreenOv] = useState<OpenVidu | null>(null);
   const [screenSession, setScreenSession] = useState<Session | null>(null);
   const [screenPublisher, setScreenPublisher] = useState<Publisher | null>(null);
+  const isMyScreenActive = () => !!screenPublisher || !!screenSession;
 
 
   // 참가자 역할 구분을 위한 함수
@@ -771,13 +772,15 @@ const VideoConsultationPage: React.FC = () => {
   }, [session]);
 
   // 이미 화면공유(본인/상대) 존재하는지 체크
-  const hasAnyScreen = (sess?: Session | null) =>
-  !!sess?.streamManagers?.some((sm: any) => {
-    const st = sm?.stream;
-    if (!st) return false;
-    const meta = parseOvData(st?.connection?.data);
-    return meta?.kind === 'screen' || st?.typeOfVideo === 'SCREEN';
-  });
+  const hasAnyScreen = (sess?: Session | null) => {
+    if (isMyScreenActive()) return true;
+    return !!sess?.streamManagers?.some((sm: any) => {
+      const st = sm?.stream;
+      if (!st) return false;
+      const meta = parseOvData(st?.connection?.data);
+      return meta?.kind === 'screen' || st?.typeOfVideo === 'SCREEN';
+    });
+  };
 
   // 녹화 시작
   const handleStartRecording = async () => {
