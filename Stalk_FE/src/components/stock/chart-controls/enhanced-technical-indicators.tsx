@@ -148,16 +148,16 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                 const rect = e.currentTarget.getBoundingClientRect();
                 const tooltipWidth = 320;
                 const tooltipHeight = 120;
-                
+
                 // Calculate position relative to button
                 let x = rect.right + 8; // Position to the right of button
                 let y = rect.top + rect.height / 2;
-                
+
                 // Adjust if tooltip would go off screen
                 if (x + tooltipWidth > window.innerWidth) {
                   x = rect.left - tooltipWidth - 8; // Position to the left
                 }
-                
+
                 if (y + tooltipHeight / 2 > window.innerHeight) {
                   y = window.innerHeight - tooltipHeight - 8;
                 } else if (y - tooltipHeight / 2 < 0) {
@@ -165,7 +165,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                 } else {
                   y = y - tooltipHeight / 2;
                 }
-                
+
                 setTooltipPosition({ x, y });
                 setHoveredIndicator(key);
               }}
@@ -336,8 +336,8 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
         {/* Header with glassmorphism accent */}
         <div className={`mb-4 pb-3 border-b ${darkMode ? 'border-gray-700/30' : 'border-gray-200/30'}`}>
           <h3 className={`text-sm font-bold tracking-wide ${
-            darkMode 
-              ? 'text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400' 
+            darkMode
+              ? 'text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400'
               : 'text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600'
           }`}>
             📈 기술적 지표
@@ -353,16 +353,16 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                   const rect = e.currentTarget.getBoundingClientRect();
                   const tooltipWidth = 288;
                   const tooltipHeight = 160;
-                  
+
                   // Calculate position relative to button
                   let x = rect.right + 8; // Position to the right of button
                   let y = rect.top + rect.height / 2;
-                  
+
                   // Adjust if tooltip would go off screen
                   if (x + tooltipWidth > window.innerWidth) {
                     x = rect.left - tooltipWidth - 8; // Position to the left
                   }
-                  
+
                   if (y + tooltipHeight / 2 > window.innerHeight) {
                     y = window.innerHeight - tooltipHeight - 8;
                   } else if (y - tooltipHeight / 2 < 0) {
@@ -370,7 +370,7 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
                   } else {
                     y = y - tooltipHeight / 2;
                   }
-                  
+
                   setTooltipPosition({ x, y });
                   setHoveredIndicator('info');
                 }}
@@ -426,7 +426,6 @@ const EnhancedTechnicalIndicators: React.FC<EnhancedTechnicalIndicatorsProps> = 
           )}
           {renderIndicatorControl('vwap', 'VWAP', indicators.vwap, indicatorExplanations.vwap, false)}
           {renderIndicatorControl('ichimoku', '일목균형표', indicators.ichimoku, indicatorExplanations.ichimoku, false)}
-          {renderIndicatorControl('volume', '거래량', indicators.volume, indicatorExplanations.volume, false)}
         </div>
 
       </div>

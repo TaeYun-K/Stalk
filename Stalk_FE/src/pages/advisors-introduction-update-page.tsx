@@ -34,7 +34,6 @@ interface AdvisorDetailApi {
 
 type PreferredTradeStyle = "SHORT" | "MID_SHORT" | "MID" | "MID_LONG" | "LONG";
 
-
 const AdvisorsIntroductionUpdatePage: React.FC = () => {
   const navigate = useNavigate();
   const { advisorId } = useParams<{ advisorId: string }>();
@@ -77,23 +76,15 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
 
   // 전화번호 포맷팅 함수
   const formatPhoneNumber = (value: string) => {
-    // 숫자만 추출
     const numbers = value.replace(/[^\d]/g, "");
-
-    // 11자리 이하로 제한
     const limitedNumbers = numbers.slice(0, 11);
-
-    // 전화번호 형식으로 변환
-    if (limitedNumbers.length <= 3) {
-      return limitedNumbers;
-    } else if (limitedNumbers.length <= 7) {
+    if (limitedNumbers.length <= 3) return limitedNumbers;
+    if (limitedNumbers.length <= 7)
       return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(3)}`;
-    } else {
-      return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(
-        3,
-        7
-      )}-${limitedNumbers.slice(7)}`;
-    }
+    return `${limitedNumbers.slice(0, 3)}-${limitedNumbers.slice(
+      3,
+      7
+    )}-${limitedNumbers.slice(7)}`;
   };
 
   // 전화번호 입력 핸들러
@@ -111,39 +102,28 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
 
   // 날짜 포맷팅 함수
   const formatDate = (value: string) => {
-    // 숫자만 추출
     const numbers = value.replace(/[^\d]/g, "");
-
-    // 8자리 이하로 제한
     const limitedNumbers = numbers.slice(0, 8);
-
-    // 날짜 형식으로 변환
-    if (limitedNumbers.length <= 4) {
-      return limitedNumbers;
-    } else if (limitedNumbers.length <= 6) {
+    if (limitedNumbers.length <= 4) return limitedNumbers;
+    if (limitedNumbers.length <= 6)
       return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(4)}`;
-    } else {
-      return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(
-        4,
-        6
-      )}.${limitedNumbers.slice(6)}`;
-    }
+    return `${limitedNumbers.slice(0, 4)}.${limitedNumbers.slice(
+      4,
+      6
+    )}.${limitedNumbers.slice(6)}`;
   };
 
   // 날짜 유효성 검사 함수
   const isValidDate = (dateString: string) => {
     const regex = /^\d{4}\.\d{2}\.\d{2}$/;
     if (!regex.test(dateString)) return false;
-
     const parts = dateString.split(".");
     const year = parseInt(parts[0]);
     const month = parseInt(parts[1]);
     const day = parseInt(parts[2]);
-
     if (year < 1900 || year > 2100) return false;
     if (month < 1 || month > 12) return false;
     if (day < 1 || day > 31) return false;
-
     const date = new Date(year, month - 1, day);
     return (
       date.getFullYear() === year &&
@@ -237,37 +217,14 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
   };
 
   // 각 항목별 입력 완료 상태 확인 함수들
-  const isProfileImageComplete = () => {
-    return profileImage !== null;
-  };
-
-  const isContactComplete = () => {
-    return expertContact.trim() !== "";
-  };
-
-  const isCareerComplete = () => {
-    return careerEntries.length > 0;
-  };
-
-  const isTitleComplete = () => {
-    return experTitle.trim() !== "";
-  };
-
-  const isIntroductionComplete = () => {
-    return expertIntroduction.trim() !== "";
-  };
-
-  const isPreferredTradeStyleComplete = () => {
-    return preferredTradeStyle !== "";
-  };
-
-  const isConsultationFeeComplete = () => {
-    return consultationFee.trim() !== "";
-  };
-
-  const checkOperatingHoursComplete = () => {
-    return isOperatingHoursComplete;
-  };
+  const isProfileImageComplete = () => profileImage !== null;
+  const isContactComplete = () => expertContact.trim() !== "";
+  const isCareerComplete = () => careerEntries.length > 0;
+  const isTitleComplete = () => experTitle.trim() !== "";
+  const isIntroductionComplete = () => expertIntroduction.trim() !== "";
+  const isPreferredTradeStyleComplete = () => preferredTradeStyle !== "";
+  const isConsultationFeeComplete = () => consultationFee.trim() !== "";
+  const checkOperatingHoursComplete = () => isOperatingHoursComplete;
 
   // 기존 등록된 전문가 정보 로드
   useEffect(() => {
@@ -289,7 +246,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         setExpertTitle(result.short_intro || "");
         setExpertIntroduction(result.long_intro || "");
 
-        // 거래 스타일 응답값 정규화 (카멜/스네이크 + 한글/영문 대응)
+        // 거래 스타일 응답값 정규화
         const normalizeIncomingTradeStyle = (
           value?: string
         ): PreferredTradeStyle | "" => {
@@ -319,7 +276,6 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         ) {
           setConsultationFee(String(result.consultation_fee));
         }
-        // setConsultationFee(result.consultation_fee || '');
 
         const mappedCareers: CareerEntry[] = (result.careers || []).map(
           (c: AdvisorCareerApi) => ({
@@ -360,7 +316,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
     fetchExpert();
   }, [advisorId]);
 
-  // 전체 등록 처리 함수
+  // 전체 등록 처리 함수 (FormData로 전송)
   const handleSubmitAll = async () => {
     try {
       console.log("Starting update process...");
@@ -383,23 +339,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
         return;
       }
 
-      // 1. 프로필 이미지 업로드
-      let uploadedImageUrl = "";
-      if (profileImage) {
-        try {
-          const response = await advisorService.uploadProfileImage(
-            profileImage
-          );
-          uploadedImageUrl = response.fileUrl;
-          console.log("Profile image uploaded:", uploadedImageUrl);
-        } catch (error) {
-          console.error("Profile image upload failed:", error);
-          alert("프로필 이미지 업로드에 실패했습니다.");
-          return;
-        }
-      }
-
-      // 거래 스타일 정규화
+      // 거래 스타일 정규화 (한글 값이 들어왔을 가능성 방지)
       const normalizeTradeStyle = (
         value: string | undefined
       ): PreferredTradeStyle | undefined => {
@@ -414,13 +354,18 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
             return "MID_LONG";
           case "장기":
             return "LONG";
+          case "SHORT":
+          case "MID_SHORT":
+          case "MID":
+          case "MID_LONG":
+          case "LONG":
+            return value as PreferredTradeStyle;
           default:
             return undefined;
         }
       };
-
       const normalizedStyle = normalizeTradeStyle(
-        preferredTradeStyle || undefined
+        (preferredTradeStyle as string) || undefined
       );
 
       // 경력 변경사항 (CREATE/UPDATE/DELETE)
@@ -470,7 +415,7 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
           endedAt: e.endDate ? e.endDate.replace(/\./g, "-") : null,
         }));
 
-      const createEntries: CareerPayload[] = careerEntries
+      const createEntriesAll: CareerPayload[] = careerEntries
         .filter((e) => e.apiId === undefined)
         .map((e) => ({
           action: "CREATE",
@@ -483,48 +428,50 @@ const AdvisorsIntroductionUpdatePage: React.FC = () => {
       const careerChanges: CareerPayload[] = [
         ...deleteEntries,
         ...updateEntries,
-        ...createEntries,
+        ...createEntriesAll,
       ];
 
-      // 2. 프로필 데이터 생성 (선택하지 않은 필드는 제외)
-      const profileData = {
-        profileImageUrl: uploadedImageUrl,
-        publicContact: expertContact,
-        shortIntro: experTitle.trim(), // experTitle을 shortIntro에 매핑
-        longIntro: expertIntroduction,
-        preferredTradeStyle: preferredTradeStyle || "MID_LONG", // 기본값 설정
-        careerEntries: careerEntries.map((entry) => ({
-          action: "CREATE",
-          title: entry.company, // company를 title에 매핑
-          description: entry.position, // position을 description에 매핑
-          startedAt: entry.startDate.replace(/\./g, "-"),
-          endedAt: entry.endDate ? entry.endDate.replace(/\./g, "-") : null,
-        })),
-        consultationFee: consultationFee,
-      };
+      // === 여기부터 FormData 조립 ===
+      const form = new FormData();
 
-      if (normalizedStyle) {
-        profileData.preferredTradeStyle = normalizedStyle;
+      // 파일(선택)
+      if (profileImage) {
+        // 백엔드 @RequestPart 이름에 맞춰 키를 조정해줘야 함. (예: "profileImage", "image", ...)
+        form.append("profileImage", profileImage, profileImage.name);
       }
 
-      if (careerChanges.length > 0) {
-        // 필드 존재를 선택적으로 추가
-        (
-          profileData as unknown as { careerEntries?: typeof careerChanges }
-        ).careerEntries = careerChanges;
+      // 단순 문자열/숫자 필드
+      form.append("publicContact", expertContact); // 예: @RequestPart("publicContact") String
+      form.append("shortIntro", experTitle.trim());
+      form.append("longIntro", expertIntroduction.trim());
+      form.append("preferredTradeStyle", normalizedStyle ?? "MID_LONG");
+      if (consultationFee !== "") {
+        form.append("consultationFee", consultationFee);
       }
 
-      console.log("Submitting profile data:", profileData);
+      // 경력 리스트(JSON Part) — Spring에선 @RequestPart("careerEntries")로 받기 좋게 JSON으로 보냄
+      const careerEntriesJson = new Blob(
+        [
+          JSON.stringify(
+            careerChanges.length > 0 ? careerChanges : createEntriesAll
+          ),
+        ],
+        { type: "application/json" }
+      );
+      form.append("careerEntries", careerEntriesJson);
 
-      // 3. 프로필 데이터 전송
-      const response = await advisorService.updateProfile(profileData);
+      // (선택) 기존 이미지 URL을 유지하려면, 파일을 안 보낼 때만 서버에서 유지하도록 처리
+      // 필요시 아래 라인을 사용:
+      // if (!profileImage && profileImageUrl) form.append("profileImageUrl", profileImageUrl);
+
+      console.log("Submitting profile (multipart/form-data)...");
+      const response = await advisorService.updateProfile(form);
       console.log("Profile updated successfully:", response);
-      const returnedId =
-        (response && (response.id as string | number | undefined)) ?? undefined;
 
       alert("전문가 프로필이 성공적으로 수정되었습니다.");
 
-      // 상세 페이지로 이동: 응답 id 우선, 없으면 URL의 advisorId 사용, 그래도 없으면 목록으로
+      const returnedId =
+        (response && (response.id as string | number | undefined)) ?? undefined;
       const targetId = returnedId ?? advisorId;
       if (targetId) {
         navigate(`/advisors-detail/${targetId}`);

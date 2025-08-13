@@ -76,7 +76,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     return uri.startsWith("/api/auth/")
         || uri.startsWith("/api/krx/")
-        || uri.startsWith("/api/community/")
+        || uri.equals("/api/community/")
         || uri.equals("/api/advisors")  // 목록 조회만
         || uri.matches("/api/advisors/\\d+");  // 상세 조회만 (숫자 ID)
   }

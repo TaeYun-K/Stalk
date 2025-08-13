@@ -19,6 +19,7 @@ const PUBLIC_ROUTES = [
   '/signup-complete',
   '/products',
   '/investment-knowledge-list',
+  '/investment-knowledge-detail',
   '/search',
   '/advisors-list'];
 
