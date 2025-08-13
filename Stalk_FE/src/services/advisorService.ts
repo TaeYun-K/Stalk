@@ -67,47 +67,38 @@ class AdvisorService {
     return { fileUrl };
   }
 
-  // 프로필 생성 - JSON만 사용
-  static async createProfile(profileData: any): Promise<{
-    id: number;
-    profileImageUrl: string;
-    publicContact: string;
-    shortIntro: string;
-    longIntro: string;
-    preferredTradeStyle: string;
-    careerEntries: Array<{
-      id: number;
-      action: string;
-      title: string;
-      description: string;
-      startedAt: string;
-      endedAt: string;
-      validForUpdate: boolean;
-      validForDelete: boolean;
-      deleteAction: boolean;
-      updateAction: boolean;
-      createAction: boolean;
-    }>;
-  }> {
-    const response = await AuthService.authenticatedRequest(
-      "/api/advisors/profile",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(profileData),
-      }
-    );
+  static async createProfile(payload: Record<string, any> | FormData) {
+    const isFormData =
+      typeof FormData !== "undefined" && payload instanceof FormData;
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => null);
-      const msg = err?.message || response.statusText;
-      throw new Error(`프로필 생성 실패: ${response.status} (${msg})`);
+    const options: RequestInit = {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${AuthService.getAccessToken()}`,
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      },
+      body: isFormData ? payload : JSON.stringify(payload),
+    };
+
+    if (isFormData) {
+      console.log("FormData 전송 중:");
+      for (const [k, v] of payload.entries()) {
+        console.log(`${k}:`, v);
+      }
     }
 
-    const result = await response.json();
-    return result;
+    const res = await fetch("/api/advisors/profile", options);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`프로필 생성 실패(${res.status}): ${text}`);
+    }
+
+    try {
+      const data = await res.json();
+      return data?.result ?? data;
+    } catch {
+      return {};
+    }
   }
 
   // 프로필 업데이트: JSON 또는 FormData 둘 다 지원

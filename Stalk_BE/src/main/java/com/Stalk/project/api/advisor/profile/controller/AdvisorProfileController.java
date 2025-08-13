@@ -52,11 +52,25 @@ public class AdvisorProfileController {
                     @RequestPart("longIntro") String longIntro,
                     @RequestPart("preferredTradeStyle") String preferredTradeStyle,
                     @RequestPart(value = "consultationFee", required = false) String consultationFee,
-                    @RequestPart("careerEntries") List<CareerEntryDto> careerEntries
+                    @RequestPart("careerEntries") String careerEntriesJson  // 이 부분 변경
     ) {
         Long advisorId = SecurityUtil.getCurrentUserPrimaryId();
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
+        }
+
+        // JSON 문자열을 List<CareerEntryDto>로 변환 (업데이트와 동일한 로직 추가)
+        List<CareerEntryDto> careerEntries = null;
+        if (careerEntriesJson != null && !careerEntriesJson.trim().isEmpty()) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                objectMapper.registerModule(new JavaTimeModule());
+                careerEntries = objectMapper.readValue(careerEntriesJson,
+                                new TypeReference<List<CareerEntryDto>>() {});
+            } catch (Exception e) {
+                log.error("Failed to parse careerEntries JSON: {}", careerEntriesJson, e);
+                throw new BaseException(BaseResponseStatus.INVALID_JSON_FORMAT);
+            }
         }
 
         AdvisorProfileCreateRequestDto req = new AdvisorProfileCreateRequestDto();

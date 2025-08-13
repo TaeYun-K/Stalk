@@ -195,7 +195,6 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
     try {
       console.log("Starting registration process (multipart)...");
 
-      // 토큰 확인
       const token =
         AuthService.getAccessToken?.() || localStorage.getItem("accessToken");
       if (!token) {
@@ -204,7 +203,7 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
         return;
       }
 
-      // 필수 필드 검증 (업데이트와 동일한 규약)
+      // 필수 검증들...
       if (!isTitleComplete()) {
         alert("전문가 제목(간단 소개)을 입력해주세요.");
         return;
@@ -226,36 +225,38 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
         return;
       }
 
-      // FormData 구성
       const form = new FormData();
 
-      // 파일 (optional)
+      // 파일 파트 이름은 서버와 동일해야 함: "profileImage"
       if (profileImage) {
         form.append("profileImage", profileImage, profileImage.name);
       }
 
-      // 텍스트 파트
-      form.append("publicContact", expertContact);
+      // 텍스트 파트 (RequestPart 이름 정확히 맞추기)
+      form.append("publicContact", expertContact.trim());
       form.append("shortIntro", experTitle.trim());
       form.append("longIntro", expertIntroduction.trim());
-      form.append("preferredTradeStyle", preferredTradeStyle || "MID_LONG"); // 기본값 허용
-      if (consultationFee !== "")
-        form.append("consultationFee", consultationFee);
 
-      // JSON 배열 파트 (application/json)
+      // 서버 enum과 100% 동일 값으로 매핑
+      // 예: UI 값이 'MID_LONG'|'SHORT'|'LONG'처럼 서버와 같다면 그대로 사용
+      form.append("preferredTradeStyle", (preferredTradeStyle ?? "").trim());
+
+      // consultationFee: 빈 문자열일 땐 아예 보내지 않기 (서버 NPE 회피)
+      if (consultationFee !== "") {
+        form.append("consultationFee", String(consultationFee).trim());
+      }
+
+      // ✅ careerEntries는 "문자열"로! (Blob 사용 금지)
       const careerPayload = careerEntries.map((e) => ({
-        action: "CREATE",
+        // action 제거 권장 (백엔드 DTO에 없을 수 있음)
         title: e.company,
         description: e.position,
         startedAt: e.startDate.replace(/\./g, "-"),
         endedAt: e.endDate ? e.endDate.replace(/\./g, "-") : null,
       }));
-      form.append(
-        "careerEntries",
-        new Blob([JSON.stringify(careerPayload)], { type: "application/json" })
-      );
+      form.append("careerEntries", JSON.stringify(careerPayload)); // ← 여기 핵심 변경
 
-      // 전송 (Content-Type 수동 지정 ❌, Authorization만 추가)
+      // 전송 (Content-Type 수동 지정 X)
       const res = await fetch("/api/advisors/profile", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -263,25 +264,25 @@ const AdvisorsIntroductionCreatePage: React.FC = () => {
       });
 
       if (!res.ok) {
+        const text = await res.text().catch(() => "");
         let msg = "등록에 실패했습니다.";
         try {
-          const err = await res.json();
+          const err = text ? JSON.parse(text) : null;
           msg = err?.message || msg;
         } catch {
-          /* ignore */
+          if (text) msg = text;
         }
         throw new Error(msg);
       }
 
-      const payload = await res.json();
-      // 서버 BaseResponse 규약에 맞춰 추출
+      // 성공 응답 파싱 (빈 바디 대비)
+      const text = await res.text().catch(() => "");
+      const payload = text ? JSON.parse(text) : {};
       const result = payload?.result ?? payload?.data ?? payload;
       const expertId =
         result?.id ?? result?.advisorId ?? result?.profileId ?? null;
 
       alert("전문가 프로필이 성공적으로 등록되었습니다.");
-
-      // 상세 페이지로 이동 (id 없으면 목록으로)
       if (expertId) navigate(`/expert-detail/${expertId}`);
       else navigate("/advisors-list");
     } catch (error) {
