@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
-import profileDefault from '@/assets/images/profiles/Profile_default.svg';
 import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
@@ -28,11 +27,11 @@ const HomePageNavbar: React.FC = () => {
       if (data.result?.profileImage) {
         setUserProfileImage(data.result.profileImage);
       } else {
-        setUserProfileImage(profileDefault);
+        setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
       }
     } catch (error) {
       console.error('프로필 이미지 로드 실패:', error);
-      setUserProfileImage(profileDefault);
+      setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
     }
   };
 
@@ -198,12 +197,12 @@ const HomePageNavbar: React.FC = () => {
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.src = profileDefault;
+                        e.currentTarget.src = `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
                       }}
                     />
                   ) : (
                     <img
-                      src={profileDefault}
+                      src={`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`}
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(_e) => {
