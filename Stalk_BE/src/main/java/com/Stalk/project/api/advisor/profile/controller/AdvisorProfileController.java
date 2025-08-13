@@ -1,8 +1,10 @@
 package com.Stalk.project.api.advisor.profile.controller;
 
+import com.Stalk.project.api.advisor.dto.in.PreferredTradeStyle;
 import com.Stalk.project.api.advisor.profile.dto.in.AdvisorCertificateApprovalRequestDto;
 import com.Stalk.project.api.advisor.profile.dto.in.AdvisorProfileCreateRequestDto;
 import com.Stalk.project.api.advisor.profile.dto.in.AdvisorProfileUpdateRequestDto;
+import com.Stalk.project.api.advisor.profile.dto.in.CareerEntryDto;
 import com.Stalk.project.api.advisor.profile.dto.out.AdvisorProfileResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.ApprovalHistoryResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.CertificateApprovalResponseDto;
@@ -21,10 +23,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
@@ -50,7 +54,7 @@ public class AdvisorProfileController {
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     public BaseResponse<AdvisorProfileResponseDto> createAdvisorProfile(
-        @Valid @ModelAttribute AdvisorProfileCreateRequestDto request) {
+        @Valid @RequestBody AdvisorProfileCreateRequestDto request) {
 
         log.info("POST /api/advisors/profile - Creating advisor profile");
 
@@ -69,39 +73,42 @@ public class AdvisorProfileController {
         return new BaseResponse<>(result);
     }
 
-    // ===== 전문가 상세 정보 수정 =====
-
-    @PutMapping("/profile")
-    @Operation(
-        summary = "전문가 상세 정보 수정",
-        description = "등록된 프로필 정보를 수정합니다. 경력 정보는 개별적으로 생성/수정/삭제가 가능합니다."
+    @PutMapping(
+        value = "/profile",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "프로필 수정 성공"),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청 (수정할 내용 없음 등)"),
-        @ApiResponse(responseCode = "403", description = "권한 없음"),
-        @ApiResponse(responseCode = "404", description = "등록된 프로필 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 오류")
-    })
     public BaseResponse<AdvisorProfileResponseDto> updateAdvisorProfile(
-        @Valid @ModelAttribute AdvisorProfileUpdateRequestDto request) {
-
+        @RequestPart(value = "profileImage", required = false) MultipartFile profileImage,
+        @RequestPart("publicContact") String publicContact,
+        @RequestPart("shortIntro") String shortIntro,
+        @RequestPart("longIntro") String longIntro,
+        @RequestPart("preferredTradeStyle") String preferredTradeStyle,
+        @RequestPart(value = "consultationFee", required = false) String consultationFee,
+        @RequestPart("careerEntries") List<CareerEntryDto> careerEntries
+    ) {
         log.info("PUT /api/advisors/profile - Updating advisor profile");
 
-        // 1. JWT 토큰에서 현재 사용자 정보 추출
         Long currentUserId = SecurityUtil.getCurrentUserPrimaryId();
 
-        // 2. 전문가 권한 확인
         if (!SecurityUtil.isCurrentUserAdvisor()) {
             throw new BaseException(BaseResponseStatus.UNAUTHORIZED_ADVISOR_ACCESS);
         }
 
-        // 3. 서비스 호출
-        AdvisorProfileResponseDto result = advisorProfileService.updateAdvisorProfile(
-            currentUserId, request);
+        AdvisorProfileUpdateRequestDto request = new AdvisorProfileUpdateRequestDto();
+        request.setProfileImageUrl(request.getProfileImageUrl());
+        request.setPublicContact(publicContact);
+        request.setShortIntro(shortIntro);
+        request.setLongIntro(longIntro);
+        request.setPreferredTradeStyle(PreferredTradeStyle.valueOf(preferredTradeStyle));
+        request.setConsultationFee(Integer.valueOf(consultationFee));
+        request.setCareerEntries(careerEntries);
+
+        AdvisorProfileResponseDto result =
+            advisorProfileService.updateAdvisorProfile(currentUserId, request);
 
         return new BaseResponse<>(result);
     }
+
 
     // ===== 자격 승인 요청 =====
 
