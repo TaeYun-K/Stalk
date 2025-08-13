@@ -124,32 +124,6 @@ function parseOvData(raw: string): any {
   return {};
 }
 
-// 서버가 CAM/SCREEN을 실제로 보고 있는지 폴링
-async function waitForStreamsOnServer(
-  sessionId: string,
-  {
-    needCamera = true,
-    needScreen = true,
-    timeoutMs = 8000,
-    intervalMs = 300,
-  }: { needCamera?: boolean; needScreen?: boolean; timeoutMs?: number; intervalMs?: number } = {}
-) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const token = AuthService.getAccessToken();
-    const { data } = await axios.get(
-      `/api/openvidu/sessions/${encodeURIComponent(sessionId)}`,
-      { headers: { Authorization: `Bearer ${token}` } } // ✅ JWT 포함
-    );
-    const conns = data?.connections?.content ?? [];
-    const types = conns.flatMap((c: any) => (c.publishers ?? []).map((p: any) => p.typeOfVideo));
-    const hasCam = types.includes('CAMERA');
-    const hasScreen = types.includes('SCREEN');
-    if ((!needCamera || hasCam) && (!needScreen || hasScreen)) return;
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  throw new Error('Timeout: CAM/SCREEN not visible in OpenVidu server');
-}
 
 const TIMER_INTERVAL_MS = 1000;
 
@@ -954,7 +928,7 @@ const VideoConsultationPage: React.FC = () => {
           throw new Error('Screen track not live');
         }
 
-        await waitForStreamsOnServer(ovSessionId, { needCamera: true, needScreen: true, timeoutMs: 8000, intervalMs: 300 });
+        await axios.post(`/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`, {}, { headers: { Authorization: `Bearer ${token}` }});
 
         // (선택) 레이스 방지용 짧은 대기
         await new Promise((r) => setTimeout(r, 120));
