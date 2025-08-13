@@ -1057,15 +1057,18 @@ const VideoConsultationPage: React.FC = () => {
           {showStockChart && (
             <>
               {/* Stock Info */}
-              {selectedStock && (
+              {(selectedStock || currentChart) && (
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-semibold">{selectedStock.name}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700/50 text-gray-300">
-                    {selectedStock.ticker}
+                  <span className="text-white font-semibold">
+                    {selectedStock?.name ?? currentChart?.name ?? ''}
                   </span>
+                  {(selectedStock?.ticker ?? currentChart?.ticker) && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700/50 text-gray-300">
+                      {selectedStock?.ticker ?? currentChart?.ticker}
+                    </span>
+                  )}
                 </div>
               )}
-
               {/* Period Controls */}
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-800/40 backdrop-blur-md border border-gray-700/30">
                 <ChartControls
