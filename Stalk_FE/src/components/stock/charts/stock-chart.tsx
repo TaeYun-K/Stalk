@@ -1652,26 +1652,16 @@ const StockChart: React.FC<StockChartProps> = ({
 
   // 내가 period 바꿀 때 브로드 캐스트 보내기
   const handlePeriodChange = (newPeriod: string) => {
+
     setPeriod(newPeriod);
-    
-    // Call external handler if provided (for consultation mode) - YOUR LOCAL CODE
-    externalPeriodChange?.(parseInt(newPeriod));
 
-    const ticker = getCurrentTicker();
+    // 기존 onChartChange 콜백 유지
+    onChartChange?.({ ticker: getCurrentTicker(), period: newPeriod, name: getCurrentName() || getCurrentTicker() });
 
-    if (ticker) {
-      const info = { ticker, period: newPeriod };
-      // 기존 상위 콜백 유지
-      onChartChange?.(info);
-      // ✅ 세션 브로드캐스트 추가 - FROM DEV (for real-time collaboration)
-      session?.signal({
-        type: 'chart:change',
-        data: JSON.stringify(info),
-      }).catch(console.error);
+    // ✅ 시그널 전송을 헬퍼로 통일
 
-      // 내가 바꾼 걸 sharedChart에도 반영 (내 화면도 일관성 있게)
-      setSharedChart(info);
-    }
+    broadcastChartChange({ period: newPeriod });
+
   };
 
   const handleChartTypeChange = (newType: ChartType) => {
