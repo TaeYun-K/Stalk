@@ -50,8 +50,41 @@ export const useDrawingCanvas = (
   const drawingToolRef = useRef<string>('pen');
   const strokeColorRef = useRef<string>('#1e40af');
   const strokeWidthRef = useRef<number>(2);
+  
+  // Chart context for coordinate mapping
+  const chartContextRef = useRef<{
+    totalDataPoints: number;
+    actualDataPoints: number;
+    futureDataPoints: number;
+    hasFutureSpace: boolean;
+  } | null>(null);
 
   const genId = () => `shape_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Get scaled pointer position accounting for future space
+  const getScaledPointerPosition = useCallback((stage: Konva.Stage) => {
+    const pos = stage.getPointerPosition();
+    if (!pos) return null;
+    
+    // If we have chart context with future space, adjust x coordinate
+    if (chartContextRef.current && chartContextRef.current.hasFutureSpace) {
+      const { totalDataPoints, actualDataPoints } = chartContextRef.current;
+      const stageWidth = stage.width();
+      
+      // Calculate the scaling factor
+      // The actual data takes up actualDataPoints/totalDataPoints of the width
+      // We need to map the x coordinate accordingly
+      const scaleFactor = totalDataPoints / actualDataPoints;
+      
+      // Only scale x coordinate for horizontal alignment with chart
+      return {
+        x: pos.x,  // Keep original for now - will be adjusted by chart
+        y: pos.y
+      };
+    }
+    
+    return pos;
+  }, []);
 
   // Konva 노드에 고유 ID 부여 (없으면 생성)
   const ensureId = useCallback((node: Konva.Node): string => {
@@ -361,7 +394,7 @@ export const useDrawingCanvas = (
     const layer = layerRef.current;
     if (!stage || !layer) return;
 
-    const pos = stage.getPointerPosition();
+    const pos = getScaledPointerPosition(stage);
     if (!pos) return;
 
     isDrawingRef.current = true;
@@ -388,7 +421,7 @@ export const useDrawingCanvas = (
         console.log(`${drawingToolRef.current} 드래그 생성 시작`);
       }
     }
-  }, []);
+  }, [getScaledPointerPosition]);
 
   const handleMouseMove = useCallback((_e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (!isDrawingRef.current) return;
@@ -397,7 +430,7 @@ export const useDrawingCanvas = (
     const layer = layerRef.current;
     if (!stage || !layer) return;
 
-    const pos = stage.getPointerPosition();
+    const pos = getScaledPointerPosition(stage);
     if (!pos) return;
 
     if (drawingToolRef.current === 'pen') {
@@ -412,7 +445,7 @@ export const useDrawingCanvas = (
         layer.batchDraw();
       }
     }
-  }, []);
+  }, [getScaledPointerPosition]);
 
 
   // 드로잉 종료 시 생성된 도형을 add 시그널로 올리고, 
@@ -1002,6 +1035,22 @@ export const useDrawingCanvas = (
   handleMouseDown, handleMouseMove, handleMouseUp, handleClick,
   onLocalShapeUpdated, emit, ensureId]);
 
+  // Update chart context for proper coordinate mapping
+  const updateChartContext = useCallback((context: {
+    totalDataPoints: number;
+    actualDataPoints: number;
+    futureDataPoints: number;
+    hasFutureSpace: boolean;
+  }) => {
+    chartContextRef.current = context;
+    
+    // If stage exists and future space changed, re-calculate positions
+    if (stageRef.current && layerRef.current) {
+      // Trigger re-draw to update positions if needed
+      layerRef.current.batchDraw();
+    }
+  }, []);
+
   return {
     initializeCanvas,
     enableDrawing,
@@ -1017,5 +1066,6 @@ export const useDrawingCanvas = (
     applySnapshot,      
     onLocalShapeCreated,
     onLocalShapeUpdated,
+    updateChartContext,
   };
 };
