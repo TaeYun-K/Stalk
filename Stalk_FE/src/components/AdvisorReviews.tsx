@@ -36,13 +36,14 @@ const AdvisorReviews: React.FC<Props> = ({ advisorId }) => {
   return (
     <div className="space-y-4">
       {data?.content.map((r) => (
-        <div key={r.reviewId} className="border rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
+        <div key={r.reviewId} className="border rounded-lg p-6">
+          <div className="flex items-center mb-2 space-x-2">
             <div className="font-semibold text-gray-900">{r.userName}</div>
-            <div className="text-yellow-500">⭐ {r.rating}</div>
+            <div className="text-gray-700">⭐ {r.rating}</div>
           </div>
-          <div className="text-sm text-gray-500 mb-2">{new Date(r.createdAt).toLocaleString()}</div>
-          <div className="text-gray-800 whitespace-pre-wrap">{r.content}</div>
+          <div className="text-sm text-left text-gray-500 mb-2">{new Date(r.createdAt).toLocaleString()}</div>
+          <hr className="my-4 border-gray-200" />
+          <div className="text-gray-800 whitespace-pre-wrap text-left">{r.content}</div>
         </div>
       ))}
       {data && data.content.length === 0 && (
