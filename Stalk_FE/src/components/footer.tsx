@@ -8,7 +8,7 @@ const Footer: React.FC = () => {
         <div className="flex justify-center space-x-12 text-base text-gray-600 mb-8">
           <span>개인정보 처리방침</span>
           <span className="text-gray-300">|</span>
-          <span>고객센터 0000-0000</span>
+          <span>고객센터 1544-9001</span>
           <span className="text-gray-300">|</span>
           <span>공지사항</span>
         </div>
