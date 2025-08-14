@@ -161,7 +161,10 @@ public class ConsultationSessionService {
 
       session.close();
 
-      // 1) 메모리에서 세션 정보 제거
+      // DB 상태 변경
+      consultationSessionMapper.updateStatusToApprovedBySessionId(sessionId);
+
+      // 메모리에서 세션 정보 제거
       sessionMap.remove(consultationId);
       createdAtMap.remove(consultationId);
 
