@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import tossLogoBlue from "@/assets/images/logos/Toss_logo_blue.svg";
 import checkIcon from "@/assets/images/icons/check_icon.svg";
 import sidebarSlideupIcon from "@/assets/images/icons/sidebar_slideup_icon.svg";
@@ -53,9 +53,7 @@ interface KnowledgePost {
 
 const Sidebar: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { userRole } = useAuth();
-  const isHomePage = location.pathname === "/";
   const { watchlist, removeFromWatchlist } = useWatchlist();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
   const [selectedMenu, setSelectedMenu] = useState<string>("notifications");
@@ -187,7 +185,6 @@ const Sidebar: React.FC = () => {
     }
 
     const willCollapse = selectedMenu === menuId && !isCollapsed;
-    const willExpand = !willCollapse && isCollapsed;
     
     // 먼저 이벤트를 발생시켜서 다른 컴포넌트가 준비할 시간을 줌
     window.dispatchEvent(new CustomEvent('sidebarStateChange', {
@@ -219,11 +216,9 @@ const Sidebar: React.FC = () => {
   };
 
   const handleToggleSidebar = () => {
-    const willExpand = isCollapsed;
-    
     // 먼저 이벤트를 발생시켜서 다른 컴포넌트가 준비할 시간을 줌
     window.dispatchEvent(new CustomEvent('sidebarStateChange', {
-      detail: { expanded: willExpand }
+      detail: { expanded: isCollapsed }
     }));
 
     // 약간의 딜레이 후 실제 상태 변경 (smooth transition을 위해)
@@ -337,7 +332,10 @@ const Sidebar: React.FC = () => {
                     >
                       <img src={likeClickIcon} alt="like" className="w-5 h-5" />
                     </button>
-                    <div className="flex-1 flex justify-between items-center">
+                    <div
+                      className="flex-1 flex justify-between items-center"
+                      onClick={() => navigate(`/products?ticker=${encodeURIComponent(item.code)}`)}
+                    >
                       <div>
                         <div className="font-semibold text-gray-900">
                           {item.name}
@@ -483,6 +481,7 @@ const Sidebar: React.FC = () => {
                   <div
                     key={post.postId}
                     className="bg-white border rounded-lg p-4 shadow-sm"
+                    onClick={() => navigate(`/investment-knowledge-detail/${post.postId}`)}
                   >
                     <div className="font-semibold text-gray-900 mb-2 line-clamp-2">
                       {post.title}

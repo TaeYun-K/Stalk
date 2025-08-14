@@ -778,22 +778,7 @@ const MyPage = () => {
   const handleConsultationDiaryClick = async (
     consultation: ConsultationItem
   ) => {
-    setSelectedConsultation(consultation);
-    setActiveTab("상담일지");
-    setIsLoadingDiary(true);
-    setDiaryError(null);
-
-    try {
-      const diaryData = await ConsultationService.getConsultationDiary(
-        consultation.id
-      );
-      setConsultationDiary(diaryData);
-    } catch (error) {
-      console.error("상담일지 조회 실패:", error);
-      setDiaryError("상담일지를 불러오는데 실패했습니다.");
-    } finally {
-      setIsLoadingDiary(false);
-    }
+    navigate(`/consultations/${consultation.id}/recordings`);
   };
 
   const handleCloseDiary = () => {

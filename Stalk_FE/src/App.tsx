@@ -48,6 +48,7 @@ import AdvisorReviewsPage from "@/pages/advisor-reviews-page";
 
 import SearchPage from "@/pages/search-page";
 import VideoConsultationPage from "@/pages/video-consultation-page";
+import ConsultationRecordingsPage from "@/pages/consultation-recordings-page";
 import AdminPage from "@/pages/admin-page";
 
 // Payment Result ============================================================================================
@@ -176,6 +177,12 @@ const AppContent: React.FC = () => {
               <Route
                 path="/video-consultation/:consultationId"
                 element={<VideoConsultationPage />}
+              />
+
+              {/* 상담 녹화 영상 전용 페이지 */}
+              <Route
+                path="/consultations/:consultationId/recordings"
+                element={<ConsultationRecordingsPage />}
               />
 
               {/* 결제 결과 관련 path */}
