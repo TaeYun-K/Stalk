@@ -201,7 +201,7 @@ const StockRankingTable: React.FC<StockRankingTableProps> = ({
                     darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                   }`}
                 >
-                  <td className={`w-[40px] pr-4 py-4 text-center`}>
+                  <td className={`w-[40px] pl-5 py-4 text-center`}>
                     {isInWatchlist(stock.ticker) && (
                       <span className="text-red-500">
                         <svg
