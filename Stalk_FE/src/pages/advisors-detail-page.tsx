@@ -789,7 +789,7 @@ const AdvisorsDetailPage: React.FC = () => {
         day
       );
       const dateStart = startOfDay(date);
-      const isPast = dateStart < today;
+      const isPast = dateStart <= today;
 
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
       const isSunday = date.getDay() === 0;
