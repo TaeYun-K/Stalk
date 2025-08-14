@@ -12,4 +12,11 @@
         WHERE id = #{consultationId}
     </update>
 
+    <update id="updateStatusToApprovedBySessionId">
+        UPDATE consultation_sessions
+        SET status = 'APPROVED',
+            end_time = CURRENT_TIME
+        WHERE session_id = #{sessionId}
+    </update>
+
 </mapper>
