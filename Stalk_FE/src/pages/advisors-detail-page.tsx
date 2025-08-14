@@ -912,7 +912,7 @@ const AdvisorsDetailPage: React.FC = () => {
               <div className="flex flex-row justify-between items-center">
                 {/* 컨설턴트명 / 연락처 등 기본 정보 */}
                 <div>
-                  <div className="flex flex-row items-center gap-2">
+                  <div className="flex flex-row items-end gap-2">
                     {/* 찜하기 하트 버튼 */}
                     {currentUserRole === "USER" && (
                       <button
@@ -945,17 +945,19 @@ const AdvisorsDetailPage: React.FC = () => {
                     <h1 className="text-left text-3xl font-bold text-gray-900 mb-2">
                       {expert.name}
                     </h1>
-                    <h3 className="text-left text-l font-semibold text-blue-500 mb-2">
+                    <h3 className="text-left text-l font-medium text-blue-500 mb-2">
                       {expert.title}
                     </h3>
                     <h3 className="text-left text-l font-medium text-gray-400 mb-2">
                       / {expertData?.contact || "010-0000-0000"}
                     </h3>
                     <div className="flex items-center space-x-4 mb-2 ml-4">
-                      <div className="flex text-yellow-400">⭐</div>
-                      <span className="ml-2 font-semibold text-gray-900">
-                        {expert.rating}
-                      </span>
+                      <div className="flex items-center">
+                        <div className="flex text-yellow-400">⭐</div>
+                        <span className="ml-1 font-semibold text-gray-900">
+                          {expert.rating}
+                        </span>
+                      </div>
                       <span className="text-gray-600 ml-4">
                         리뷰 {expert.reviewCount}개
                       </span>
@@ -1012,7 +1014,7 @@ const AdvisorsDetailPage: React.FC = () => {
 
               {/* Experience */}
               <section className="w-1/2">
-                <div className="flex flex-row items-end space-x-3 mb-4">
+                <div className="flex flex-row items-end space-x-8 mb-4">
                   <h2 className="text-left text-2xl font-bold text-gray-900">
                     경력사항
                   </h2>
@@ -1020,18 +1022,19 @@ const AdvisorsDetailPage: React.FC = () => {
                     Professional Experience
                   </p>
                 </div>
-                <div className="space-y-4">
+                <ul className="space-y-4 list-disc list-inside">
                   {expert.experience.map((exp, index) => (
-                    <div key={index} className="flex">
-                      <div className="w-32 text-sm text-left text-gray-500 font-medium">
+                    <li key={index} className="flex items-center">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
+                      <div className="text-sm text-left text-gray-500 font-medium pr-7">
                         {formatPeriod(exp.period)}
                       </div>
                       <div className="text-left flex-1 text-gray-700">
                         {exp.company} {exp.position}
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
             </div>
             {/* Reviews */}
@@ -1051,9 +1054,13 @@ const AdvisorsDetailPage: React.FC = () => {
                         alt={`${review.username}의 프로필 사진`}
                         className="w-10 h-10 rounded-full"
                       />
-                      <div className="ml-3">
-                        <div className="text-left font-medium text-gray-90 font-semibold">
-                          {review.username} ⭐ {review.rating}
+                      <div className="p-3">
+                        <div className="flex flex-row items-center space-x-3 text-left font-medium text-gray-90 font-semibold">
+                          <p>{review.username}</p>
+                          <div>{Array.from({ length: review.rating }, (_, i) => (
+                            <span key={i}>⭐</span>
+                          ))}
+                          </div>
                         </div>
                         <div className="text-left text-sm text-gray-500">
                           {review.date}
