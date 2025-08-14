@@ -309,7 +309,9 @@ const AdvisorsDetailPage: React.FC = () => {
   const reviews: Review[] = expertData
     ? expertData.reviews.map((review) => ({
         id: review.review_id,
-        avatar: review.profile_image || `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`,
+        avatar:
+          review.profile_image ||
+          `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`,
         username: review.nickname,
         rating: review.rating,
         date: new Date(review.created_at)
@@ -322,6 +324,11 @@ const AdvisorsDetailPage: React.FC = () => {
         content: review.content,
       }))
     : [];
+
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = startOfDay(new Date());
+  const firstOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   // 달력 관련 함수들
   const getDaysInMonth = (date: Date) => {
@@ -539,9 +546,13 @@ const AdvisorsDetailPage: React.FC = () => {
   };
 
   const handlePrevMonth = () => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1)
+    const prev = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() - 1,
+      1
     );
+    if (prev < firstOfThisMonth) return; // 오늘이 속한 달보다 이전 달은 막기
+    setCurrentMonth(prev);
   };
 
   const handleNextMonth = () => {
@@ -714,7 +725,6 @@ const AdvisorsDetailPage: React.FC = () => {
 
       // 성공 시에는 곧바로 리다이렉트되어 아래 코드는 실행 안 됨
     } catch (error: unknown) {
-
       // 2) 명시적 실패에만 취소 (catch에서만)
       // Toss에서 reject되는 케이스 = 사용자 취소/카드오류 등 "실패" 상황
       // if (orderIdForCancel) {
@@ -744,9 +754,13 @@ const AdvisorsDetailPage: React.FC = () => {
 
   // 달력 렌더링
   const renderCalendar = () => {
+    const startOfDay = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = startOfDay(new Date()); // "오늘 00:00"
+
     const daysInMonth = getDaysInMonth(currentMonth);
     const firstDay = getFirstDayOfMonth(currentMonth);
-    const days = [];
+    const days: React.ReactNode[] = []; // ⬅ 여기 수정됨
 
     // 이전 달의 마지막 날들
     const prevMonth = new Date(
@@ -774,22 +788,31 @@ const AdvisorsDetailPage: React.FC = () => {
         currentMonth.getMonth(),
         day
       );
+      const dateStart = startOfDay(date);
+      const isPast = dateStart < today;
+
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+      const isSunday = date.getDay() === 0;
       const isSelectedDate = isSelected(date);
+
+      const base = "text-center py-2 rounded-full transition-colors";
+      const clickable = "cursor-pointer hover:bg-blue-100";
+      const disabledCls =
+        "text-gray-400 bg-gray-100 cursor-not-allowed pointer-events-none";
+      const colorCls = isSelectedDate
+        ? "bg-blue-500 text-white"
+        : isWeekend
+        ? isSunday
+          ? "text-red-500"
+          : "text-blue-500"
+        : "text-gray-900";
 
       days.push(
         <div
           key={day}
-          onClick={() => handleDateClick(date)}
-          className={`text-center py-2 cursor-pointer ${
-            isSelectedDate
-              ? "bg-blue-500 text-white rounded-full"
-              : isWeekend
-              ? date.getDay() === 0
-                ? "text-red-500"
-                : "text-blue-500"
-              : "text-gray-900"
-          } hover:bg-blue-100 hover:rounded-full transition-colors`}
+          onClick={!isPast ? () => handleDateClick(date) : undefined}
+          className={`${base} ${isPast ? disabledCls : clickable} ${colorCls}`}
+          aria-disabled={isPast}
         >
           {day}
         </div>
@@ -797,7 +820,7 @@ const AdvisorsDetailPage: React.FC = () => {
     }
 
     // 다음 달의 첫 날들
-    const remainingDays = 42 - days.length; // 6주 표시를 위해
+    const remainingDays = 42 - days.length;
     for (let i = 1; i <= remainingDays; i++) {
       const date = new Date(
         currentMonth.getFullYear(),
@@ -1173,7 +1196,10 @@ const AdvisorsDetailPage: React.FC = () => {
                         {/* 전문가 본인인 경우 수정/삭제 버튼 */}
                         <button
                           onClick={() =>
-                            id && navigate(`/advisors-introduction-update/${parseInt(id)}`)
+                            id &&
+                            navigate(
+                              `/advisors-introduction-update/${parseInt(id)}`
+                            )
                           }
                           className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg mb-3"
                         >
