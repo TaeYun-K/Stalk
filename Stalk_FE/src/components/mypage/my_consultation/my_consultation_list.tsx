@@ -1,6 +1,7 @@
 import React from "react";
 import { ConsultationItem, ConsultationDiaryResponse } from "@/types";
 import ConsultationNote from "@/components/mypage/my_consultation/consultation_note";
+import { useAuth } from "@/context/AuthContext";
 
 type ConsultationTab = "상담 전" | "상담 완료";
 
@@ -56,6 +57,8 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
   onAnalyzeVideo,
   videoAnalysisResult,
 }) => {
+  const { userRole } = useAuth();
+  const expertHeaderLabel = userRole === 'ADVISOR' ? '의뢰인' : '전문가';
   return (
     <div className="bg-white rounded-lg p-6">
       <h2 className="text-left text-xl font-semibold text-gray-900 mb-6">내 상담 내역</h2>
@@ -121,13 +124,13 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">상담일자</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">상담시간</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">상담 요청 내용</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">전문가</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">{expertHeaderLabel}</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">
                   {consultationTab === "상담 전" ? "화상상담" : "화상상담"}
                 </th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">
+                {/* <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">
                   {consultationTab === "상담 전" ? "상담취소" : "차트조회"}
-                </th>
+                </th> */}
                 {consultationTab === "상담 완료" && (
                   <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">상담일지</th>
                 )}
@@ -153,7 +156,7 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
                         {item.videoConsultation}
                       </button>
                     </td>
-                    <td className="px-4 py-3">
+                    {/* <td className="px-4 py-3">
                       {consultationTab !== "상담 완료" ? (
                         <button
                           onClick={() => onCancelConsultation(item)}
@@ -173,7 +176,7 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
                           {item.action}
                         </button>
                       )}
-                    </td>
+                    </td> */}
                     {consultationTab === "상담 완료" && (
                       <td className="px-4 py-3">
                         <button
@@ -198,73 +201,6 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
         </div>
       )}
 
-      {/* 하드코딩된 데이터 (WebRTC 상담방 수정용) */}
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">하드코딩된 데이터 (WebRTC 상담방 수정용)</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일자</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담시간</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담 요청 내용</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">전문가</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{consultationTab === "상담 전" ? "화상상담" : "화상상담"}</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{consultationTab === "상담 전" ? "상담취소" : "차트조회"}</th>
-                {consultationTab === "상담 완료" && (
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">상담일지</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {hardcodedConsultationData[consultationTab].map((item, index) => (
-                <tr key={index} className="border-b border-gray-200">
-                  <td className="px-4 py-3 text-left text-sm text-gray-900">{item.date}</td>
-                  <td className="px-4 py-3 text-left text-sm text-gray-900">{item.time}</td>
-                  <td className="px-4 py-3 text-left text-sm text-gray-900">{item.content}</td>
-                  <td className="px-4 py-3 text-left text-sm text-gray-900">{item.expert}</td>
-                  <td className="px-4 py-3 text-left">
-                    <button
-                      className="bg-gray-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600 transition-colors"
-                      onClick={() => onEnterConsultation(item)}
-                    >
-                      {item.videoConsultation}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    {consultationTab !== "상담 완료" ? (
-                      <button
-                        onClick={() => onCancelConsultation(item)}
-                        className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors"
-                        disabled={isCancelling}
-                      >
-                        {item.action}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onNavigateAdvisor(item.expert)}
-                        className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                      >
-                        {item.action}
-                      </button>
-                    )}
-                  </td>
-                  {consultationTab === "상담 완료" && (
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => onViewDiary(item)}
-                        className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                      >
-                        상담일지
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       {activeTab === "상담일지" && selectedConsultation && (
         <div className="mt-8">

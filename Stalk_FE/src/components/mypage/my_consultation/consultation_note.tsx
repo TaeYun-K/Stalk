@@ -29,14 +29,12 @@ const ConsultationNote: React.FC<ConsultationNoteProps> = ({
 }) => {
   return (
     <div className="bg-white rounded-lg p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">상담일지</h2>
-        <button onClick={onBack} className="text-gray-500 hover:text-gray-700 text-sm font-medium flex items-center space-x-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m0 7h18" />
-          </svg>
-          <span>뒤로가기</span>
+      <div className="flex items-center justify-start mb-6">
+        <button onClick={onBack}
+          className="text-gray-500 hover:bg-gray-100 rounded-lg p-2 text-sm font-medium flex space-x-2 pr-4">
+          &lt;
         </button>
+        <h2 className="text-2xl font-bold text-gray-900">상담일지</h2>
       </div>
 
       {isLoadingDiary ? (
@@ -135,25 +133,25 @@ const ConsultationNote: React.FC<ConsultationNoteProps> = ({
 
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-3">📋 상담 정보</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-gray-700">상담 ID:</span>
+            <div className="grid grid-cols-2 gap-4 text-sm px-10">
+              <div className="flex items-center">
+                <span className="font-medium text-gray-700">· 상담 ID:</span>
                 <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.id}</span>
               </div>
-              <div>
-                <span className="font-medium text-gray-700">상담일:</span>
+              <div className="flex items-center">
+                <span className="font-medium text-gray-700">· 상담일:</span>
                 <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.date}</span>
               </div>
-              <div>
-                <span className="font-medium text-gray-700">상담시간:</span>
+              <div className="flex items-center">
+                <span className="font-medium text-gray-700">· 상담시간:</span>
                 <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.time}</span>
               </div>
-              <div>
-                <span className="font-medium text-gray-700">전문가:</span>
+              <div className="flex items-center">
+                <span className="font-medium text-gray-700">· 전문가:</span>
                 <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.expert}</span>
               </div>
-              <div className="col-span-2">
-                <span className="font-medium text-gray-700">상담 내용:</span>
+              <div className="flex items-center">
+                <span className="font-medium text-gray-700">· 상담 내용:</span>
                 <span className="ml-2 text-gray-900">{consultationDiary.consultationInfo.content}</span>
               </div>
             </div>
@@ -162,9 +160,11 @@ const ConsultationNote: React.FC<ConsultationNoteProps> = ({
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div className="flex items-start">
               <div className="text-blue-600 text-xl mr-3">🤖</div>
-              <div>
-                <h3 className="font-semibold text-blue-800 mb-2">Stalk AI가 상담 영상을 자동으로 요약해드립니다</h3>
-                <p className="text-blue-700 text-sm">상담내용을 전문가가 직접 분석 작성한 상담일지에 대한 신뢰도와 정확성을 책임집니다.</p>
+              <div className="w-full">
+                <h3 className="font-semibold text-left text-blue-800 mb-2">Stalk AI가 상담 영상을 자동으로 요약해드립니다</h3>
+                <p className="text-blue-700 text-sm text-left">상담내용을 전문가가 직접 분석 작성한 상담일지에 대한 신뢰도와 정확성을 책임집니다.</p>
+                <hr className="w-full my-4 border-blue-200" />
+                <p className="text-left text-sm text-gray-500">※ AI 요약 상담 일지는 상담 녹화 영상이 있을 때 제공됩니다.</p>
               </div>
             </div>
           </div>

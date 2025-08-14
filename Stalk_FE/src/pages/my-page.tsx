@@ -421,6 +421,13 @@ const MyPage = () => {
     selectedFile: null,
   });
 
+  // 상담 영업 스케줄 관리 - 저장 제어 상태
+  const [scheduleSelectedDate, setScheduleSelectedDate] = useState<string | null>(null);
+  const [scheduleBlockedTimes, setScheduleBlockedTimes] = useState<string[]>([]);
+  const [isScheduleDirty, setIsScheduleDirty] = useState(false);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [scheduleCommitKey, setScheduleCommitKey] = useState(0);
+
   const generalTabs = [
     { id: "내 정보", label: "내 정보" },
     { id: "내 상담 내역", label: "내 상담 내역" },
@@ -993,6 +1000,43 @@ const MyPage = () => {
     }
   };
 
+  // 스케줄 저장 핸들러 (수정하기 버튼)
+  const handleSaveSchedule = async () => {
+    if (!scheduleSelectedDate) {
+      alert("날짜를 선택해주세요.");
+      return;
+    }
+    try {
+      setIsSavingSchedule(true);
+      const token = AuthService.getAccessToken();
+      const response = await AuthService.authenticatedRequest(
+        `/api/advisors/blocked-times?date=${scheduleSelectedDate}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+          body: JSON.stringify({ blockedTimes: scheduleBlockedTimes || [] }),
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "스케줄 저장에 실패했습니다.");
+      }
+      // 저장 성공: 자식 컴포넌트에 커밋 신호 전달 및 dirty 해제
+      setScheduleCommitKey((k) => k + 1);
+      setIsScheduleDirty(false);
+      alert("스케줄이 저장되었습니다.");
+    } catch (e) {
+      console.error("스케줄 저장 실패:", e);
+      alert(e instanceof Error ? e.message : "스케줄 저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
     
@@ -1115,7 +1159,7 @@ const MyPage = () => {
 
             {activeTab === "찜한 전문가" && !isExpert && (
               <div className="bg-white rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                <h2 className="text-left text-xl font-semibold text-gray-900 mb-6">
                   찜한 전문가
                 </h2>
                 {favoriteLoading ? (
@@ -1169,7 +1213,7 @@ const MyPage = () => {
                             >
                               <path
                                 fillRule="evenodd"
-                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
                                 clipRule="evenodd"
                               />
                             </svg>
@@ -1215,7 +1259,7 @@ const MyPage = () => {
 
 
                         {/* Short Intro */}
-                        <p className="text-sm text-gray-600 mb-4 text-center line-clamp-2">
+                        <p className="text-sm text-gray-600 mb-4 text-center line-clamp-1">
                           {advisor.shortIntro}
                         </p>
 
@@ -1246,438 +1290,30 @@ const MyPage = () => {
                 <h1 className="font-bold text-left text-xl font-semibold text-gray-900 mb-6">
                   상담 영업 스케줄 관리
                 </h1>
-
-                
-                {/* 추가: 캘린더 기반 스케줄 관리 컴포넌트 (기존 기능 유지) */}
-                <div className="mt-8">
-                  <AdvisorTimeTable onOperatingHoursChange={(_hasOperatingHours) => {}} />
-                </div>
-              </div>
-            )}
-
-            {activeTab === "상담일지" && selectedConsultation && (
-              <div className="bg-white rounded-lg p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">상담일지</h2>
+                <div className="flex items-center justify-end gap-3">
                   <button
-                    onClick={handleCloseDiary}
-                    className="text-gray-500 hover:text-gray-700 text-sm font-medium flex items-center space-x-2"
+                    onClick={handleSaveSchedule}
+                    disabled={!isScheduleDirty || isSavingSchedule || !scheduleSelectedDate}
+                    className={`px-4 py-2 rounded-lg text-white text-sm transition-colors ${
+                      !isScheduleDirty || isSavingSchedule || !scheduleSelectedDate
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10 19l-7-7m0 0l7-7m0 7h18"
-                      />
-                    </svg>
-                    <span>뒤로가기</span>
+                    {isSavingSchedule ? "저장 중..." : "수정하기"}
                   </button>
                 </div>
-
-                {isLoadingDiary ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-3 text-gray-600">
-                      상담일지를 불러오는 중...
-                    </span>
-                  </div>
-                ) : diaryError ? (
-                  <div className="text-center py-12">
-                    <div className="text-red-600 mb-4">⚠️ {diaryError}</div>
-                    <button
-                      onClick={() =>
-                        handleConsultationDiaryClick(selectedConsultation)
-                      }
-                      className="text-blue-600 hover:text-blue-700 text-sm"
-                    >
-                      다시 시도
-                    </button>
-                  </div>
-                ) : consultationDiary ? (
-                  <div className="mb-6">
-                    {/* 녹화 영상 목록 */}
-                    {consultationDiary.recordings &&
-                    consultationDiary.recordings.length > 0 ? (
-                      <div className="mb-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                          📹 상담 녹화 영상
-                        </h3>
-                        <div className="space-y-4">
-                          {consultationDiary.recordings.map(
-                            (recording: VideoRecording, index: number) => (
-                              <div
-                                key={recording.id}
-                                className="border border-gray-200 rounded-lg p-4"
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <h4 className="font-medium text-gray-900">
-                                    녹화 영상 {index + 1}
-                                  </h4>
-                                  <span
-                                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                      recording.status === "COMPLETED"
-                                        ? "bg-green-100 text-green-800"
-                                        : recording.status === "PROCESSING"
-                                        ? "bg-yellow-100 text-yellow-800"
-                                        : "bg-gray-100 text-gray-800"
-                                    }`}
-                                  >
-                                    {recording.status === "COMPLETED"
-                                      ? "완료"
-                                      : recording.status === "PROCESSING"
-                                      ? "처리중"
-                                      : "대기중"}
-                                  </span>
-                                </div>
-
-                                {/* 비디오 플레이어 */}
-                                <div className="relative bg-black rounded-lg aspect-video flex items-center justify-center mb-3">
-                                  {recording.url ? (
-                                    <video
-                                      controls
-                                      className="w-full h-full rounded-lg"
-                                      src={recording.url}
-                                    >
-                                      브라우저가 비디오를 지원하지 않습니다.
-                                    </video>
-                                  ) : (
-                                    <div className="flex items-center justify-center w-full h-full">
-                                      <button className="bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center transition-colors">
-                                        <svg
-                                          className="w-6 h-6 ml-1"
-                                          fill="currentColor"
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path d="M8 5v14l11-7z" />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* 영상 요약하기 버튼 */}
-                                {recording.url && (
-                                  <div className="mb-3">
-                                    <button
-                                      onClick={() =>
-                                        handleVideoAnalysis(recording.url)
-                                      }
-                                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                                    >
-                                      <svg
-                                        className="w-5 h-5"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                                        />
-                                      </svg>
-                                      영상 요약하기
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* 녹화 정보 */}
-                                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                                  <div>
-                                    <span className="font-medium">
-                                      시작 시간:
-                                    </span>
-                                    <span className="ml-2">
-                                      {new Date(
-                                        recording.startTime
-                                      ).toLocaleString("ko-KR")}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">
-                                      종료 시간:
-                                    </span>
-                                    <span className="ml-2">
-                                      {new Date(
-                                        recording.endTime
-                                      ).toLocaleString("ko-KR")}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">
-                                      세션 ID:
-                                    </span>
-                                    <span className="ml-2 font-mono text-xs">
-                                      {recording.sessionId}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">
-                                      녹화 ID:
-                                    </span>
-                                    <span className="ml-2 font-mono text-xs">
-                                      {recording.recordingId}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <svg
-                          className="w-12 h-12 mx-auto mb-4 text-gray-300"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                        <p>이 상담의 녹화 영상이 없습니다.</p>
-                      </div>
-                    )}
-
-                    {/* 상담 정보 */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                        📋 상담 정보
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            상담 ID:
-                          </span>
-                          <span className="ml-2 text-gray-900">
-                            {consultationDiary.consultationInfo.id}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            상담일:
-                          </span>
-                          <span className="ml-2 text-gray-900">
-                            {consultationDiary.consultationInfo.date}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            상담시간:
-                          </span>
-                          <span className="ml-2 text-gray-900">
-                            {consultationDiary.consultationInfo.time}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            전문가:
-                          </span>
-                          <span className="ml-2 text-gray-900">
-                            {consultationDiary.consultationInfo.expert}
-                          </span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="font-medium text-gray-700">
-                            상담 내용:
-                          </span>
-                          <span className="ml-2 text-gray-900">
-                            {consultationDiary.consultationInfo.content}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* AI 안내 */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                      <div className="flex items-start">
-                        <div className="text-blue-600 text-xl mr-3">🤖</div>
-                        <div>
-                          <h3 className="font-semibold text-blue-800 mb-2">
-                            Stalk AI가 상담 영상을 자동으로 요약해드립니다
-                          </h3>
-                          <p className="text-blue-700 text-sm">
-                            상담내용을 전문가가 직접 분석 작성한 상담일지에 대한
-                            신뢰도와 정확성을 책임집니다.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                   
-
-                    {/* 영상 분석 결과 */}
-                    {videoAnalysisResult && (
-                      <div className="mt-8 bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                            <svg
-                              className="w-6 h-6 text-blue-600"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                              />
-                            </svg>
-                            영상 분석 결과
-                          </h3>
-                          <div className="text-sm text-gray-500">
-                            {new Date(
-                              videoAnalysisResult.processedAt
-                            ).toLocaleString("ko-KR")}
-                          </div>
-                        </div>
-
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          {(() => {
-                            try {
-                              const summaryData = JSON.parse(
-                                videoAnalysisResult.summary
-                              );
-                              if (
-                                summaryData.lecture_content &&
-                                Array.isArray(summaryData.lecture_content) &&
-                                summaryData.lecture_content.length === 0 &&
-                                summaryData.key_takeaways?.main_subject ===
-                                  "이 영상에는 투자에 대한 내용이 포함되어 있지 않습니다."
-                              ) {
-                                return (
-                                  <div className="text-center py-8">
-                                    <div className="text-gray-500 text-lg font-medium">
-                                      이 영상에는 투자에 대한 내용이 포함되어
-                                      있지 않습니다.
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <div className="space-y-6">
-                                  {summaryData.lecture_content &&
-                                    summaryData.lecture_content.length > 0 && (
-                                      <div>
-                                        <h4 className="text-lg font-semibold text-gray-900 mb-3">
-                                          📚 강의 내용
-                                        </h4>
-                                        <div className="space-y-3">
-                                          {summaryData.lecture_content.map(
-                                            (item: { topic: string; details: string }, index: number) => (
-                                              <div
-                                                key={index}
-                                                className="bg-white rounded-lg p-4 border border-gray-200"
-                                              >
-                                                <h5 className="font-medium text-blue-600 mb-2">{item.topic}</h5>
-                                                <p className="text-gray-700 leading-relaxed">{item.details}</p>
-                                              </div>
-                                            )
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  {summaryData.key_takeaways && (
-                                    <div>
-                                      <h4 className="text-lg font-semibold text-gray-900 mb-3">
-                                        🎯 핵심 요약
-                                      </h4>
-                                      <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-3">
-                                        <div>
-                                          <h5 className="font-medium text-gray-900 mb-2">
-                                            주요 주제
-                                          </h5>
-                                          <p className="text-gray-700">
-                                            {
-                                              summaryData.key_takeaways
-                                                .main_subject
-                                            }
-                                          </p>
-                                        </div>
-                                        {summaryData.key_takeaways
-                                          .core_concepts &&
-                                          summaryData.key_takeaways
-                                            .core_concepts.length > 0 && (
-                                            <div>
-                                              <h5 className="font-medium text-gray-900 mb-2">
-                                                핵심 개념
-                                              </h5>
-                                              <ul className="list-disc list-inside space-y-1">
-                                                {summaryData.key_takeaways.core_concepts.map(
-                                                  (
-                                                    concept: string,
-                                                    index: number
-                                                  ) => (
-                                                    <li
-                                                      key={index}
-                                                      className="text-gray-700"
-                                                    >
-                                                      {concept}
-                                                    </li>
-                                                  )
-                                                )}
-                                              </ul>
-                                            </div>
-                                          )}
-                                        <div>
-                                          <h5 className="font-medium text-gray-900 mb-2">
-                                            결론 및 전략
-                                          </h5>
-                                          <p className="text-gray-700">
-                                            {
-                                              summaryData.key_takeaways
-                                                .conclusion_and_strategy
-                                            }
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            } catch {
-                              return (
-                                <div className="text-gray-700 whitespace-pre-wrap">
-                                  {videoAnalysisResult.summary}
-                                </div>
-                              );
-                            }
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
-                {/* 푸터 */}
-                <div className="border-t pt-6">
-                  <div className="flex justify-between items-center text-sm text-gray-500">
-                    <div>개인정보 처리방침 | 고객센터 0000-0000 | 공지사항</div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-400">
-                    <p>
-                      사업자 등록번호 : 000-00-0000 대표 : 스토킹 주소 : 46733
-                      부산광역시 강서구 녹산산업중로 333
-                    </p>
-                    <p>
-                      스토킹에서 제공되는 투자 정보 및 정보는 투자 판단을 위한
-                      단순 참고용일 뿐이며, 투자 권유 및 광고, 종목 추천을 위한
-                      목적이 절대 아닙니다.
-                    </p>
-                  </div>
+                <div className="mt-4">
+                  <AdvisorTimeTable
+                    onOperatingHoursChange={(_hasOperatingHours) => {}}
+                    autoSave={false}
+                    onSelectionChange={(date, times) => {
+                      setScheduleSelectedDate(date);
+                      setScheduleBlockedTimes(times);
+                    }}
+                    onDirtyChange={(dirty) => setIsScheduleDirty(dirty)}
+                    commitKey={scheduleCommitKey}
+                  />
                 </div>
               </div>
             )}
