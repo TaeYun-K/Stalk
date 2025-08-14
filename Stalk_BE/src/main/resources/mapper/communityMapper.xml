@@ -86,61 +86,59 @@
         SELECT LAST_INSERT_ID()
     </select>
 
-    <!-- 8. 커뮤니티 글 수정 -->
-    <select id="findCommunityPostDetail"
-            resultType="com.Stalk.project.api.community.dto.out.CommunityPostDetailDto">
-        SELECT cp.id                                                 as postId,
-               cp.title,
-               cp.content,
-               CASE
-                   WHEN u.role = 'ADVISOR' THEN u.name
-                   ELSE u.nickname
-                   END                                                 as authorName,
-               u.role                                                as authorRole,
-               CASE
-                   WHEN u.role = 'ADVISOR' THEN u.image
-                   ELSE uci.image_path
-                   END                                                 as authorProfileImage,
-               cp.category,
-               CASE cp.category
-                   WHEN 'QUESTION' THEN '질문'
-                   WHEN 'TRADE_RECORD' THEN '매매기록'
-                   WHEN 'STOCK_DISCUSSION' THEN '종목토론'
-                   WHEN 'MARKET_ANALYSIS' THEN '시황분석'
-                   END                                                 as categoryDisplayName,
-               cp.view_count                                         as viewCount,
-               cp.comment_count                                      as commentCount,
-               DATE_FORMAT(cp.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-        FROM community_posts cp
-                 INNER JOIN users u ON cp.user_id = u.id
-                 LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
-        WHERE cp.id = #{postId}
-          AND cp.deleted_at IS NULL
-    </select>
+  <!-- 8. 커뮤니티 글 수정 -->
+  <select id="findCommunityPostDetail"
+    resultType="com.Stalk.project.api.community.dto.out.CommunityPostDetailDto">
+    SELECT cp.id                                                 as postId,
+           cp.title,
+           cp.content,
+           CASE
+             WHEN u.role = 'ADVISOR' THEN u.name
+             ELSE u.nickname
+             END                                                 as authorName,
+           u.role                                                as authorRole,
+           CASE
+             WHEN u.image IS NOT NULL AND u.image != '' THEN u.image
+             ELSE '/images/default_profile.png'
+             END                                                 as authorProfileImage,
+           cp.category,
+           CASE cp.category
+             WHEN 'QUESTION' THEN '질문'
+             WHEN 'TRADE_RECORD' THEN '매매기록'
+             WHEN 'STOCK_DISCUSSION' THEN '종목토론'
+             WHEN 'MARKET_ANALYSIS' THEN '시황분석'
+             END                                                 as categoryDisplayName,
+           cp.view_count                                         as viewCount,
+           cp.comment_count                                      as commentCount,
+           DATE_FORMAT(cp.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+    FROM community_posts cp
+           INNER JOIN users u ON cp.user_id = u.id
+    WHERE cp.id = #{postId}
+      AND cp.deleted_at IS NULL
+  </select>
 
-    <!-- 9. 커뮤니티 글 논리적 삭제 -->
-    <select id="findCommunityPostComments"
-            resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
-        SELECT cc.id                                                 as commentId,
-               cc.content,
-               CASE
-                   WHEN u.role = 'ADVISOR' THEN u.name
-                   ELSE u.nickname
-                   END                                                 as authorName,
-               u.role                                                as authorRole,
-               CASE
-                   WHEN u.role = 'ADVISOR' THEN u.image
-                   ELSE uci.image_path
-                   END                                                 as authorProfileImage,
-               DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-        FROM community_comments cc
-                 INNER JOIN users u ON cc.user_id = u.id
-                 LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
-        WHERE cc.post_id = #{postId}
-        ORDER BY cc.created_at ASC
-            LIMIT #{limitPlusOne}
-        OFFSET #{offset}
-    </select>
+  <!-- 9. 커뮤니티 글 논리적 삭제 -->
+  <select id="findCommunityPostComments"
+    resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
+    SELECT cc.id                                                 as commentId,
+           cc.content,
+           CASE
+             WHEN u.role = 'ADVISOR' THEN u.name
+             ELSE u.nickname
+             END                                                 as authorName,
+           u.role                                                as authorRole,
+           CASE
+             WHEN u.image IS NOT NULL AND u.image != '' THEN u.image
+             ELSE '/images/default_profile.png'
+             END                                                 as authorProfileImage,
+           DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+    FROM community_comments cc
+           INNER JOIN users u ON cc.user_id = u.id
+    WHERE cc.post_id = #{postId}
+    ORDER BY cc.created_at ASC
+      LIMIT #{limitPlusOne}
+    OFFSET #{offset}
+  </select>
 
     <!-- 10. 글에 달린 모든 댓글 물리적 삭제 -->
     <select id="findPostPermission"
@@ -167,29 +165,28 @@
         SELECT LAST_INSERT_ID()
     </select>
 
-    <!-- 마지막 생성된 댓글 ID 조회 -->
-    <select id="findCommentsByPostId"
-            resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
-        SELECT cc.id                                                 as commentId,
-               cc.content,
-               CASE
-                   WHEN u.role = 'ADVISOR' THEN u.name
-                   ELSE u.nickname
-                   END                                                 as authorName,
-               u.role                                                as authorRole,
-               CASE
-                   WHEN u.role = 'ADVISOR' THEN u.image
-                   ELSE uci.image_path
-                   END                                                 as authorProfileImage,
-               DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
-        FROM community_comments cc
-                 INNER JOIN users u ON cc.user_id = u.id
-                 LEFT JOIN user_community_images uci ON u.id = uci.user_id AND u.role = 'USER'
-        WHERE cc.post_id = #{postId}
-        ORDER BY cc.created_at ASC
-            LIMIT #{pageRequest.limitPlusOne}
-        OFFSET #{pageRequest.offset}
-    </select>
+  <!-- 마지막 생성된 댓글 ID 조회 -->
+  <select id="findCommentsByPostId"
+    resultType="com.Stalk.project.api.community.dto.out.CommunityCommentDto">
+    SELECT cc.id                                                 as commentId,
+           cc.content,
+           CASE
+             WHEN u.role = 'ADVISOR' THEN u.name
+             ELSE u.nickname
+             END                                                 as authorName,
+           u.role                                                as authorRole,
+           CASE
+             WHEN u.image IS NOT NULL AND u.image != '' THEN u.image
+             ELSE '/images/default_profile.png'
+             END                                                 as authorProfileImage,
+           DATE_FORMAT(cc.created_at, '%Y-%m-%dT%H:%i:%s+09:00') as createdAt
+    FROM community_comments cc
+           INNER JOIN users u ON cc.user_id = u.id
+    WHERE cc.post_id = #{postId}
+    ORDER BY cc.created_at ASC
+      LIMIT #{pageRequest.limitPlusOne}
+    OFFSET #{pageRequest.offset}
+  </select>
 
     <!-- 댓글 목록 조회 (페이징) -->
     <select id="findCommentPermission"
@@ -245,5 +242,13 @@
     WHERE cp.id = #{postId}
       AND cp.deleted_at IS NULL
   </select>
+
+  <!-- 조회수 1 증가 -->
+  <update id="incrementViewCount">
+    UPDATE community_posts
+    SET view_count = view_count + 1
+    WHERE id = #{postId}
+      AND deleted_at IS NULL
+  </update>
 
 </mapper>

@@ -2,18 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthService from '@/services/authService';
 import stalkLogoBlue from '@/assets/images/logos/Stalk_logo_blue.svg';
-import profileDefault from '@/assets/images/profiles/Profile_default.svg';
-import newsIcon from '@/assets/images/icons/news_icon.png';
-import mortarboardIcon from '@/assets/images/icons/mortarboard_icon.png';
 import { useAuth } from '@/context/AuthContext';
 
 const HomePageNavbar: React.FC = () => {
   const navigate = useNavigate();
   const { isLoggedIn, logout, userInfo, userRole, isLoggingOut } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [communityMenuTimeout, setCommunityMenuTimeout] = useState<number | null>(null);
   const [isInputActive, setIsInputActive] = useState<boolean>(false); // 마우스 이벤트 상태 관리
   const [isNavBarScrolled, setIsNavBarScrolled] = useState<boolean>(false); // 스크롤 상태 관리
   const [userProfileImage, setUserProfileImage] = useState<string>(''); // 사용자 프로필 이미지
@@ -32,11 +27,11 @@ const HomePageNavbar: React.FC = () => {
       if (data.result?.profileImage) {
         setUserProfileImage(data.result.profileImage);
       } else {
-        setUserProfileImage(profileDefault);
+        setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
       }
     } catch (error) {
       console.error('프로필 이미지 로드 실패:', error);
-      setUserProfileImage(profileDefault);
+      setUserProfileImage(`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`);
     }
   };
 
@@ -116,9 +111,6 @@ const HomePageNavbar: React.FC = () => {
     setIsInputActive(false); // 입력창에서 마우스가 빠져나갔을 때 비활성화
   };
 
-  // AuthContext에서 로그인 상태를 가져오므로 별도의 로그인 상태 관리 제거
-
-
 
   // 로그인 상태가 변경될 때 프로필 이미지 가져오기
   useEffect(() => {
@@ -147,7 +139,7 @@ const HomePageNavbar: React.FC = () => {
           {/* Navigation Menu */}
           <div className="hidden md:flex items-center space-x-10">
             <button 
-              onClick={() => navigate('/experts')}
+              onClick={() => navigate('/advisors-list')}
               className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
             >
               투자 전문가
@@ -160,56 +152,13 @@ const HomePageNavbar: React.FC = () => {
               상품 조회
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
             </button>
-            
-            <div 
-              className="relative group"
-              onMouseEnter={() => {
-                if (communityMenuTimeout) {
-                  window.clearTimeout(communityMenuTimeout);
-                  setCommunityMenuTimeout(null);
-                }
-                setShowCommunityMenu(true);
-              }}
-              onMouseLeave={() => {
-                const timeout = window.setTimeout(() => {
-                  setShowCommunityMenu(false);
-                }, 200);
-                setCommunityMenuTimeout(timeout);
-              }}
-            >
-              <button 
-                onClick={() => navigate('/community')}
-                className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative flex items-center space-x-1"
+            <button 
+              onClick={() => navigate('/investment-knowledge-list')}
+              className="hover:font-semibold hover:text-blue-500 font-medium text-lg transition-all duration-300 relative group"
               >
-                <span>커뮤니티</span>
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-500 transition-all duration-300 group-hover:w-full"></span>
-              </button>
-              {/* Community Dropdown Menu */}
-              {showCommunityMenu && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white backdrop-blur-xl rounded-2xl border border-white/20 py-2 z-50">
-                  <button
-                    onClick={() => {
-                      navigate('/community?tab=news');
-                      setShowCommunityMenu(false);
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
-                  >
-                    <img src={newsIcon} alt="뉴스" className="w-5 h-5" />
-                    <span>뉴스</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/community?tab=knowledge');
-                      setShowCommunityMenu(false);
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-500 transition-colors flex items-center space-x-3"
-                  >
-                    <img src={mortarboardIcon} alt="투자 지식" className="w-5 h-5" />
-                    <span>투자 지식iN</span>
-                  </button>
-                </div>
-              )}
-            </div>
+              <span>투자 지식 iN</span>
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
+            </button>
           </div>
 
           {/* Search Bar and User Actions */}
@@ -248,12 +197,12 @@ const HomePageNavbar: React.FC = () => {
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.src = profileDefault;
+                        e.currentTarget.src = `${import.meta.env.VITE_API_URL}/uploads/profile_default.png`;
                       }}
                     />
                   ) : (
                     <img
-                      src={profileDefault}
+                      src={`${import.meta.env.VITE_API_URL}/uploads/profile_default.png`}
                       alt="프로필"
                       className="w-12 h-12 rounded-full object-cover"
                       onError={(_e) => {
@@ -290,6 +239,20 @@ const HomePageNavbar: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>상담 내역</span>
+                      </button>
+                    )}
+                    {userRole !== 'ADMIN' && (
+                      <button
+                        onClick={() => {
+                          navigate('/my-reviews');
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-3"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81H7.03a1 1 0 00.95-.69l1.07-3.292z" />
+                        </svg>
+                        <span>내 리뷰</span>
                       </button>
                     )}
                     {/* (ADMIN만 보이는 관리자 페이지 버튼) */}

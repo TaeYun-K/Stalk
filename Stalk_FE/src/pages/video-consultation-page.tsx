@@ -6,6 +6,7 @@ import {
 } from "openvidu-browser";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import AuthService from "@/services/authService";
 
@@ -21,6 +22,34 @@ import ChatPanel from "@/components/consultation/Chat.panel";
 import { StockChart } from "@/components/stock";
 import StockSearch from "@/components/stock/stock-search";
 import ChartErrorBoundary from "@/components/ChartErrorBoundary";
+import ChartControls from "@/components/stock/chart-controls/chart-controls";
+
+// Indicator explanations for tooltips
+const indicatorExplanations = {
+  volume: {
+    title: '거래량',
+    description: '특정 기간 동안의 주식 거래량을 표시합니다.',
+    usage: '거래량이 많으면 강한 추세를 의미합니다.',
+  },
+  rsi: {
+    title: 'RSI (상대강도지수)',
+    description: '가격의 상승압력과 하락압력 간의 상대적 강도를 나타냅니다.',
+    usage: '70 이상: 과매수 구간, 30 이하: 과매도 구간',
+    params: '기간(일): 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
+  },
+  macd: {
+    title: 'MACD',
+    description: '두 이동평균선의 차이를 이용한 추세 추종 모멘텀 지표입니다.',
+    usage: 'MACD선이 시그널선을 상향 돌파시 매수 신호, 하향 돌파시 매도 신호',
+    params: '단기(12), 장기(26), 시그널(9)이 기본값 (최소 26개 데이터 포인트 필요)'
+  },
+  stochastic: {
+    title: '스토캐스틱',
+    description: '일정 기간 중 현재 가격의 상대적 위치를 나타내는 모멘텀 지표입니다.',
+    usage: '80 이상: 과매수, 20 이하: 과매도. %K와 %D선의 교차로 매매 신호 포착',
+    params: '%K 기간, %D 기간 (smoothing) - 일반적으로 14일 사용 (최소 14개 데이터 포인트 필요)'
+  }
+};
 
 interface LocationState {
   connectionUrl: string;    // wss://… 전체 URL
@@ -45,6 +74,7 @@ interface ChatMessage {
 interface ChartInfo {
   ticker: string;
   period: string;
+  name?: string;
 }
 
 type HoveredButton =
@@ -63,7 +93,40 @@ const DEFAULT_VIDEO_CONFIG = {
   mirror: true,
 };
 
+// ✅ OV connection.data 안전 파서 (JSON/legacy 모두 흡수)
+function parseOvData(raw: string): any {
+  if (!raw) return {};
+
+  // A. "clientDataJSON%/%serverDataJSON" 포맷 우선 처리
+  if (raw.includes('%/%')) {
+    const [clientPart] = raw.split('%/%');
+    try { return JSON.parse(clientPart); } catch {}
+  }
+
+  // B. 통짜 JSON 포맷 처리
+  try {
+    const obj = JSON.parse(raw);
+    if (obj?.clientData && typeof obj.clientData === 'string') {
+      try { return JSON.parse(obj.clientData); } catch {}
+    }
+    if (obj?.serverData && typeof obj.serverData === 'string') {
+      try { return JSON.parse(obj.serverData); } catch {}
+    }
+    if (obj && (obj.ownerId || obj.kind)) return obj;
+  } catch {}
+
+  // C. 레거시 key=value 포맷 방어
+  const mClient = /clientData=([^,&]+)/.exec(raw);
+  if (mClient) { try { return JSON.parse(decodeURIComponent(mClient[1])); } catch {} }
+  const mServer = /serverData=([^,&]+)/.exec(raw);
+  if (mServer) { try { return JSON.parse(decodeURIComponent(mServer[1])); } catch {} }
+
+  return {};
+}
+
+
 const TIMER_INTERVAL_MS = 1000;
+
 
 const VideoConsultationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -85,6 +148,13 @@ const VideoConsultationPage: React.FC = () => {
 
   // 차트 관련 상태
   const [currentChart, setCurrentChart] = useState<ChartInfo | null>(null);
+  const [chartPeriod, setChartPeriod] = useState<number>(30); // Increased default to 30 days for better indicator support
+  const [chartIndicators, setChartIndicators] = useState<any>({});
+  const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
+  const [activeIndicator, setActiveIndicator] = useState<string>('volume');
+  const [dataPointCount, setDataPointCount] = useState<number>(0);
+  const [hoveredIndicator, setHoveredIndicator] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{x: number, y: number}>({x: 0, y: 0});
 
   // 사용자 정보 상태 추가
   const [userInfo, setUserInfo] = useState<{ name: string; role: string; userId: string; contact: string; email: string; profileImage: string } | null>(null);
@@ -107,6 +177,69 @@ const VideoConsultationPage: React.FC = () => {
   const [hoveredButton, setHoveredButton] = useState<HoveredButton>(null);
   const [showParticipantFaces, setShowParticipantFaces] = useState<boolean>(true);
 
+  // 녹화 관련 상태
+  const [screenOv, setScreenOv] = useState<OpenVidu | null>(null);
+  const [screenSession, setScreenSession] = useState<Session | null>(null);
+  const [screenPublisher, setScreenPublisher] = useState<Publisher | null>(null);
+  const isMyScreenActive = () => !!screenPublisher || !!screenSession;
+  const screenConnectingRef = useRef(false);
+  const isCleaningScreenRef = useRef(false);
+  const myScreenConnectionIdRef = useRef<string | null>(null);
+
+  // 안전하게 트랙 정지
+  const stopTracks = (pub?: Publisher | null) => {
+    try {
+      const ms = pub?.stream?.getMediaStream?.();
+      ms?.getTracks?.().forEach(t => {
+        try { t.stop(); } catch {}
+      });
+    } catch {}
+  };
+
+  const cleanupScreenShare = async () => {
+    if (isCleaningScreenRef.current) return;
+    isCleaningScreenRef.current = true;
+
+    try {
+      // 1) 퍼블리셔가 있으면 우선 unpublish
+      if (screenPublisher) {
+        try {
+          // second connection 우선
+          if (screenSession) {
+            await screenSession.unpublish(screenPublisher);
+          } else if (session) {
+            // same-connection 방식 대비 (혹시 토글에서 같은 세션 퍼블리시한 경우)
+            await session.unpublish(screenPublisher);
+          }
+        } catch (e) {
+          // unpublish 실패해도 트랙은 반드시 정지
+          console.warn("[cleanupScreenShare] unpublish failed:", e);
+        } finally {
+          stopTracks(screenPublisher);
+        }
+      }
+
+      // 2) 두 번째 세션을 쓰는 경우 세션 종료
+      if (screenSession) {
+        try { await screenSession.disconnect(); } catch (e) {
+          console.warn("[cleanupScreenShare] screenSession.disconnect failed:", e);
+        }
+      }
+
+      // 3) OpenVidu 인스턴스는 세션 끊으면 같이 정리됨 (명시 해제는 선택)
+      // try { (screenOv as any)?.off?.(); } catch {}
+
+      // 4) 상태 초기화
+      setScreenPublisher(null);
+      setScreenSession(null);
+      setScreenOv(null);
+      myScreenConnectionIdRef.current = null; 
+      setIsScreenSharing(false);
+
+    } finally {
+      isCleaningScreenRef.current = false;
+    }
+  };
 
   // 참가자 역할 구분을 위한 함수
   const getParticipantRole = (subscriber: Subscriber): 'ADVISOR' | 'USER' => {
@@ -147,14 +280,14 @@ const VideoConsultationPage: React.FC = () => {
   try {
     console.log('fetchUserInfo called');
     setIsLoadingUserInfo(true);
-    
+
     const userProfile = await AuthService.getUserProfile();
     console.log('User profile received:', userProfile);
-    
+
     setUserInfo(userProfile);
   } catch (error) {
     console.error('사용자 정보 조회 실패:', error);
-    
+
     // 실패 시에도 기본 구조는 설정 (OpenVidu 초기화를 위해)
     setUserInfo({
       name: '', // 빈 문자열로 설정하여 기본값 로직이 작동하도록
@@ -205,12 +338,23 @@ const VideoConsultationPage: React.FC = () => {
       console.log('Initializing OpenVidu...');
       const openVidu = new OpenVidu();
       setOv(openVidu);
-      
+
       if (ovToken) {
         const session = openVidu.initSession();
-  
+
         // 세션 이벤트 구독을 먼저 설정 (이 부분이 중요!)
         session.on('streamCreated', (event) => {
+          const meta = parseOvData(event.stream.connection.data); 
+          const isScreen = event.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+          const mine = meta?.ownerId && meta.ownerId === userInfo?.userId;
+
+          const fromThisConnection = session.connection?.connectionId === event.stream.connection.connectionId;
+          const fromMySecondConn = myScreenConnectionIdRef.current === event.stream.connection.connectionId;
+          if (isScreen && (mine || fromThisConnection || fromMySecondConn))  {
+            console.log('[OV] skip subscribe for recording-only screen stream');
+            return;
+          }
+  
           console.log('🔴 streamCreated 이벤트 발생:', event.stream.streamId);
           const subscriber = session.subscribe(event.stream, undefined);
           console.log('Subscriber 스트림:', subscriber.stream.getMediaStream());
@@ -222,7 +366,7 @@ const VideoConsultationPage: React.FC = () => {
             setTimeout(() => {
               attachSubscriberVideo(subscriber, newSubscribers.length - 1);
             }, 100);
-            
+
             return newSubscribers;
           });
         });
@@ -264,13 +408,16 @@ const VideoConsultationPage: React.FC = () => {
             console.error("채팅 수신 파싱 오류:", err);
           }
         });
-      
+
         session.on('streamDestroyed', (event) => {
           console.log('Stream destroyed:', event.stream.streamId);
           setSubscribers(prev => prev.filter(sub => sub !== event.stream.streamManager));
         });
-  
-        session.on('connectionCreated', (event) => { 
+
+        session.on('connectionCreated', (event) => {
+          const meta = parseOvData(event.connection.data);
+          if (meta?.kind === 'screen') return; // ✅ 화면공유 connection은 입장 알림/리스트 제외
+
           const raw = event.connection.data;
           const userData = JSON.parse(raw.split("%/%")[0]);
           const username = userData.userData || "익명";
@@ -281,13 +428,13 @@ const VideoConsultationPage: React.FC = () => {
             timestamp: new Date(),
             type: "system",
           };
-          setChatMessages((prev) => [...prev, msg]);      
+          setChatMessages((prev) => [...prev, msg]);
         });
-  
+
         session.on('connectionDestroyed', (event) => {
             const raw = event.connection.data;
             const userData = JSON.parse(raw.split("%/%")[0]);
-            const username = userData.userData || "익명";          
+            const username = userData.userData || "익명";
             const msg: ChatMessage = {
               id: `sys-${Date.now()}`,
               sender: "system",
@@ -297,20 +444,26 @@ const VideoConsultationPage: React.FC = () => {
             };
             setChatMessages((prev) => [...prev, msg]);
         });
-  
+
+        const ownerId = userInfo?.userId ?? '0';
+        const ownerName = userInfo?.name ?? 'unknown';
+
         // 사용자 정보를 포함한 연결 데이터 준비
         const connectionData = {
           role: userInfo?.role || 'USER',
           userData: userInfo?.name || ('익명'),
-          userId: userInfo?.userId || '0'
+          userId: userInfo?.userId || '0',
+          ownerId,                  // 🔑 그룹핑/녹화용 공통 키
+          ownerName,                // 🔑 표시용
+          kind: 'cam'               // 🔑 cam|screen 구분
         };
-  
+
         // 세션에 연결
         console.log('Connecting to session with token:', ovToken.substring(0, 20) + '...');
         await session.connect(ovToken, JSON.stringify(connectionData));
         setSession(session);
         console.log('Connected to session successfully');
-        
+
         // Publisher 생성 및 발행
         await createAndPublishStream(openVidu, session);
       }
@@ -330,7 +483,7 @@ const VideoConsultationPage: React.FC = () => {
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
-      
+
       // Publisher 스트림이 준비되면 발행
       publisher.on('streamCreated', () => {
         console.log('Publisher stream created');
@@ -347,9 +500,9 @@ const VideoConsultationPage: React.FC = () => {
       setPublisher(publisher);
       setIsVideoEnabled(true);
       setIsAudioEnabled(false); // 초기 상태는 오디오 비활성화
-      
+
       console.log('Publisher created and published');
-      
+
     } catch (error) {
       console.error("Error creating publisher:", error);
       throw error;
@@ -407,13 +560,13 @@ const VideoConsultationPage: React.FC = () => {
       alert('연결이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
       return;
     }
-    
+
     // 이미 publisher가 있다면 재시작하지 않음
     if (publisher) {
       console.log('Publisher already exists');
       return;
     }
-  
+
     try {
       await createAndPublishStream(ov, session);
     } catch (error) {
@@ -429,14 +582,14 @@ const VideoConsultationPage: React.FC = () => {
       console.warn('Publisher not available');
       return;
     }
-  
+
     const newVideoState = !isVideoEnabled;
-  
+
     try {
       if (newVideoState) {
         // 비디오 켜기
         await publisher.publishVideo(true);
-        
+
           setTimeout(() => {
           attachLocalVideo(publisher);
         }, 100); // 100ms 후 시도
@@ -445,7 +598,7 @@ const VideoConsultationPage: React.FC = () => {
         await publisher.publishVideo(false);
         console.log('Video disabled');
       }
-  
+
       setIsVideoEnabled(newVideoState);
     } catch (error) {
       console.error("Error toggling video:", error);
@@ -460,9 +613,9 @@ const VideoConsultationPage: React.FC = () => {
       console.warn('Publisher not available');
       return;
     }
-  
+
     const newAudioState = !isAudioEnabled;
-  
+
     try {
       if (newAudioState) {
         // 오디오 켜기
@@ -473,7 +626,7 @@ const VideoConsultationPage: React.FC = () => {
         await publisher.publishAudio(false);
         console.log('Audio disabled');
       }
-  
+
       setIsAudioEnabled(newAudioState);
     } catch (error) {
       console.error("Error toggling audio:", error);
@@ -485,9 +638,9 @@ const VideoConsultationPage: React.FC = () => {
   const checkMediaPermissions = async () => {
     try {
       console.log('Checking media permissions...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
       });
       console.log('Media permissions granted');
       stream.getTracks().forEach(track => track.stop());
@@ -501,20 +654,28 @@ const VideoConsultationPage: React.FC = () => {
 
   // 화면 공유 토글 함수
   const toggleScreenShare = async () => {
-    if (!isScreenSharing && ov && session) {
-      try {
-        const screenPublisher = await ov.initPublisherAsync(undefined, {
+    if (!ov || !session) return;
+
+    try {
+      if (!screenPublisher) {
+        const pub = await ov.initPublisherAsync(undefined, {
           videoSource: "screen",
           publishAudio: false,
           publishVideo: true,
         });
-        await session.publish(screenPublisher);
+        await session.publish(pub);
+        setScreenPublisher(pub);
         setIsScreenSharing(true);
-      } catch (error) {
-        console.error("Error sharing screen:", error);
+      } else {
+        try { await session.unpublish(screenPublisher); } catch {}
+        try { screenPublisher.stream.getMediaStream().getTracks().forEach(t => t.stop()); } catch {}
+        setScreenPublisher(null);
+        setIsScreenSharing(false);
+        await cleanupScreenShare();
       }
-    } else {
-      setIsScreenSharing(false);
+    } catch (error) {
+      console.error("Error toggling screen share:", error);
+      await cleanupScreenShare();
     }
   };
 
@@ -570,13 +731,57 @@ const VideoConsultationPage: React.FC = () => {
     }
   };
 
+  // 기간 변경 하는 핸들러
+  const handlePeriodChange = (period: number) => {
+    console.log('handlePeriodChange called with period:', period);
+    setChartPeriod(period);
+
+    // 현재 선택/공유 중인 티커 기준으로 chart:change 브로드캐스트
+    const info = {
+      ticker: currentChart?.ticker || selectedStock?.ticker || '',
+      period: String(period),
+      name: selectedStock?.name || currentChart?.name || ''
+    };
+
+    // 로컬 state도 동기화
+    setCurrentChart(prev => prev ? { ...prev, period: String(period) } : info);
+
+    if (session) {
+      // 권장: chart:change만 보내도 충분 (수신측은 이걸로만 처리하고 있음)
+      session.signal({
+        type: 'chart:change',
+        data: JSON.stringify(info)
+      }).catch(err => console.error('Chart change signaling failed', err));
+
+      // (선택) 하위 호환: 기존 chart:period도 함께 보낼 거면 아래 유지
+      session.signal({
+        type: 'chart:period',
+        data: JSON.stringify({ period })
+      }).catch(err => console.error('Period change signaling failed', err));
+    }
+  };
+
+  const handleIndicatorChange = (indicators: any) => {
+    setChartIndicators(indicators);
+    // You can also signal this change if needed
+    if (session) {
+      session.signal({
+        type: 'chart:indicators',
+        data: JSON.stringify(indicators)
+      }).catch(err => console.error('Indicator change signaling failed', err));
+    }
+  };
+
   // 차트 선택 시 signaling
   useEffect(() => {
     if (!session) return;
     if (!selectedStock?.ticker) return;
 
     if (currentChart?.ticker !== selectedStock.ticker) {
-      const info = { ticker: selectedStock.ticker, period: currentChart?.period ?? '7' };
+      const info = { ticker: 
+        selectedStock.ticker, period: currentChart?.period ?? '7', 
+        name: selectedStock.name || currentChart?.name || '' };
+      console.log('chartinfo : ' , info);
       setCurrentChart(info);
       session.signal({
         type: 'chart:change',
@@ -592,8 +797,8 @@ const VideoConsultationPage: React.FC = () => {
     const onChartChange = (e: any) => {
       const info = JSON.parse(e.data) as ChartInfo;
       console.log('[chart] recv:', info);
-      setShowStockChart(true);
       setCurrentChart(info);
+      setShowStockChart(true);
     };
     session.on('signal:chart:change', onChartChange);
     return () => { session.off('signal:chart:change', onChartChange); };
@@ -609,10 +814,14 @@ const VideoConsultationPage: React.FC = () => {
   useEffect(() => {
     if (!session) return;
     const onSyncReq = async () => {
-      if (currentChart) {
+      if (currentChart) {      
+        const chartWithName = {
+          ...currentChart,
+          name: currentChart.name || selectedStock?.name || currentChart.ticker
+        };
         await session.signal({
           type: 'chart:sync_state',
-          data: JSON.stringify(currentChart),
+          data: JSON.stringify(chartWithName),
         });
       }
     };
@@ -631,29 +840,123 @@ const VideoConsultationPage: React.FC = () => {
     return () => { session.off('signal:chart:sync_state', onSyncState); };
   }, [session]);
 
+  // 드로잉 모드 시그널 수신 처리
+  useEffect(() => {
+    if (!session) return;
+    const onDrawingMode = (e: any) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (typeof msg.enabled === 'boolean') {
+          console.log('Received drawing mode signal:', msg.enabled);
+          setIsDrawingMode(msg.enabled);
+          // Drawing mode state will be passed to StockChart as prop
+          // which will handle the future space addition
+        }
+      } catch (err) {
+        console.error('Failed to parse drawing mode signal:', err);
+      }
+    };
+    session.on('signal:chart:drawingMode', onDrawingMode);
+    return () => { session.off('signal:chart:drawingMode', onDrawingMode); };
+  }, [session]);
+
+  // 이미 화면공유(본인/상대) 존재하는지 체크
+  const hasAnyScreen = (sess?: Session | null) => {
+    if (isMyScreenActive()) return true;
+    return !!sess?.streamManagers?.some((sm: any) => {
+      const st = sm?.stream;
+      if (!st) return false;
+      const meta = parseOvData(st?.connection?.data);
+      return meta?.kind === 'screen' || st?.typeOfVideo === 'SCREEN';
+    });
+  };
+
   // 녹화 시작
   const handleStartRecording = async () => {
-    if (!ovSessionId || !consultationId) {
+    if (!ovSessionId || !consultationId || !session) {
       alert("세션 정보가 없습니다.");
       return;
     }
+    if (isRecording) return;
+    if (screenConnectingRef.current) return;
+
     try {
+      const userId = userInfo?.userId ?? '0';
+      const name = userInfo?.name ?? 'unknown';
       const token = AuthService.getAccessToken();
-      await axios.post(
-        `/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+
+      // 1) 화면공유 연결(두 번째 connection) 필요하면 한 번만 생성
+      if (!isMyScreenActive() && !hasAnyScreen(session)) {
+        screenConnectingRef.current = true;
+
+        // ✅ 컨트롤러 경로 통일: /connections  +  kind=screen
+        const tokenRes = await axios.post(
+          `/api/recordings/sessions/${encodeURIComponent(ovSessionId)}/connections`,
+          {},
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { kind: 'screen', userId, name },
+          }
+        );
+        const screenToken = tokenRes?.data?.result?.token ?? tokenRes?.data?.data?.token;
+        if (!screenToken) throw new Error("화면공유 토큰 발급 실패");
+
+        const ov2 = new OpenVidu();
+        const sess2 = ov2.initSession();
+
+        // ✅ screen connection에도 동일 메타데이터 전달
+        await sess2.connect(
+          screenToken,
+          JSON.stringify({ ownerId: userId, ownerName: name, kind: 'screen' })
+        );
+        myScreenConnectionIdRef.current = sess2.connection?.connectionId || null;
+        setScreenOv(ov2);
+        setScreenSession(sess2);
+
+        const pub = await ov2.initPublisherAsync(undefined, {
+          videoSource: "screen",
+          mirror: false,
+          // audioSource: "screen" // 브라우저 지원 시 필요하면 ON
+        });
+        await sess2.publish(pub);
+        setScreenPublisher(pub);
+        console.log("[recording] screen published on second connection");
+
+        // 트랙이 live인지 즉시 확인
+        const vt = pub.stream.getMediaStream()?.getVideoTracks?.()[0];        
+        if (!vt || vt.readyState !== 'live') {
+          throw new Error('Screen track not live');
         }
+
+        await axios.post(`/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`, {}, { headers: { Authorization: `Bearer ${token}` }});
+
+        // (선택) 레이스 방지용 짧은 대기
+        await new Promise((r) => setTimeout(r, 120));
+      } else {
+        console.log("[recording] screen exists → skip creating second connection");
+      }
+
+      // 2) 녹화 시작 (불필요 params 제거)
+      const recRes = await axios.post(
+        `/api/recordings/start/${encodeURIComponent(ovSessionId)}?consultationId=${encodeURIComponent(String(consultationId))}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      // recordingId는 백엔드에서 반환하도록 개선 필요, 임시로 sessionId 사용
-      setRecordingId(ovSessionId);
+
+      const recId = (recRes?.data?.data?.recordingId as string) || ovSessionId;
+      setRecordingId(recId);
       setIsRecording(true);
-    } catch (e) {
-      alert("녹화 시작에 실패했습니다.");
-      console.error(e);
+
+    } catch (e: any) {
+      if (e?.name === "NotAllowedError" || String(e?.message || "").includes("Permission")) {
+        alert("화면 공유가 취소되어 녹화를 시작하지 않았습니다.");
+      } else {
+        alert("녹화 시작에 실패했습니다.");
+      }
+      console.error("[recording] start failed:", e);
+      cleanupScreenShare();
+    } finally {
+      screenConnectingRef.current = false;
     }
   };
 
@@ -663,24 +966,53 @@ const VideoConsultationPage: React.FC = () => {
       alert("녹화 ID가 없습니다.");
       return;
     }
+    if (!isRecording) return;
+
     try {
       const token = AuthService.getAccessToken();
-      await axios.post(
-        `/api/recordings/stop/${recordingId}`,
+
+      const stopUrl = consultationId
+        ? `/api/recordings/stop/${encodeURIComponent(recordingId)}?consultationId=${encodeURIComponent(
+            String(consultationId)
+          )}`
+        : `/api/recordings/stop/${encodeURIComponent(recordingId)}`;
+
+      const res = await axios.post(
+        stopUrl,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      const url = res?.data?.data?.url as string | undefined;
+      const durationSec = res?.data?.data?.durationSec as number | undefined;
+      const sizeBytes = res?.data?.data?.sizeBytes as number | undefined;
+
+      // 화면공유 전용 Connection 정리
+      try {
+        screenPublisher?.stream?.getMediaStream()?.getTracks()?.forEach(t => t.stop());
+      } catch {}
+      try {
+        screenSession?.disconnect();
+      } catch {}
+      setScreenPublisher(null);
+      setScreenSession(null);
+      setScreenOv(null);
+
+      // UI 상태 초기화
       setIsRecording(false);
       setRecordingId(null);
+
+      if (url) {
+        console.log("[recording] saved:", { url, durationSec, sizeBytes });
+        // 필요 시 자동 다운로드
+        // window.open(url, "_blank");
+      }
     } catch (e) {
       alert("녹화 종료에 실패했습니다.");
       console.error(e);
     }
   };
+
 
     // 상담 종료 함수
   const leaveSession = async (): Promise<void> => {
@@ -778,7 +1110,7 @@ const VideoConsultationPage: React.FC = () => {
     const initializeConsultation = async () => {
       try {
         console.log('Starting consultation initialization...');
-        
+
         // 1. 미디어 권한 확인
         const hasPermissions = await checkMediaPermissions();
         if (!hasPermissions) {
@@ -792,7 +1124,7 @@ const VideoConsultationPage: React.FC = () => {
 
         // 3. OpenVidu 초기화는 사용자 정보 로딩 완료 후에 별도로 처리
         console.log('User info fetch completed, OpenVidu initialization will be handled separately');
-        
+
       } catch (error) {
         console.error('Error during consultation initialization:', error);
         alert('상담 초기화 중 오류가 발생했습니다.');
@@ -806,7 +1138,7 @@ const VideoConsultationPage: React.FC = () => {
         hasConsultationId: !!consultationId
     });
     }
-  }, [ovToken, consultationId]); 
+  }, [ovToken, consultationId]);
 
   // 사용자 로딩 후 OpenVidu 초기화
   useEffect(() => {
@@ -903,8 +1235,8 @@ const VideoConsultationPage: React.FC = () => {
       if (isInSessionRef.current) {
         // 사용자에게 경고 메시지를 표시
         e.preventDefault();
-        e.returnValue = ""; 
-        
+        e.returnValue = "";
+
         sessionStorage.setItem('navigateToMyPageAfterReload', '1');
       }
     };
@@ -942,19 +1274,284 @@ const VideoConsultationPage: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-gray-900 text-white flex flex-col overflow-hidden">
-      {/* Header navbar */}
-      <div className="bg-gray-800 px-6 py-3 flex items-center justify-between border-b border-gray-700">
+      {/* Unified Header navbar - expands when chart mode is active */}
+      <div className={`${showStockChart ? 'bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl' : 'bg-gray-800'} px-6 py-3 flex items-center justify-between border-b border-gray-700 transition-all duration-300 relative overflow-visible`}>
         <div className="flex items-center space-x-4 flex-1">
           <img src={stalkLogoWhite} alt="Stalk Logo" className="h-6" />
-          
-          {/* Thin search bar in header for chart mode */}
+
+          {/* Chart Mode Controls */}
           {showStockChart && (
-            <div className="flex-1 max-w-md [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0">
-              <StockSearch
-                onStockSelect={setSelectedStock}
-                darkMode={true}
-              />
-            </div>
+            <>
+              {/* Stock Info */}
+              {(selectedStock || currentChart) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-semibold">
+                    {selectedStock?.name ?? currentChart?.name ?? ''}
+                  </span>
+                  {(selectedStock?.ticker ?? currentChart?.ticker) && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700/50 text-gray-300">
+                      {selectedStock?.ticker ?? currentChart?.ticker}
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* Period Controls */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-800/40 backdrop-blur-md border border-gray-700/30">
+                <ChartControls
+                  period={chartPeriod.toString()}
+                  chartType={'line'}
+                  onPeriodChange={(period) => handlePeriodChange(parseInt(period))}
+                  onChartTypeChange={() => {}}
+                  darkMode={true}
+                />
+              </div>
+
+              {/* Indicator Controls - Complete set */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">지표:</span>
+
+                {/* Volume Indicator */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const newIndicator = activeIndicator === 'volume' ? null : 'volume';
+                      setActiveIndicator(newIndicator);
+                      if (session) {
+                        session.signal({
+                          type: 'chart:indicator',
+                          data: JSON.stringify({ indicator: newIndicator })
+                        }).catch(console.error);
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      activeIndicator === 'volume'
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                        : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                  >
+                    거래량
+                  </button>
+                </div>
+                {/* RSI Indicator */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      if (dataPointCount >= 14) {
+                        const newIndicator = activeIndicator === 'rsi' ? null : 'rsi';
+                        setActiveIndicator(newIndicator);
+                        if (session) {
+                          session.signal({
+                            type: 'chart:indicator',
+                            data: JSON.stringify({ indicator: newIndicator })
+                          }).catch(console.error);
+                        }
+                      }
+                    }}
+                    disabled={dataPointCount < 14}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      dataPointCount < 14
+                        ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
+                        : activeIndicator === 'rsi'
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                          : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                    title={dataPointCount < 14 ? `RSI requires 14+ data points (current: ${dataPointCount})` : ''}
+                  >
+                    RSI
+                  </button>
+                  <div
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 320;
+                      const tooltipHeight = 140;
+
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('rsi');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+                {/* MACD Indicator */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      if (dataPointCount >= 26) {
+                        const newIndicator = activeIndicator === 'macd' ? null : 'macd';
+                        setActiveIndicator(newIndicator);
+                        if (session) {
+                          session.signal({
+                            type: 'chart:indicator',
+                            data: JSON.stringify({ indicator: newIndicator })
+                          }).catch(console.error);
+                        }
+                      }
+                    }}
+                    disabled={dataPointCount < 26}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      dataPointCount < 26
+                        ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
+                        : activeIndicator === 'macd'
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                          : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                    title={dataPointCount < 26 ? `MACD requires 26+ data points (current: ${dataPointCount})` : ''}
+                  >
+                    MACD
+                  </button>
+                  <div
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 320;
+                      const tooltipHeight = 140;
+
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('macd');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+                {/* Stochastic Indicator */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      if (dataPointCount >= 14) {
+                        const newIndicator = activeIndicator === 'stochastic' ? null : 'stochastic';
+                        setActiveIndicator(newIndicator);
+                        if (session) {
+                          session.signal({
+                            type: 'chart:indicator',
+                            data: JSON.stringify({ indicator: newIndicator })
+                          }).catch(console.error);
+                        }
+                      }
+                    }}
+                    disabled={dataPointCount < 14}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      dataPointCount < 14
+                        ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed'
+                        : activeIndicator === 'stochastic'
+                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                          : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                    }`}
+                    title={dataPointCount < 14 ? `Stochastic requires 14+ data points (current: ${dataPointCount})` : ''}
+                  >
+                    스토캐스틱
+                  </button>
+                  <div
+                    className="relative"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const tooltipWidth = 320;
+                      const tooltipHeight = 140;
+
+                      let x = rect.right + 8;
+                      let y = rect.top + rect.height / 2;
+
+                      if (x + tooltipWidth > window.innerWidth) {
+                        x = rect.left - tooltipWidth - 8;
+                      }
+
+                      if (y + tooltipHeight / 2 > window.innerHeight) {
+                        y = window.innerHeight - tooltipHeight - 8;
+                      } else if (y - tooltipHeight / 2 < 0) {
+                        y = 8;
+                      } else {
+                        y = y - tooltipHeight / 2;
+                      }
+
+                      setTooltipPosition({ x, y });
+                      setHoveredIndicator('stochastic');
+                    }}
+                    onMouseLeave={() => setHoveredIndicator(null)}
+                  >
+                    <button
+                      className="text-xs rounded-full w-4 h-4 flex items-center justify-center bg-gray-700 text-gray-400 hover:bg-gray-600 transition-colors"
+                      type="button"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawing Mode Button */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => {
+                    const newDrawingMode = !isDrawingMode;
+                    console.log('Consultation: Toggling drawing mode from', isDrawingMode, 'to', newDrawingMode);
+                    setIsDrawingMode(newDrawingMode);
+                    if (session) {
+                      session.signal({
+                        type: 'chart:drawingMode',
+                        data: JSON.stringify({ enabled: newDrawingMode })
+                      }).catch(console.error);
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    isDrawingMode
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                      : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
+                  }`}
+                >
+                  {isDrawingMode ? '✏️ 그리기 중' : '✏️ 그리기'}
+                </button>
+              </div>
+
+              {/* Stock Search - moved to right side */}
+              <div className="ml-auto w-55 relative z-[1000] [&_input]:!py-0.5 [&_input]:!text-xs [&_input]:!px-2 [&_.mb-5]:!mb-0 [&_input]:!h-7 [&_.relative]:!mb-0 [&_.px-4.py-3]:!px-2 [&_.px-4.py-3]:!py-2">
+                <StockSearch
+                  onStockSelect={setSelectedStock}
+                  darkMode={true}
+                />
+              </div>
+            </>
           )}
 
           {/* Compact status indicators */}
@@ -985,7 +1582,15 @@ const VideoConsultationPage: React.FC = () => {
             <div className="h-full grid grid-cols-2 gap-2">
                 {/* 구독자 비디오 렌더링 */}
                 {subscribers.length > 0 ? (
-                  subscribers.map((subscriber, index) => {
+                  subscribers
+                  .filter(sub => {
+                    const meta = parseOvData(sub.stream.connection.data);
+                    const isScreen = sub.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+                    const mine = meta?.ownerId === userInfo?.userId;
+                    const fromMySecondConn = myScreenConnectionIdRef.current === sub.stream.connection.connectionId;
+                    return !(isScreen && (mine || fromMySecondConn));
+                  })
+                  .map((subscriber, index) => {
                     const name = getParticipantName(subscriber);
                     const role = getParticipantRole(subscriber);
                     const roleName = getRoleDisplayName(role);
@@ -1008,7 +1613,7 @@ const VideoConsultationPage: React.FC = () => {
                             }
                           }}
                           autoPlay
-                          playsInline 
+                          playsInline
                           muted={false}
                           id={`subscriber-video-${index}`}
                           className="w-full h-full object-contain"
@@ -1170,28 +1775,33 @@ const VideoConsultationPage: React.FC = () => {
           <div className="flex-1 flex min-w-0">
             {/* Main Chart Area - Takes most of the space */}
             <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex-1 p-4 min-h-0 min-w-0">
-                <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col">
-                  <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 p-4 min-w-0 overflow-hidden">
+                <div className="h-full bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
+                  <div className="flex-1 relative overflow-y-auto chart-scrollbar">
                     {selectedStock || currentChart ? (
-                      <div 
-                        style={{ 
-                          position: 'relative', 
-                          height: '100%', 
+                      <div
+                        style={{
+                          position: 'relative',
+                          minHeight: '600px',
                           width: '100%',
-                          maxWidth: '100%',
-                          contain: 'layout style',
-                          overflow: 'hidden'
+                          maxWidth: '100%'
                         }}
                       >
                         <ChartErrorBoundary>
-                          <div style={{ width: '100%', height: '100%', minWidth: 0 }}>
-                            <StockChart 
-                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: '' } : null)}
-                              darkMode={true} 
+                          <div style={{ width: '100%', minHeight: '600px', minWidth: 0 }}>
+                            <StockChart
+                              selectedStock={selectedStock ?? (currentChart ? { ticker: currentChart.ticker, name: currentChart.name ?? '' } : null)}
+                              darkMode={true}
                               session={session}
                               chartInfo={currentChart ?? undefined}
                               onChartChange={handleChartChange}
+                              isConsultationMode={true}
+                              onPeriodChange={handlePeriodChange}
+                              onIndicatorChange={handleIndicatorChange}
+                              drawingMode={isDrawingMode}
+                              period={chartPeriod}
+                              activeIndicator={activeIndicator as 'volume' | 'rsi' | 'macd' | 'stochastic' | null}
+                              onDataPointsUpdate={setDataPointCount}
                               key={(selectedStock?.ticker ?? currentChart?.ticker) || 'chart'}
                               />
                           </div>
@@ -1393,7 +2003,7 @@ const VideoConsultationPage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* 구독자들 */}
                   {subscribers.map((subscriber, index) => (
                     <div
@@ -1635,6 +2245,46 @@ const VideoConsultationPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Indicator Tooltips */}
+      {hoveredIndicator && createPortal(
+        <div
+          className="fixed p-4 rounded-xl shadow-2xl text-xs w-80 z-[2147483647] bg-gray-800/95 backdrop-blur-sm border border-gray-600/50"
+          style={{
+            left: `${tooltipPosition.x}px`,
+            top: `${tooltipPosition.y}px`,
+            pointerEvents: 'none'
+          }}
+        >
+          <div className="space-y-3">
+            <div>
+              <h4 className="font-bold text-sm mb-1 text-blue-400">
+                {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.title}
+              </h4>
+              <p className="text-gray-300 leading-relaxed whitespace-normal">
+                {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.description}
+              </p>
+            </div>
+            
+            <div>
+              <span className="text-green-400 font-semibold">사용법</span>
+              <p className="text-gray-300 mt-1 leading-relaxed whitespace-normal">
+                {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.usage}
+              </p>
+            </div>
+            
+            {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params && (
+              <div>
+                <span className="text-yellow-400 font-semibold">설정</span>
+                <p className="text-gray-300 mt-1 leading-relaxed whitespace-normal">
+                  {indicatorExplanations[hoveredIndicator as keyof typeof indicatorExplanations]?.params}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

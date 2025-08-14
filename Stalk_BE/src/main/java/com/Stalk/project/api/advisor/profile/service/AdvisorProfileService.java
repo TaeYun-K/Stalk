@@ -8,6 +8,7 @@ import com.Stalk.project.api.advisor.profile.dto.in.CareerEntryDto;
 import com.Stalk.project.api.advisor.profile.dto.out.AdvisorProfileResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.ApprovalHistoryResponseDto;
 import com.Stalk.project.api.advisor.profile.dto.out.CertificateApprovalResponseDto;
+import com.Stalk.project.api.user.service.FileStorageService;
 import com.Stalk.project.global.exception.BaseException;
 import com.Stalk.project.global.response.BaseResponseStatus;
 import com.Stalk.project.global.util.CursorPage;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 public class AdvisorProfileService {
 
     private final AdvisorProfileMapper advisorProfileMapper;
+    private final FileStorageService fileStorageService;
 
     // ===== 프로필 등록 =====
 
@@ -47,13 +49,21 @@ public class AdvisorProfileService {
         validateCareerEntriesForCreate(request.getCareerEntries());
 
         try {
-            // 4. 프로필 상세 정보 등록
-            int profileResult = advisorProfileMapper.insertAdvisorDetailInfo(advisorId, request);
-            if (profileResult == 0) {
-                throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_CREATE_FAILED);
+            // 이미지 업로드
+            if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
+                String url = fileStorageService.storeFile(request.getProfileImage());
+                request.setProfileImageUrl(url);
+                request.setProfileImage(null);
             }
 
-            // 5. 경력 정보 등록
+            // 4. 프로필 상세 정보 등록
+            advisorProfileMapper.insertAdvisorDetailInfo(advisorId, request);
+
+            // 5. advisor 테이블 업데이트 (상담료 및 프로필 완성 상태)
+            advisorProfileMapper.updateAdvisorProfileCompletion(advisorId, request.getConsultationFee());
+
+
+            // 6. 경력 정보 등록
             for (CareerEntryDto career : request.getCareerEntries()) {
                 int careerResult = advisorProfileMapper.insertCareerEntry(advisorId, career);
                 if (careerResult == 0) {
@@ -71,30 +81,39 @@ public class AdvisorProfileService {
     }
 
     // ===== 프로필 수정 =====
-
     @Transactional
-    public AdvisorProfileResponseDto updateAdvisorProfile(Long advisorId, AdvisorProfileUpdateRequestDto request) {
+    public AdvisorProfileResponseDto updateAdvisorProfile(
+        Long advisorId,
+        AdvisorProfileUpdateRequestDto request
+    ) {
         log.info("Updating advisor profile for advisorId: {}", advisorId);
 
-        // 1. 전문가 승인 여부 확인
+        // 1) 전문가 승인 여부 확인
         validateApprovedAdvisor(advisorId);
 
-        // 2. 프로필 존재 여부 확인
+        // 2) 프로필 존재 여부 확인
         Boolean hasProfile = advisorProfileMapper.hasAdvisorDetailInfo(advisorId);
         if (!Boolean.TRUE.equals(hasProfile)) {
             throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_NOT_FOUND);
         }
 
-        // 3. 업데이트할 내용이 있는지 확인
+        // 3) 업데이트할 내용이 있는지 확인
         if (!request.hasAnyUpdates()) {
             throw new BaseException(BaseResponseStatus.NO_UPDATE_FIELDS);
         }
 
         try {
-            // 4. 프로필 기본 정보 수정
+            // 4) 이미지 처리: 새 파일이 들어온 경우에만 업로드 -> URL 세팅
+            if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
+                String uploadedUrl = fileStorageService.storeFile(request.getProfileImage());
+                request.setProfileImageUrl(uploadedUrl); // 이제 타입 에러 없음
+                request.setProfileImage(null); // DB 내려갈 때 MultipartFile 제거
+            }
+
+            // 5) 프로필 기본 정보 수정 (여기서는 문자열/숫자 등 DB에 들어갈 값만 사용해야 함)
             updateProfileBasicInfo(advisorId, request);
 
-            // 5. 경력 정보 수정 처리
+            // 6) 경력 정보 변경 처리
             if (request.hasCareerChanges()) {
                 processCareerChanges(advisorId, request);
             }
@@ -109,6 +128,7 @@ public class AdvisorProfileService {
             throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_UPDATE_FAILED);
         }
     }
+
 
     // ===== 자격증 승인 요청 =====
 
@@ -216,22 +236,40 @@ public class AdvisorProfileService {
         }
     }
 
-    /**
-     * 프로필 기본 정보 수정
-     */
     private void updateProfileBasicInfo(Long advisorId, AdvisorProfileUpdateRequestDto request) {
-        // 기본 정보 필드 중 하나라도 있으면 업데이트
-        if (request.getProfileImageUrl() != null ||
-            request.getPublicContact() != null ||
-            request.getShortIntro() != null ||
-            request.getLongIntro() != null ||
-            request.getPreferredTradeStyle() != null) {
+        log.info("=== updateProfileBasicInfo 시작 ===");
+        log.info("advisorId: {}", advisorId);
+        log.info("consultationFee: {}", request.getConsultationFee());
 
+        // advisor_detail_info 테이블 업데이트
+        if (request.getProfileImageUrl() != null ||
+                        request.getPublicContact() != null ||
+                        request.getShortIntro() != null ||
+                        request.getLongIntro() != null ||
+                        request.getPreferredTradeStyle() != null) {
+
+            log.info("advisor_detail_info 업데이트 실행");
             int result = advisorProfileMapper.updateAdvisorDetailInfo(advisorId, request);
+            log.info("advisor_detail_info 업데이트 결과: {}", result);
             if (result == 0) {
                 throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_UPDATE_FAILED);
             }
         }
+
+        // advisor 테이블 업데이트 (상담료)
+        if (request.getConsultationFee() != null) {
+            log.info("상담료 업데이트 실행 - advisorId: {}, fee: {}", advisorId, request.getConsultationFee());
+            int result = advisorProfileMapper.updateAdvisorConsultationFee(advisorId, request.getConsultationFee());
+            log.info("상담료 업데이트 결과: {}", result);
+            if (result == 0) {
+                log.error("상담료 업데이트 실패 - 영향받은 행: 0");
+                throw new BaseException(BaseResponseStatus.ADVISOR_PROFILE_UPDATE_FAILED);
+            }
+        } else {
+            log.info("consultationFee가 null이므로 상담료 업데이트 건너뜀");
+        }
+
+        log.info("=== updateProfileBasicInfo 완료 ===");
     }
 
     /**

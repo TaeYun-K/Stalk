@@ -73,6 +73,55 @@ export const useDrawingCanvas = (
     const className = node.getClassName();
     const id = ensureId(node);
     const attrs = node.getAttrs();
+    
+    // Group인 경우 tool 속성으로 타입 판단
+    if (className === 'Group') {
+      const tool = attrs.tool as DrawingTool;
+      
+      // 화살표 그룹인 경우 특별 처리
+      if (tool === 'arrow') {
+        const group = node as Konva.Group;
+        const children = group.getChildren();
+        
+        // 첫 번째 자식(선)의 points와 스타일 속성을 가져옴
+        const arrowLine = children[0] as Konva.Line;
+        const linePoints = arrowLine ? arrowLine.points() : [];
+        const lineStroke = arrowLine ? arrowLine.stroke() : '#000000';
+        const lineStrokeWidth = arrowLine ? arrowLine.strokeWidth() : 2;
+        
+        return {
+          id,
+          type: 'arrow',
+          attrs: {
+            x: attrs.x || 0,
+            y: attrs.y || 0,
+            points: linePoints,
+            stroke: lineStroke,
+            strokeWidth: lineStrokeWidth / 1.5, // 생성 시 1.5배로 만들었으므로 원래 값으로 복원
+            tool: 'arrow',
+            draggable: attrs.draggable !== false,
+            rotation: attrs.rotation || 0,
+            scaleX: attrs.scaleX || 1,
+            scaleY: attrs.scaleY || 1,
+          }
+        };
+      }
+      
+      // 다른 Group 도구들(fibonacci 등)도 여기서 처리
+      return {
+        id,
+        type: tool || 'path',
+        attrs: {
+          x: attrs.x, y: attrs.y, width: attrs.width, height: attrs.height, rotation: attrs.rotation,
+          points: attrs.points, tension: attrs.tension, stroke: attrs.stroke, strokeWidth: attrs.strokeWidth,
+          opacity: attrs.opacity, dash: attrs.dash, fill: attrs.fill,
+          scaleX: attrs.scaleX, scaleY: attrs.scaleY, offsetX: attrs.offsetX, offsetY: attrs.offsetY,
+          draggable: attrs.draggable, visible: attrs.visible,
+          tool: attrs.tool,
+        }
+      };
+    }
+    
     const kept = {
       x: attrs.x, y: attrs.y, width: attrs.width, height: attrs.height, rotation: attrs.rotation,
       points: attrs.points, tension: attrs.tension, stroke: attrs.stroke, strokeWidth: attrs.strokeWidth,
@@ -102,15 +151,123 @@ export const useDrawingCanvas = (
   //SerializedShape를 레이어에 생성/갱신
   const upsertFromSerialized = useCallback((layer: Konva.Layer, s: SerializedShape) => {
     let node = findById(layer, s.id);
-    const apply = (n: Konva.Node) => { n.setAttrs({ ...s.attrs }); n.id(s.id); };
-
+    
     if (node) {
-      apply(node);
+      // 기존 노드가 있으면 업데이트
+      if (s.type === 'arrow' && node.getClassName() === 'Group') {
+        // 화살표 그룹 업데이트
+        const group = node as Konva.Group;
+        const points = s.attrs.points as number[];
+        if (points && points.length >= 4) {
+          const x1 = points[0], y1 = points[1], x2 = points[2], y2 = points[3];
+          
+          // 화살표 치수 재계산
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
+          const arrowLength = Math.min(Math.max(length * 0.2, 12), 25);
+          
+          const children = group.getChildren();
+          if (children.length >= 2) {
+            const arrowLine = children[0] as Konva.Line;
+            const arrowHead = children[1] as Konva.Line;
+            
+            // 선 업데이트
+            const lineEndX = x2 - (arrowLength * 0.7) * Math.cos(angle);
+            const lineEndY = y2 - (arrowLength * 0.7) * Math.sin(angle);
+            arrowLine.points([x1, y1, lineEndX, lineEndY]);
+            
+            // 화살촉 업데이트
+            arrowHead.points([
+              x2, y2,
+              x2 - arrowLength * Math.cos(angle - Math.PI/6), y2 - arrowLength * Math.sin(angle - Math.PI/6),
+              x2 - arrowLength * 0.5 * Math.cos(angle), y2 - arrowLength * 0.5 * Math.sin(angle),
+              x2 - arrowLength * Math.cos(angle + Math.PI/6), y2 - arrowLength * Math.sin(angle + Math.PI/6),
+              x2, y2
+            ]);
+          }
+        }
+        
+        // 그룹 속성 업데이트
+        group.setAttrs({
+          x: s.attrs.x,
+          y: s.attrs.y,
+          draggable: s.attrs.draggable,
+          rotation: s.attrs.rotation,
+          scaleX: s.attrs.scaleX,
+          scaleY: s.attrs.scaleY,
+        });
+      } else {
+        // 일반 노드 업데이트
+        node.setAttrs({ ...s.attrs });
+      }
+      node.id(s.id);
     } else {
+      // 새 노드 생성
       switch (s.type) {
-        case 'rectangle': node = new Konva.Rect({ ...s.attrs }); break;
-        case 'arrow':     node = new Konva.Arrow({ ...s.attrs }); break;
-        default:          node = new Konva.Line({ ...s.attrs });  break;
+        case 'rectangle': 
+          node = new Konva.Rect({ ...s.attrs }); 
+          break;
+        case 'arrow':
+          // 화살표를 Group으로 재생성
+          const points = s.attrs.points as number[];
+          if (points && points.length >= 4) {
+            const x1 = points[0], y1 = points[1], x2 = points[2], y2 = points[3];
+            
+            const arrowGroup = new Konva.Group({
+              draggable: s.attrs.draggable || true,
+              x: s.attrs.x || 0,
+              y: s.attrs.y || 0,
+              rotation: s.attrs.rotation || 0,
+              scaleX: s.attrs.scaleX || 1,
+              scaleY: s.attrs.scaleY || 1,
+            });
+            
+            // 화살표 치수 계산
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+            const arrowLength = Math.min(Math.max(length * 0.2, 12), 25);
+            
+            // 선
+            const lineEndX = x2 - (arrowLength * 0.7) * Math.cos(angle);
+            const lineEndY = y2 - (arrowLength * 0.7) * Math.sin(angle);
+            const arrowLine = new Konva.Line({
+              points: [x1, y1, lineEndX, lineEndY],
+              stroke: s.attrs.stroke || '#000000',
+              strokeWidth: (s.attrs.strokeWidth || 2) * 1.5,
+              lineCap: 'round',
+            });
+            
+            // 화살촉
+            const arrowHead = new Konva.Line({
+              points: [
+                x2, y2,
+                x2 - arrowLength * Math.cos(angle - Math.PI/6), y2 - arrowLength * Math.sin(angle - Math.PI/6),
+                x2 - arrowLength * 0.5 * Math.cos(angle), y2 - arrowLength * 0.5 * Math.sin(angle),
+                x2 - arrowLength * Math.cos(angle + Math.PI/6), y2 - arrowLength * Math.sin(angle + Math.PI/6),
+                x2, y2
+              ],
+              stroke: s.attrs.stroke || '#000000',
+              strokeWidth: 1,
+              fill: s.attrs.stroke || '#000000',
+              closed: true,
+            });
+            
+            arrowGroup.add(arrowLine);
+            arrowGroup.add(arrowHead);
+            arrowGroup.setAttr('tool', 'arrow');
+            node = arrowGroup;
+          } else {
+            // points가 없으면 일반 선으로 폴백
+            node = new Konva.Line({ ...s.attrs });
+          }
+          break;
+        default:
+          node = new Konva.Line({ ...s.attrs });
+          break;
       }
       node.id(s.id);
       layer.add(node);

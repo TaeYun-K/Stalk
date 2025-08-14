@@ -10,7 +10,7 @@
         SELECT
             a.advisor_id as advisorId,
             u.name as name,
-            u.image as profileImage,
+            adi.profile_image_url as profileImage,
             adi.avg_rating as averageRating,
             adi.review_counting as reviewCount,
             adi.preferred_trade_style as preferredTradeStyle,

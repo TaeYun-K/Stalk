@@ -6,15 +6,25 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 @Getter
 @Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Schema(description = "전문가 프로필 수정 요청 DTO")
 public class AdvisorProfileUpdateRequestDto {
+
+    // 업로드할 때만 쓰는 필드 (프론트에서 FormData로 넘어옴)
+    private MultipartFile profileImage;
 
     @Schema(description = "프로필 이미지 URL", example = "https://example.com/new-profile.jpg")
     private String profileImageUrl;
@@ -30,7 +40,7 @@ public class AdvisorProfileUpdateRequestDto {
     private String longIntro;
 
     @Schema(description = "선호 투자 스타일", example = "LONG",
-        allowableValues = {"SHORT", "MID_SHORT", "MID", "MID_LONG", "LONG"})
+                    allowableValues = {"SHORT", "MID_SHORT", "MID", "MID_LONG", "LONG"})
     private PreferredTradeStyle preferredTradeStyle;
 
     @Min(value = 10000, message = "상담료는 1만원 이상 100만원 이하여야 합니다.")
@@ -50,32 +60,32 @@ public class AdvisorProfileUpdateRequestDto {
     public List<CareerEntryDto> getCreateCareerEntries() {
         if (careerEntries == null) return List.of();
         return careerEntries.stream()
-            .filter(CareerEntryDto::isCreateAction)
-            .toList();
+                        .filter(CareerEntryDto::isCreateAction)
+                        .toList();
     }
 
     public List<CareerEntryDto> getUpdateCareerEntries() {
         if (careerEntries == null) return List.of();
         return careerEntries.stream()
-            .filter(CareerEntryDto::isValidForUpdate)
-            .toList();
+                        .filter(CareerEntryDto::isValidForUpdate)
+                        .toList();
     }
 
     public List<CareerEntryDto> getDeleteCareerEntries() {
         if (careerEntries == null) return List.of();
         return careerEntries.stream()
-            .filter(CareerEntryDto::isValidForDelete)
-            .toList();
+                        .filter(CareerEntryDto::isValidForDelete)
+                        .toList();
     }
 
     // 적어도 하나의 필드가 업데이트되는지 확인
     public boolean hasAnyUpdates() {
         return profileImageUrl != null ||
-            publicContact != null ||
-            shortIntro != null ||
-            longIntro != null ||
-            preferredTradeStyle != null ||
-            consultationFee != null ||
-            hasCareerChanges();
+                        publicContact != null ||
+                        shortIntro != null ||
+                        longIntro != null ||
+                        preferredTradeStyle != null ||
+                        consultationFee != null ||
+                        hasCareerChanges();
     }
 }

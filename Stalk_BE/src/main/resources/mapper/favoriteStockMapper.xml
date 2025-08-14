@@ -20,8 +20,8 @@
   </select>
 
   <insert id="addFavorite">
-    INSERT INTO favorite_stocks (user_id, stock_ticker, created_at)
-    VALUES (#{userId}, #{stockTicker}, NOW())
+    INSERT INTO favorite_stocks (user_id, stock_ticker)
+    VALUES (#{userId}, #{stockTicker})
   </insert>
 
   <delete id="deleteFavorite">

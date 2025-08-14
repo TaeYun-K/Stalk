@@ -28,12 +28,12 @@ public interface AdvisorProfileMapper {
     Boolean hasAdvisorDetailInfo(@Param("advisorId") Long advisorId);
 
     // ===== 프로필 관리 =====
-    
-    /**
-     * 전문가 상세 정보 등록
-     */
-    int insertAdvisorDetailInfo(@Param("advisorId") Long advisorId, 
-                               @Param("request") AdvisorProfileCreateRequestDto request);
+
+    void insertAdvisorDetailInfo(@Param("advisorId") Long advisorId,
+        @Param("request") AdvisorProfileCreateRequestDto request);
+
+    void updateAdvisorProfileCompletion(@Param("advisorId") Long advisorId,
+        @Param("consultationFee") int consultationFee);
     
     /**
      * 전문가 상세 정보 수정
@@ -71,6 +71,12 @@ public interface AdvisorProfileMapper {
      */
     Boolean isCareerEntryOwner(@Param("advisorId") Long advisorId, 
                               @Param("careerId") Long careerId);
+
+    /**
+     * 전문가 상담료 업데이트
+     */
+    int updateAdvisorConsultationFee(@Param("advisorId") Long advisorId,
+                    @Param("consultationFee") Integer consultationFee);
 
     // ===== 자격증 승인 요청 =====
     
