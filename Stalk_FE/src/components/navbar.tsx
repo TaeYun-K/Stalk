@@ -9,13 +9,6 @@ const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isLoggedIn, logout, isLoggingOut, userRole } = useAuth();
-  
-  // Debug logging for userRole
-  React.useEffect(() => {
-    console.log('Navbar - userRole:', userRole);
-    console.log('Navbar - userRole type:', typeof userRole);
-    console.log('Navbar - isLoggedIn:', isLoggedIn);
-  }, [userRole, isLoggedIn]);
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   // const [showCommunityMenu, setShowCommunityMenu] = useState<boolean>(false);
 
@@ -30,9 +23,9 @@ const Navbar: React.FC = () => {
     try {
       const response = await AuthService.authenticatedRequest('/api/users/me');
       const data = await response.json();
-      
-      
-      
+
+
+
       if (data.result?.profileImage) {
         setUserProfileImage(data.result.profileImage);
       } else {
@@ -116,43 +109,43 @@ const Navbar: React.FC = () => {
         <div className="flex justify-between items-center h-20">
           {/* Brand Logo */}
           <div className="flex items-center">
-            <button 
+            <button
               onClick={() => navigate('/')}
               className="flex items-center space-x-2 hover:opacity-80 transition-opacity duration-300"
             >
-              
+
               <img src={stalkLogoBlue} alt="Stalk Logo" className="w-30 h-10" />
             </button>
-            
+
           </div>
 
           {/* Navigation Menu */}
-          
+
             <div className="hidden md:flex items-center space-x-10">
-              <button 
+              <button
                 onClick={() => navigate('/advisors-list')}
                 className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
               >
                 투자 전문가
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/products')}
                 className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
               >
                 상품 조회
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/investment-knowledge-list')}
                 className="text-gray-600 hover:font-semibold hover:text-blue-600 font-medium text-lg transition-all duration-300 relative group"
                 >
                 <span>투자 지식 iN</span>
-                
+
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300 group-hover:w-full"></span>
               </button>
             </div>
-          
+
 
           {/* Search Bar and User Actions */}
           <div className="flex items-center space-x-4">
@@ -167,8 +160,8 @@ const Navbar: React.FC = () => {
                 className={`ml-2 bg-transparent outline-none text-gray-600 placeholder-gray-400 text-sm flex-1 border-none focus:outline-none focus:ring-0 ${isInputActive ? '' : 'pointer-events-none'}`}
                 readOnly={!isInputActive}
               />
-              <button 
-                onClick={handleSearch} 
+              <button
+                onClick={handleSearch}
                 className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-300 inline-flex item-center justify-center"
               >
                 <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,8 +173,8 @@ const Navbar: React.FC = () => {
             {/* User Actions */}
             {isLoggedIn ? (
               <div className="relative">
-                <button 
-                  onClick={() => setShowProfileMenu(!showProfileMenu)} 
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
                   className="w-11 h-11 rounded-full overflow-hidden hover:shadow-modern transition-all duration-300 hover:scale-105"
                 >
                   {userProfileImage ? (
@@ -202,8 +195,8 @@ const Navbar: React.FC = () => {
                       }}
                     />
                   )}
-                  
-                  
+
+
                 </button>
 
                 {/* Profile Dropdown Menu */}
@@ -268,7 +261,7 @@ const Navbar: React.FC = () => {
                         </span>
                       </button>
                     )}
-                    
+
                     {/* ADMIN일 때만 표시되는 관리자 페이지 메뉴 */}
                     {userRole === 'ADMIN' && (
                       <button
@@ -284,9 +277,9 @@ const Navbar: React.FC = () => {
                         <span>관리자 페이지</span>
                       </button>
                     )}
-                    
+
                     <div className="border-t border-gray-200 my-1"></div>
-                    
+
                     {/* 로그아웃 버튼 - 모든 role에서 표시 */}
                     <button
                       onClick={async () => {
@@ -320,8 +313,8 @@ const Navbar: React.FC = () => {
 
       {/* Backdrop for dropdown */}
       {showProfileMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
+        <div
+          className="fixed inset-0 z-40"
           onClick={() => setShowProfileMenu(false)}
         />
       )}
@@ -329,4 +322,4 @@ const Navbar: React.FC = () => {
   );
 };
 
-export default Navbar; 
+export default Navbar;

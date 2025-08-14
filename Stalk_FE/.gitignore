@@ -213,5 +213,6 @@ chrome-profiler-events*.json
 /public/uploads/
 
 # Claude
+.claude
 .Claude
 CLAUDE.md
