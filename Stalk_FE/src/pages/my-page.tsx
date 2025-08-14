@@ -19,19 +19,10 @@ import {
   ApprovalHistoryResponse,
   CertificateApprovalRequest,
   ConsultationDiaryResponse,
-  VideoRecording,
+  ConsultationItem,
 } from "@/types";
 
-interface ConsultationItem {
-  id: string;
-  date: string;
-  time: string;
-  content: string;
-  expert: string;
-  videoConsultation: string;
-  action: string;
-  status?: 'scheduled' | 'completed' | 'cancelled';
-}
+// 사용 위치에서 공용 타입(`@/types`)의 ConsultationItem을 사용합니다.
 
 // 영상 분석 결과 타입 정의
 interface VideoAnalysisResult {
@@ -363,7 +354,7 @@ const MyPage = () => {
     useState<ConsultationItem | null>(null);
   const [consultationDiary, setConsultationDiary] =
     useState<ConsultationDiaryResponse | null>(null);
-  const [isLoadingDiary, setIsLoadingDiary] = useState(false);
+  const [isLoadingDiary, _setIsLoadingDiary] = useState(false);
   const [diaryError, setDiaryError] = useState<string | null>(null);
 
   // 사용자 역할에 따른 전문가 여부 확인 (백엔드 데이터 사용)
@@ -443,7 +434,7 @@ const MyPage = () => {
 
   const tabs = isExpert ? expertTabs : generalTabs;
 
-  const consultationData = {
+  const consultationData: { "상담 전": ConsultationItem[]; "상담 완료": ConsultationItem[] } = {
     "상담 전": [
       {
         id: "1",
@@ -535,6 +526,8 @@ const MyPage = () => {
             consultationTime?: string;
             requestMessage?: string;
             status?: string;
+            clientName?: string;
+            clientUserId?: number;
             advisorName?: string;
             advisorUserId?: number;
             profileImageUrl?: string;
@@ -574,10 +567,13 @@ const MyPage = () => {
               date: reservation.consultationDate || "",
               time: reservation.consultationTime || "",
               content: reservation.requestMessage || "상담 요청",
-              expert:
-                reservation.advisorName ||
-                reservation.advisorUserId?.toString() ||
-                "전문가",
+              expert: isExpert
+                ? (reservation.clientName ||
+                   reservation.clientUserId?.toString() ||
+                   "의뢰인")
+                : (reservation.advisorName ||
+                   reservation.advisorUserId?.toString() ||
+                   "전문가"),
               videoConsultation:
                 effectiveStatus === "completed" ? "상담 완료" : "상담 입장",
               action:
@@ -1129,14 +1125,18 @@ const MyPage = () => {
                 isCancelling={isCancelling}
                 onViewDiary={handleConsultationDiaryClick}
                 onNavigateAdvisor={(expertName) => navigate(`/advisors-detail/${encodeURIComponent(expertName)}`)}
-                hardcodedConsultationData={consultationData as any}
+                hardcodedConsultationData={consultationData}
                 activeTab={activeTab}
                 selectedConsultation={selectedConsultation}
                 isLoadingDiary={isLoadingDiary}
                 diaryError={diaryError}
                 consultationDiary={consultationDiary}
                 onCloseDiary={handleCloseDiary}
-                onRetryDiary={() => handleConsultationDiaryClick(selectedConsultation as any)}
+                onRetryDiary={() => {
+                  if (selectedConsultation) {
+                    handleConsultationDiaryClick(selectedConsultation);
+                  }
+                }}
                 onAnalyzeVideo={handleVideoAnalysis}
                 videoAnalysisResult={videoAnalysisResult}
               />

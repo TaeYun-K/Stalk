@@ -310,7 +310,8 @@ const StockChart: React.FC<StockChartProps> = ({
     setStrokeWidth,
     getAllShapes,
     applyRemoteChange,
-    applySnapshot
+    applySnapshot,
+    updateChartContext
   } = useDrawingCanvas(chartContainerRef, {
 
     onChange: (change) => {
@@ -1103,6 +1104,16 @@ const StockChart: React.FC<StockChartProps> = ({
 
         setChartData(newChartData);
         setVolumeChartData(newVolumeData);
+
+        // Update drawing canvas with chart context for proper coordinate mapping
+        if (updateChartContext) {
+          updateChartContext({
+            totalDataPoints: labels.length,
+            actualDataPoints: actualDataLength,
+            futureDataPoints: labels.length - actualDataLength,
+            hasFutureSpace: futureDays > 0
+          });
+        }
 
       } else {
         console.error("StockChart - 데이터가 없음:", responseData);
@@ -2496,6 +2507,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     : 'bg-white/60 backdrop-blur-md border border-gray-200/30'
                 } shadow-sm`}>
                   <ChartControls
+                    key={`controls-${period}-${chartType}`}
                     period={period}
                     chartType={chartType}
                     onPeriodChange={handlePeriodChange}

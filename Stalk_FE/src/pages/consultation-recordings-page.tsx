@@ -130,17 +130,14 @@ const ConsultationRecordingsPage: React.FC = () => {
 	return (
 		<div className="min-h-screen bg-white">
 			<div className="max-w-7xl mx-auto px-6 py-8 pt-28" style={{ paddingRight: contentRightPaddingPx }}>
-				<div className="flex items-center justify-between mb-6">
-					<h1 className="text-2xl font-bold text-gray-900">상담 녹화 영상</h1>
+				<div className="flex items-center mb-6">
 					<button
 						onClick={() => navigate(-1)}
-						className="text-gray-500 hover:text-gray-700 text-sm font-medium flex items-center space-x-2"
+						className="text-gray-500 hover:text-gray-700 text-sm font-medium flex items-center space-x-2 mr-2 p-2 hover:bg-gray-100 rounded-lg"
 					>
-						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m0 7h18" />
-						</svg>
-						<span>뒤로가기</span>
+						&lt;
 					</button>
+					<h1 className="text-2xl font-bold text-gray-900">상담 녹화 영상</h1>
 				</div>
 
 				{isLoading ? (
@@ -155,26 +152,14 @@ const ConsultationRecordingsPage: React.FC = () => {
 				) : (
 					<div className="space-y-6">
 								{recordings.map((recording, index) => (
-									<div key={recording.id} className="border border-gray-200 rounded-lg p-4">
+									<div key={recording.id} className="p-4">
 										<div className="w-full max-w-3xl mx-auto space-y-4">
 											<div className="flex items-center justify-between mb-3">
-									<h4 className="font-medium text-gray-900">녹화 영상 {index + 1}</h4>
-									<span
-										className={`px-2 py-1 rounded-full text-xs font-medium ${
-											recording.status === "COMPLETED"
-												? "bg-green-100 text-green-800"
-											: recording.status === "PROCESSING"
-												? "bg-yellow-100 text-yellow-800"
-												: "bg-gray-100 text-gray-800"
-										}`}
-									>
-										{recording.status === "COMPLETED"
-											? "완료"
-											: recording.status === "PROCESSING"
-											? "처리중"
-											: "대기중"}
-										</span>
-										</div>
+                        <div className="flex items-center gap-2">
+									<h4 className="rounded-full bg-blue-500 text-white px-4 py-1 text-sm mr-4 font-medium text-gray-500">
+                    Recording No. {index + 1}</h4>
+                  </div>
+								</div>
 
 										<div className="relative bg-black rounded-lg aspect-video flex items-center justify-center w-full">
 									{recording.url ? (
@@ -191,7 +176,34 @@ const ConsultationRecordingsPage: React.FC = () => {
 										</div>
 									)}
 								</div>
-
+                <div className="grid grid-rows-2 border border-red-200 bg-red-50 rounded-lg p-4 mb-6">
+                  <div className="text-lg font-semibold text-gray-600">📸 녹화 정보</div>
+                  <hr className="w-full my-4 border-red-200" />
+                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="font-semibold">시작 시간</span>
+                      <span>{new Date(recording.startTime).toLocaleString("ko-KR")}</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="font-semibold">종료 시간</span>
+                      <span>{new Date(recording.endTime).toLocaleString("ko-KR")}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start">
+              <div className="text-blue-600 text-xl mr-3">🤖</div>
+              <div className="w-full">
+                <h3 className="font-semibold text-left text-blue-800 mb-2">Stalk AI가 상담 영상을 자동으로 요약해드립니다!</h3>
+                <div className="space-y-1">
+                  <p className="text-blue-700 text-sm text-left">· 상담내용을 전문가가 직접 분석 작성한 상담일지에 대한 신뢰도와 정확성을 책임집니다.</p>
+                  <p className="text-blue-700 text-sm text-left">· 영상 요약은 약 30초 ~ 1분 가량 소요될 수 있습니다.</p>
+                </div>
+                <hr className="w-full my-4 border-blue-200" />
+                <p className="text-left text-sm text-gray-500">※ AI 요약 상담 일지는 상담 녹화 영상이 있을 때 제공됩니다.</p>
+              </div>
+            </div>
+          </div>
                                         {recording.url && (
                                             <div>
                                         <button
@@ -244,12 +256,12 @@ const ConsultationRecordingsPage: React.FC = () => {
 												<div className="space-y-6">
 													{parsed.lecture_content && parsed.lecture_content.length > 0 && (
 														<div>
-															<h4 className="text-lg font-semibold text-gray-900 mb-3">📚 강의 내용</h4>
-															<div className="space-y-3">
+															<h4 className="text-lg font-semibold text-left text-gray-900 mb-3">📚 강의 내용</h4>
+															<div className="space-y-8 rounded-lg p-6 border border-gray-200">
 																{parsed.lecture_content.map((item: { topic: string; details: string }, idx: number) => (
-																	<div key={idx} className="bg-white rounded-lg p-4 border border-gray-200">
-																		<h5 className="font-medium text-blue-600 mb-2">{item.topic}</h5>
-																		<p className="text-gray-700 leading-relaxed">{item.details}</p>
+																	<div key={idx} className="flex flex-col items-start mb-2">
+																		<h5 className="font-medium font-semibold text-blue-600 mb-2 text-left">{item.topic}</h5>
+																		<p className="pl-5 text-gray-700 leading-relaxed text-left">{item.details}</p>
 																	</div>
 																))}
 															</div>
@@ -258,26 +270,28 @@ const ConsultationRecordingsPage: React.FC = () => {
 
 													{parsed.key_takeaways && (
 														<div>
-															<h4 className="text-lg font-semibold text-gray-900 mb-3">🎯 핵심 요약</h4>
-													<div className="bg-white rounded-lg p-4 border border-gray-200 space-y-3">
-																<div>
-																	<h5 className="font-medium text-gray-900 mb-2">주요 주제</h5>
-																	<p className="text-gray-700">{parsed.key_takeaways.main_subject}</p>
+															<h4 className="text-left text-lg font-semibold text-gray-900 mb-3 mt-8">🎯 핵심 요약</h4>
+													<div className="flex flex-col bg-white rounded-lg p-4 border border-gray-200 space-y-3">
+																<div className="flex flex-col items-start mb-4">
+																	<h5 className="font-medium text-gray-900 mb-2 font-semibold text-left">📌 주요주제</h5>
+                                  <span className="text-gray-700 font-normal text-left pl-6">{parsed.key_takeaways.main_subject}</span>
 																</div>
 																{parsed.key_takeaways.core_concepts && parsed.key_takeaways.core_concepts.length > 0 && (
 																	<div>
-																		<h5 className="font-medium text-gray-900 mb-2">핵심 개념</h5>
-																<ol className="list-decimal list-inside space-y-1 text-gray-800">
-																	{parsed.key_takeaways.core_concepts.map((concept: string, cidx: number) => (
-																		<li key={cidx}><span className="font-semibold">{concept}</span></li>
-																	))}
-																</ol>
+																		<h5 className="font-semibold text-gray-900 mb-2 text-left">⭐ 핵심개념</h5>
+                                    <div className="flex flex-col items-start bg-yellow-50 rounded-lg py-4 px-7">
+                                      <ol className="list-decimal list-inside space-y-1 text-gray-800 text-left space-y-2">
+                                        {parsed.key_takeaways.core_concepts.map((concept: string, cidx: number) => (
+                                          <li key={cidx}><span className="font-semibold">{concept}</span></li>
+                                        ))}
+                                      </ol>
+                                    </div>
 																	</div>
 																)}
 														{parsed.key_takeaways.conclusion_and_strategy && (
-															<div>
-																<h5 className="font-medium text-gray-900 mb-2">결론 및 전략</h5>
-																<p className="text-gray-700 leading-relaxed">{parsed.key_takeaways.conclusion_and_strategy}</p>
+															<div className="flex flex-col items-start pt-4">
+																<h5 className="font-medium text-gray-900 mb-2 font-semibold text-left">💡 결론 및 전략</h5>
+																<p className="pl-6 text-gray-700 leading-relaxed text-left">{parsed.key_takeaways.conclusion_and_strategy}</p>
 															</div>
 														)}
 															</div>
@@ -288,18 +302,6 @@ const ConsultationRecordingsPage: React.FC = () => {
 									})()}
 									</div>
 								)}
-
-								<div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-									<div>
-										<span className="font-medium">시작 시간:</span>
-										<span className="ml-2">{new Date(recording.startTime).toLocaleString("ko-KR")}</span>
-									</div>
-									<div>
-										<span className="font-medium">종료 시간:</span>
-										<span className="ml-2">{new Date(recording.endTime).toLocaleString("ko-KR")}</span>
-									</div>
-
-								</div>
 								</div>
 							</div>
 						))}

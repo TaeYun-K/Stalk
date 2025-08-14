@@ -12,6 +12,7 @@ const SignupPage = () => {
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [isEmailSent, setIsEmailSent] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [emailVerificationError, setEmailVerificationError] = useState("");
   const [passwordsMatch, setPasswordsMatch] = useState(true);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showThirdPartyModal, setShowThirdPartyModal] = useState(false);
@@ -81,11 +82,7 @@ const SignupPage = () => {
 
   const passwordValidation = getPasswordValidation();
 
-  const isContactValid = (() => {
-    if (!formData.contact) return true; // 미입력 시 경고 비표시
-    const onlyDigits = formData.contact.replace(/[^0-9]/g, "");
-    return /^\d{9,11}$/.test(onlyDigits);
-  })();
+  
 
   // URL 파라미터에서 사용자 타입 읽기
   useEffect(() => {
@@ -489,6 +486,10 @@ const SignupPage = () => {
     if (name === "nickname") {
       setNicknameVerified(false);
     }
+    if (name === "verificationCode") {
+      setEmailVerificationError("");
+      setIsEmailVerified(false);
+    }
   };
 
   const handleQualificationChange = (
@@ -551,6 +552,8 @@ const SignupPage = () => {
         setTimeLeft(600); // 10분으로 수정 (600초)
         setIsEmailSent(true);
         setErrorMessage("");
+        setIsEmailVerified(false);
+        setEmailVerificationError("");
       } else {
         setErrorMessage("인증 코드 발송에 실패했습니다.");
       }
@@ -563,6 +566,7 @@ const SignupPage = () => {
   const handleVerifyEmail = async () => {
     if (!formData.verificationCode) {
       setErrorMessage("인증 코드를 입력해주세요.");
+      setEmailVerificationError("");
       return;
     }
 
@@ -586,12 +590,15 @@ const SignupPage = () => {
         setIsEmailVerified(true);
         setIsTimerActive(false);
         setErrorMessage("");
+        setEmailVerificationError("");
       } else {
-        setErrorMessage(result.message || "인증 코드가 올바르지 않습니다.");
+        setIsEmailVerified(false);
+        setEmailVerificationError("인증번호를 다시 확인해주세요.");
       }
     } catch (error: unknown) {
       console.error("인증 코드 확인 중 오류:", error);
-      setErrorMessage("인증 코드 확인 중 오류가 발생했습니다.");
+      setIsEmailVerified(false);
+      setEmailVerificationError("인증번호를 다시 확인해주세요.");
     }
   };
 
@@ -840,11 +847,24 @@ const SignupPage = () => {
                   />
                 </div>
                 {/* Password helper */}
-                <div className="text-left ml-[33%] -mt-2 mb-2 text-xs">
+                <div className="text-left ml-[25%] -mt-2 mb-2 text-sm">
                   {formData.password ? (
                     passwordValidation.isValid ? (
-                      <div className="text-green-600">
-                        ✓ 비밀번호 조건을 모두 만족합니다
+                      <div className="flex items-center space-x-2 text-green-600">
+                        <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                        <p>비밀번호 조건을 모두 만족합니다.</p>
                       </div>
                     ) : (
                       <div className="text-red-600">
@@ -856,10 +876,10 @@ const SignupPage = () => {
                       </div>
                     )
                   ) : (
-                    <div className="text-gray-500">
-                      비밀번호는 8~20자, 숫자·대문자·소문자·특수문자 포함, 공백
-                      불가
-                    </div>
+                    <ul className="text-gray-500 list-disc list-inside ml-2 space-y-1">
+                      <li>비밀번호의 길이는 8~20자 사이여야 합니다.</li>
+                      <li>숫자·대문자·소문자·특수문자 포함, 공백 불가</li>
+                    </ul>
                   )}
                 </div>
 
@@ -945,18 +965,10 @@ const SignupPage = () => {
                     value={formData.contact}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-300"
-                    placeholder="연락처를 입력해주세요"
+                    placeholder="연락처(9~11자리, 하이픈 제외)를 입력해주세요"
                     required
                   />
                 </div>
-                {/* Contact helper */}
-                <p
-                  className={`ml-[33%] -mt-2 mb-2 text-xs ${
-                    isContactValid ? "text-gray-500" : "text-red-600"
-                  }`}
-                >
-                  숫자만 9~11자리 입력 (하이픈 제외)
-                </p>
                 {/* Email */}
                 <div className="flex flex-row items-start mb-2">
                   <h3 className="mt-3 w-2/6 text-sm font-medium text-gray-700 mb-2 text-left">
@@ -1006,25 +1018,22 @@ const SignupPage = () => {
                       className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                         !formData.email || !formData.emailDomain
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-gray-200 text-gray-600 hover:bg-gray-300 hover:text-gray-800 hover:font-bold"
+                          : "bg-blue-500 text-white hover:bg-blue-600 hover:text-white"
                       }`}
                     >
-                      {isEmailSent ? "인증번호 재발송" : "인증번호 보내기"}
+                      {isEmailSent
+                        ? (isTimerActive ? `인증번호 재발송(${formatTime(timeLeft)})` : "인증 완료")
+                        : "인증번호 발송"}
                     </button>
                     {/* Email helper */}
-                    <p className="text-xs text-gray-500 mt-2">
-                      유효한 이메일 주소 형식이어야 하며, 인증을 완료해야
-                      회원가입이 가능합니다.
-                    </p>
+                    <div className="text-xs text-gray-500 mt-2">{isEmailSent ? "입력하신 이메일에서 인증번호를 확인하세요" : " "}</div>
                   </div>
                 </div>
 
                 {/* Email Verification */}
                 <div className="flex flex-row items-start mb-2">
                   <div className="mt-3 w-2/6 text-sm text-gray-600 mb-2 text-left">
-                    {isTimerActive
-                      ? `${formatTime(timeLeft)} 안에 인증을 완료하세요`
-                      : "인증하기"}
+                    인증번호
                   </div>
                   <div className="flex flex-col w-full gap-2">
                     <input
@@ -1038,38 +1047,56 @@ const SignupPage = () => {
                       maxLength={6}
                       disabled={!isEmailSent}
                     />
-                    {isEmailVerified && (
-                      <div className="flex items-center space-x-2 mt-2 text-green-600 justify-start">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        <span className="text-sm">
-                          정상적으로 인증되었습니다.
-                        </span>
-                      </div>
-                    )}
                     <button
                       type="button"
                       onClick={handleVerifyEmail}
                       disabled={!isEmailSent || !formData.verificationCode}
                       className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                         !isEmailSent || !formData.verificationCode
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-gray-200 text-gray-600 hover:bg-gray-300 hover:text-gray-800 hover:font-bold"
-                      }`}
-                    >
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-500 text-white hover:bg-blue-600 hover:text-white"
+                        }`}
+                        >
                       인증하기
                     </button>
+                      {!isEmailVerified && emailVerificationError && (
+                        <div className="flex items-center space-x-2 mt-2 text-red-600 justify-start">
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                          <span className="text-sm">{emailVerificationError}</span>
+                        </div>
+                      )}
+                      {isEmailVerified && (
+                        <div className="flex items-center space-x-2 mt-2 text-green-600 justify-start">
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          <span className="text-sm">
+                            정상적으로 인증되었습니다.
+                          </span>
+                        </div>
+                      )}
                   </div>
                 </div>
               </div>
