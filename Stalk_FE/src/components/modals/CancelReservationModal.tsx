@@ -31,7 +31,7 @@ const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">상담 예약 취소</h3>
+          <h3 className="text-left text-lg font-semibold text-gray-900">상담 예약 취소</h3>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -42,7 +42,7 @@ const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">취소 사유</label>
+            <label className="block text-left text-sm font-medium text-gray-700 mb-2">취소 사유</label>
             <select
               value={cancelReason}
               onChange={(e) => onChangeReason(e.target.value as CancelReasonType)}
@@ -56,7 +56,7 @@ const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">상세 사유(선택)</label>
+            <label className="block text-left text-sm font-medium text-gray-700 mb-2">상세 사유(선택)</label>
             <textarea
               value={cancelMemo}
               onChange={(e) => onChangeMemo(e.target.value)}
