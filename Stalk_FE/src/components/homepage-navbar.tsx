@@ -241,7 +241,7 @@ const HomePageNavbar: React.FC = () => {
                         <span>상담 내역</span>
                       </button>
                     )}
-                    {userRole !== 'ADMIN' && (
+                    {userRole !== 'ADMIN' && userRole !== 'ADVISOR' && (
                       <button
                         onClick={() => {
                           navigate('/my-reviews');
