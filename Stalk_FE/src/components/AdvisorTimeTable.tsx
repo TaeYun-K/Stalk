@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AuthService from '@/services/authService';
 
 // API 인터페이스 정의
@@ -19,6 +19,10 @@ interface BlockedTimesResponse {
 
 interface AdvisorTimeTableProps {
   onOperatingHoursChange: (hasOperatingHours: boolean) => void;
+  autoSave?: boolean; // 기본값 true: 변경 즉시 저장, false: 부모에서 저장 제어
+  onSelectionChange?: (date: string | null, blockedTimes: string[]) => void; // 선택된 날짜/시간 변경 시 알림
+  onDirtyChange?: (isDirty: boolean) => void; // 현재 선택 날짜의 변경 여부
+  commitKey?: number; // 부모에서 저장 완료 시 원본 기준 갱신 트리거
 }
 
 const parseLocalDate = (dateString: string): Date => {
@@ -26,11 +30,20 @@ const parseLocalDate = (dateString: string): Date => {
   return new Date(year, month - 1, day);
 };
 
-const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursChange }) => {
+// 로컬 타임존 기준 YYYY-MM-DD 키 생성
+const formatLocalDateKey = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursChange, autoSave = true, onSelectionChange, onDirtyChange, commitKey }) => {
   // 캘린더 상태
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
+  const [originalSelectedTimeSlots, setOriginalSelectedTimeSlots] = useState<string[]>([]); // 서버에서 로드된 원본
   
   // 날짜별 운영 상태 관리 (운영: 'operating', 휴무: 'closed', 미운영: 'inactive')
   const [dateStatus, setDateStatus] = useState<Record<string, 'operating' | 'closed' | 'inactive'>>({});
@@ -64,7 +77,7 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
       // 오늘 이후의 평일만 기본 운영으로 설정
       const dayOfWeek = date.getDay();
       if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= todayDate) {
-        const dateKey = date.toISOString().split('T')[0];
+        const dateKey = formatLocalDateKey(date);
         defaultOperatingDates[dateKey] = 'operating';
       }
     }
@@ -78,6 +91,31 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
     const hasOperatingHours = Object.values(dateStatus).some(status => status === 'operating');
     onOperatingHoursChange(hasOperatingHours);
   }, [dateStatus, onOperatingHoursChange]);
+
+  // 선택 상태 변경 콜백 전달 및 dirty 상태 업데이트
+  useEffect(() => {
+    const dateKey = selectedDate ? getDateKey(selectedDate) : null;
+    if (onSelectionChange) {
+      onSelectionChange(dateKey, selectedTimeSlots);
+    }
+    if (onDirtyChange) {
+      const a = [...(originalSelectedTimeSlots || [])].sort().join(',');
+      const b = [...selectedTimeSlots].sort().join(',');
+      onDirtyChange(a !== b);
+    }
+  }, [selectedDate, selectedTimeSlots, originalSelectedTimeSlots, onSelectionChange, onDirtyChange]);
+
+  // 최신 선택 상태를 ref로 보관 (commit 시점에 사용)
+  const latestSelectedTimeSlotsRef = useRef<string[]>(selectedTimeSlots);
+  useEffect(() => {
+    latestSelectedTimeSlotsRef.current = selectedTimeSlots;
+  }, [selectedTimeSlots]);
+
+  // 부모 저장 완료 신호를 받으면 현재 선택 상태를 원본으로 커밋
+  useEffect(() => {
+    if (commitKey === undefined) return;
+    setOriginalSelectedTimeSlots(latestSelectedTimeSlotsRef.current);
+  }, [commitKey]);
 
   // 캘린더 관련 함수들
   const getDaysInMonth = (date: Date) => {
@@ -110,11 +148,13 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
     if (savedTimeSlots !== undefined) {
       // 로컬 캐시에 있는 경우
       setSelectedTimeSlots(savedTimeSlots);
+      setOriginalSelectedTimeSlots(savedTimeSlots);
     } else {
       // 로컬 캐시에 없는 경우 API에서 불러오기
       try {
         const blockedTimes = await fetchBlockedTimes(dateKey);
         setSelectedTimeSlots(blockedTimes);
+        setOriginalSelectedTimeSlots(blockedTimes);
         
         // 로컬 캐시에도 저장
         setDateTimeSlots(prev => ({
@@ -125,6 +165,7 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
         console.error('Failed to fetch blocked times:', error);
         // 에러 발생 시 기본값 설정
         setSelectedTimeSlots([]);
+        setOriginalSelectedTimeSlots([]);
       }
     }
   };
@@ -161,7 +202,7 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
       
       // 오늘 이후의 평일만 기본 운영으로 설정
       const dayOfWeek = date.getDay();
-      const dateKey = date.toISOString().split('T')[0];
+      const dateKey = formatLocalDateKey(date);
       
       if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate >= today && !dateStatus[dateKey]) {
         newOperatingDates[dateKey] = 'operating';
@@ -183,7 +224,7 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
 
   // 날짜 상태 관리 함수들
   const getDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    return formatLocalDateKey(date);
   };
 
   // 오늘 이후 날짜인지 확인하는 함수
@@ -209,8 +250,8 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
     const targetDate = new Date(date);
     targetDate.setHours(0, 0, 0, 0);
     
-    // 오늘을 포함한 이전 날짜는 모두 비활성화
-    if (targetDate <= today) {
+    // 오늘 이전 날짜는 모두 비활성화 (오늘은 허용)
+    if (targetDate < today) {
       return 'inactive';
     }
     
@@ -252,13 +293,15 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
           ...prev,
           [dateKey]: allTimeSlots
         }));
-        
-        // API에 모든 시간 차단 저장
-        try {
-          await submitBlockedTimes(dateKey, allTimeSlots);
-          console.log(`Successfully set all times as blocked for ${dateKey} (closed day)`);
-        } catch (error) {
-          console.error(`Failed to set blocked times for closed day ${dateKey}:`, error);
+        // autoSave일 때만 즉시 저장
+        if (autoSave) {
+          try {
+            await submitBlockedTimes(dateKey, allTimeSlots);
+            console.log(`Successfully set all times as blocked for ${dateKey} (closed day)`);
+            setOriginalSelectedTimeSlots(allTimeSlots);
+          } catch (error) {
+            console.error(`Failed to set blocked times for closed day ${dateKey}:`, error);
+          }
         }
       } else if (newStatus === 'inactive') {
         // 미운영으로 설정하는 경우 차단 시간 초기화
@@ -267,20 +310,22 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
           ...prev,
           [dateKey]: []
         }));
-        
-        // API에 빈 배열 저장
-        try {
-          await submitBlockedTimes(dateKey, []);
-          console.log(`Successfully cleared blocked times for ${dateKey} (inactive day)`);
-        } catch (error) {
-          console.error(`Failed to clear blocked times for inactive day ${dateKey}:`, error);
+        // autoSave일 때만 즉시 저장
+        if (autoSave) {
+          try {
+            await submitBlockedTimes(dateKey, []);
+            console.log(`Successfully cleared blocked times for ${dateKey} (inactive day)`);
+            setOriginalSelectedTimeSlots([]);
+          } catch (error) {
+            console.error(`Failed to clear blocked times for inactive day ${dateKey}:`, error);
+          }
         }
       }
       // 운영일로 설정하는 경우는 기존 차단 시간 유지 (별도 API 호출 없음)
     }
   };
 
-
+  
 
   const isTimeSlotPast = (time: string, date: Date) => {
     const [hour, minute] = time.split(':').map(Number);
@@ -323,14 +368,17 @@ const AdvisorTimeTable: React.FC<AdvisorTimeTableProps> = ({ onOperatingHoursCha
         [dateKey]: newSelectedTimeSlots
       }));
       
-      // API에 변경사항 저장 (비동기)
-      try {
-        await submitBlockedTimes(dateKey, newSelectedTimeSlots);
-        console.log(`Successfully updated blocked times for ${dateKey}`);
-      } catch (error) {
-        console.error(`Failed to update blocked times for ${dateKey}:`, error);
-        // 필요시 사용자에게 에러 알림 표시
-        // alert('차단 시간 저장에 실패했습니다. 다시 시도해주세요.');
+      // autoSave일 때만 변경사항 저장
+      if (autoSave) {
+        try {
+          await submitBlockedTimes(dateKey, newSelectedTimeSlots);
+          console.log(`Successfully updated blocked times for ${dateKey}`);
+          setOriginalSelectedTimeSlots(newSelectedTimeSlots);
+        } catch (error) {
+          console.error(`Failed to update blocked times for ${dateKey}:`, error);
+          // 필요시 사용자에게 에러 알림 표시
+          // alert('차단 시간 저장에 실패했습니다. 다시 시도해주세요.');
+        }
       }
     }
   };
