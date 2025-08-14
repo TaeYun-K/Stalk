@@ -13,4 +13,11 @@ public interface ConsultationSessionMapper {
      */
     void updateSessionId(@Param("consultationId") Long consultationId,
                          @Param("sessionId") String sessionId);
+
+    /**
+     * 세션 종료 시 status를 'APPROVED'로 변경
+     * @param sessionId OpenVidu 세션 ID
+     */
+    void updateStatusToApprovedBySessionId(@Param("sessionId") String sessionId);
+
 }
