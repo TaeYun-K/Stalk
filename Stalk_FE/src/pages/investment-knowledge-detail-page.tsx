@@ -90,12 +90,13 @@ const KnowledgeBoardPage = () => {
   useEffect(() => {}, [searchParams]);
 
   // 게시글 상세 정보 로드 (StrictMode 중복 호출 가드)
-  const didFetchRef = useRef(false);
+  // 개발 모드에서 동일 postId로 중복 호출만 막고, 다른 postId로 바뀌면 다시 로드되도록 함
+  const lastFetchedPostIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!postId) return;
     if (import.meta.env.MODE === "development") {
-      if (didFetchRef.current) return; // StrictMode로 인한 두 번째 호출 방지
-      didFetchRef.current = true;
+      if (lastFetchedPostIdRef.current === postId) return; // 동일 postId 중복만 차단
+      lastFetchedPostIdRef.current = postId;
     }
     loadPostDetail();
     loadComments();
