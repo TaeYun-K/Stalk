@@ -45,8 +45,8 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
   onCancelConsultation,
   isCancelling,
   onViewDiary,
-  onNavigateAdvisor,
-  hardcodedConsultationData,
+  onNavigateAdvisor: _onNavigateAdvisor,
+  hardcodedConsultationData: _hardcodedConsultationData,
   activeTab,
   selectedConsultation,
   isLoadingDiary,
@@ -128,9 +128,11 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">
                   {consultationTab === "상담 전" ? "화상상담" : "화상상담"}
                 </th>
-                {/* <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">
-                  {consultationTab === "상담 전" ? "상담취소" : "차트조회"}
-                </th> */}
+                {consultationTab === "상담 전" && (
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">
+                  상담취소
+                </th>
+                )}
                 {consultationTab === "상담 완료" && (
                   <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">상담일지</th>
                 )}
@@ -156,8 +158,8 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
                         {item.videoConsultation}
                       </button>
                     </td>
-                    {/* <td className="px-4 py-3">
-                      {consultationTab !== "상담 완료" ? (
+                    {consultationTab === "상담 전" && (
+                      <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => onCancelConsultation(item)}
                           className={`${item.status === 'cancelled'
@@ -166,17 +168,10 @@ const MyConsultationList: React.FC<MyConsultationListProps> = ({
                           } px-3 py-1 rounded-lg text-sm transition-colors`}
                           disabled={isCancelling || item.status === 'cancelled'}
                         >
-                          {item.action}
+                          상담취소
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => onNavigateAdvisor(item.expert)}
-                          className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                        >
-                          {item.action}
-                        </button>
-                      )}
-                    </td> */}
+                      </td>
+                    )}
                     {consultationTab === "상담 완료" && (
                       <td className="px-4 py-3">
                         <button
