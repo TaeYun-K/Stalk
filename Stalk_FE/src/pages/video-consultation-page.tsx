@@ -346,12 +346,24 @@ const VideoConsultationPage: React.FC = () => {
         session.on('streamCreated', (event) => {
           const meta = parseOvData(event.stream.connection.data); 
           const isScreen = event.stream.typeOfVideo === 'SCREEN' || meta?.kind === 'screen';
+          const isRecordingScreen = meta?.isRecordingScreen === true;
           const mine = meta?.ownerId && meta.ownerId === userInfo?.userId;
 
           const fromThisConnection = session.connection?.connectionId === event.stream.connection.connectionId;
-          const fromMySecondConn = myScreenConnectionIdRef.current === event.stream.connection.connectionId;
-          if (isScreen && (mine || fromThisConnection || fromMySecondConn))  {
-            console.log('[OV] skip subscribe for recording-only screen stream');
+          const fromMySecondConn = myScreenConnectionIdRef.current && 
+                                   myScreenConnectionIdRef.current === event.stream.connection.connectionId;
+          
+          // 녹화용 화면 공유 스트림은 subscribe하지 않음
+          if (isRecordingScreen || (isScreen && (mine || fromThisConnection || fromMySecondConn))) {
+            console.log('[OV] skip subscribe for recording-only screen stream:', {
+              streamId: event.stream.streamId,
+              isRecordingScreen,
+              isScreen,
+              mine,
+              fromMySecondConn,
+              connectionId: event.stream.connection.connectionId,
+              myScreenConnectionId: myScreenConnectionIdRef.current
+            });
             return;
           }
   
@@ -903,13 +915,22 @@ const VideoConsultationPage: React.FC = () => {
 
         const ov2 = new OpenVidu();
         const sess2 = ov2.initSession();
+        
+        // streamCreated 이벤트 핸들러를 미리 등록하여 화면 공유 스트림 필터링
+        sess2.on('streamCreated', (event) => {
+          console.log('[recording] Screen session received stream, but not subscribing:', event.stream.streamId);
+        });
 
         // ✅ screen connection에도 동일 메타데이터 전달
         await sess2.connect(
           screenToken,
-          JSON.stringify({ ownerId: userId, ownerName: name, kind: 'screen' })
+          JSON.stringify({ ownerId: userId, ownerName: name, kind: 'screen', isRecordingScreen: true })
         );
+        
+        // 연결 ID를 즉시 설정하여 main session의 streamCreated 이벤트에서 필터링 가능하도록 함
         myScreenConnectionIdRef.current = sess2.connection?.connectionId || null;
+        console.log("[recording] Screen connection ID set:", myScreenConnectionIdRef.current);
+        
         setScreenOv(ov2);
         setScreenSession(sess2);
 
@@ -928,24 +949,23 @@ const VideoConsultationPage: React.FC = () => {
           throw new Error('Screen track not live');
         }
 
-        await axios.post(`/api/recordings/start/${ovSessionId}?consultationId=${consultationId}`, {}, { headers: { Authorization: `Bearer ${token}` }});
-
         // (선택) 레이스 방지용 짧은 대기
         await new Promise((r) => setTimeout(r, 120));
       } else {
         console.log("[recording] screen exists → skip creating second connection");
       }
 
-      // 2) 녹화 시작 (불필요 params 제거)
+      // 2) 녹화 시작 - 한 번만 호출
       const recRes = await axios.post(
         `/api/recordings/start/${encodeURIComponent(ovSessionId)}?consultationId=${encodeURIComponent(String(consultationId))}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const recId = (recRes?.data?.data?.recordingId as string) || ovSessionId;
+      const recId = (recRes?.data?.data?.recordingId as string) || (recRes?.data?.result?.recordingId as string) || ovSessionId;
       setRecordingId(recId);
       setIsRecording(true);
+      console.log("[recording] started successfully with ID:", recId);
 
     } catch (e: any) {
       if (e?.name === "NotAllowedError" || String(e?.message || "").includes("Permission")) {
