@@ -11,6 +11,7 @@ import lombok.ToString;
 public class AnalysisResult {
 
   private Long id;
+  private Long videoRecordingId;
   private String originalFileName;
   private String gcsUri;
   private String analysisSummary;
