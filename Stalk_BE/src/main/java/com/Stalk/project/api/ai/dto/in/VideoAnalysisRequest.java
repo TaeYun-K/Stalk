@@ -7,5 +7,6 @@ import lombok.Data;
  */
 @Data
 public class VideoAnalysisRequest {
+  private Long videoRecordingId;
   private String videoUrl;
 }
