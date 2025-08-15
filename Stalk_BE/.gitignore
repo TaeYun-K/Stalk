@@ -180,4 +180,7 @@ $RECYCLE.BIN/
 .env
 *.env
 
+# Security: Ignore all service account keys and sensitive files
+/src/main/resources/keys/
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,intellij,java
