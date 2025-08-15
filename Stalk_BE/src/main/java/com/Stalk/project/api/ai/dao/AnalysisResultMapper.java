@@ -12,4 +12,12 @@ public interface AnalysisResultMapper {
    * @param result 저장할 분석 결과 객체
    */
   void insert(AnalysisResult result);
+
+  /**
+   * video_recording_id를 사용하여 분석 결과를 조회
+   *
+   * @param videoRecordingId 조회할 녹화 ID
+   * @return 조회된 분석 결과 객체, 없으면 null
+   */
+  AnalysisResult findByVideoRecordingId(Long videoRecordingId);
 }

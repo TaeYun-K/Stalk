@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Optional;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +59,7 @@ public class VideoAnalysisService {
    * @return 데이터베이스에 저장된 분석 결과 객체
    * @throws IOException 파일 다운로드, 업로드 또는 AI 분석 중 오류 발생 시
    */
-  public AnalysisResult processAndSaveAnalysisFromUrl(String videoUrl) throws IOException {
+  public AnalysisResult processAndSaveAnalysisFromUrl(Long videoRecordingId, String videoUrl) throws IOException {
     System.out.println("DEBUG: 1. URL로부터 GCS에 파일 업로드를 시작합니다...");
     /*
      * uploadFileFromUrlToGcs(videoUrl) 메소드를 호출하여 URL의 영상을 Google Cloud Storage에 업로드
@@ -76,6 +77,7 @@ public class VideoAnalysisService {
     System.out.println("DEBUG: 4. Vertex AI 분석 성공!");
 
     AnalysisResult result = new AnalysisResult();
+    result.setVideoRecordingId(videoRecordingId); // 녹화 ID 설정
     result.setOriginalFileName(uploadResult.getOriginalFileName());
     result.setGcsUri(uploadResult.getGcsUri());
     result.setAnalysisSummary(summary);
@@ -203,6 +205,16 @@ public class VideoAnalysisService {
     GenerateContentResponse response = model.generateContent(content);
 
     return ResponseHandler.getText(response);
+  }
+
+  /**
+   * 녹화 ID를 기반으로 분석 결과를 조회
+   *
+   * @param videoRecordingId 조회할 영상의 녹화 ID
+   * @return Optional<AnalysisResult> 분석 결과 객체
+   */
+  public Optional<AnalysisResult> getAnalysisResultByVideoRecordingId(Long videoRecordingId) {
+    return Optional.ofNullable(analysisResultMapper.findByVideoRecordingId(videoRecordingId));
   }
 
   /**
