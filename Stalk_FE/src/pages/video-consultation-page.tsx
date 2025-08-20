@@ -843,7 +843,7 @@ const VideoConsultationPage: React.FC = () => {
     const info = {
       ticker: currentChart?.ticker || selectedStock?.ticker || "",
       period: String(period),
-      name: selectedStock?.name || currentChart?.name || "",
+      name: currentChart?.name || selectedStock?.name || "",
     };
 
     // 로컬 state도 동기화
