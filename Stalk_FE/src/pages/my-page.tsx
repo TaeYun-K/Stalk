@@ -589,14 +589,21 @@ const MyPage = () => {
           }
         );
 
-        // 다가오는 일정 우선, 취소 항목은 하단 배치
+        // 상담 전: 최신순 정렬 (취소된 항목은 하단)
         scheduledConsultations.sort((a, b) => {
           const aCancelled = a.status === 'cancelled';
           const bCancelled = b.status === 'cancelled';
           if (aCancelled !== bCancelled) return aCancelled ? 1 : -1;
           const aTime = new Date(`${a.date} ${a.time}`).getTime();
           const bTime = new Date(`${b.date} ${b.time}`).getTime();
-          return aTime - bTime;
+          return bTime - aTime; // 최신순 (내림차순)
+        });
+
+        // 상담 완료: 최신순 정렬
+        completedConsultations.sort((a, b) => {
+          const aTime = new Date(`${a.date} ${a.time}`).getTime();
+          const bTime = new Date(`${b.date} ${b.time}`).getTime();
+          return bTime - aTime; // 최신순 (내림차순)
         });
 
         setRealConsultationData({
