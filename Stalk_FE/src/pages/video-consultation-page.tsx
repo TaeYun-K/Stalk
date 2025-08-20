@@ -560,6 +560,21 @@ const VideoConsultationPage: React.FC = () => {
       // Publisher 스트림이 준비되면 발행
       publisher.on("streamCreated", () => {
         console.log("Publisher stream created");
+        // Publisher가 생성되면 실제 스트림 상태를 읽어와서 상태 업데이트
+        const stream = publisher.stream.getMediaStream();
+        if (stream) {
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          
+          // 실제 트랙 상태를 읽어와서 설정
+          const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+          const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+          
+          setIsVideoEnabled(videoEnabled);
+          setIsAudioEnabled(audioEnabled);
+          
+          console.log("Initial media state - Video:", videoEnabled, "Audio:", audioEnabled);
+        }
       });
 
       publisher.on("streamPlaying", () => {
@@ -646,6 +661,20 @@ const VideoConsultationPage: React.FC = () => {
     // 이미 publisher가 있다면 재시작하지 않음
     if (publisher) {
       console.log("Publisher already exists");
+      // 기존 publisher의 상태를 다시 읽어와서 동기화
+      const stream = publisher.stream?.getMediaStream();
+      if (stream) {
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+        
+        const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+        const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+        
+        setIsVideoEnabled(videoEnabled);
+        setIsAudioEnabled(audioEnabled);
+        
+        console.log("Synced existing publisher state - Video:", videoEnabled, "Audio:", audioEnabled);
+      }
       return;
     }
 
@@ -667,7 +696,15 @@ const VideoConsultationPage: React.FC = () => {
       return;
     }
 
-    const newVideoState = !isVideoEnabled;
+    // 실제 현재 상태를 먼저 확인
+    const stream = publisher.stream?.getMediaStream();
+    let currentVideoState = isVideoEnabled;
+    if (stream) {
+      const videoTracks = stream.getVideoTracks();
+      currentVideoState = videoTracks.length > 0 && videoTracks[0].enabled;
+    }
+    
+    const newVideoState = !currentVideoState;
 
     try {
       if (newVideoState) {
@@ -702,7 +739,15 @@ const VideoConsultationPage: React.FC = () => {
       return;
     }
 
-    const newAudioState = !isAudioEnabled;
+    // 실제 현재 상태를 먼저 확인
+    const stream = publisher.stream?.getMediaStream();
+    let currentAudioState = isAudioEnabled;
+    if (stream) {
+      const audioTracks = stream.getAudioTracks();
+      currentAudioState = audioTracks.length > 0 && audioTracks[0].enabled;
+    }
+    
+    const newAudioState = !currentAudioState;
 
     try {
       if (newAudioState) {
@@ -921,6 +966,24 @@ const VideoConsultationPage: React.FC = () => {
       console.log("[chart] recv:", info);
       setCurrentChart(info);
       setShowStockChart(true);
+      
+      // 차트 표시 시 publisher 상태 동기화 (미니뷰가 표시되는 경우)
+      if (showParticipants && publisher) {
+        const stream = publisher.stream?.getMediaStream();
+        if (stream) {
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          
+          const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+          const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+          
+          setIsVideoEnabled(videoEnabled);
+          setIsAudioEnabled(audioEnabled);
+          
+          console.log("Synced state on chart open - Video:", videoEnabled, "Audio:", audioEnabled);
+        }
+      }
+      
       // Sync period and indicator states
       if (info.period) {
         setChartPeriod(parseInt(info.period));
@@ -978,6 +1041,23 @@ const VideoConsultationPage: React.FC = () => {
         setActiveIndicator(info.indicator || "volume");
       }
       setShowStockChart(true);
+      
+      // 차트 표시 시 publisher 상태 동기화 (미니뷰가 표시되는 경우)
+      if (showParticipants && publisher) {
+        const stream = publisher.stream?.getMediaStream();
+        if (stream) {
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          
+          const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+          const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+          
+          setIsVideoEnabled(videoEnabled);
+          setIsAudioEnabled(audioEnabled);
+          
+          console.log("Synced state on sync_state - Video:", videoEnabled, "Audio:", audioEnabled);
+        }
+      }
     };
     session.on("signal:chart:sync_state", onSyncState);
     return () => {
@@ -1378,6 +1458,26 @@ const VideoConsultationPage: React.FC = () => {
       initializeOpenVidu();
     }
   }, [isLoadingUserInfo, userInfo, ovToken, session]);
+
+  // 미니뷰 표시 시 publisher 상태 동기화
+  useEffect(() => {
+    // 미니뷰가 표시될 때 (차트와 참가자 목록이 동시에 표시)
+    if (showParticipants && showStockChart && publisher) {
+      const stream = publisher.stream?.getMediaStream();
+      if (stream) {
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+        
+        const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+        const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+        
+        setIsVideoEnabled(videoEnabled);
+        setIsAudioEnabled(audioEnabled);
+        
+        console.log("Synced state on mini-view render - Video:", videoEnabled, "Audio:", audioEnabled);
+      }
+    }
+  }, [showParticipants, showStockChart, publisher]);
 
   // 타이머 업데이트
   useEffect(() => {
@@ -2225,7 +2325,7 @@ const VideoConsultationPage: React.FC = () => {
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
-                            className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
                               mediaStatus.audio ? "bg-green-500" : "bg-red-500"
                             }`}
                           >
@@ -2242,8 +2342,8 @@ const VideoConsultationPage: React.FC = () => {
                             </svg>
                           </div>
                           <div
-                            className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${
-                              mediaStatus.audio ? "bg-green-500" : "bg-red-500"
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                              mediaStatus.video ? "bg-green-500" : "bg-red-500"
                             }`}
                           >
                             <svg
@@ -2588,6 +2688,23 @@ const VideoConsultationPage: React.FC = () => {
                   } else {
                     setShowParticipants(true);
                     setShowChat(false); // Close chat when opening participants
+                    
+                    // 미니뷰 표시 시 publisher 상태 동기화
+                    if (publisher && showStockChart) {
+                      const stream = publisher.stream?.getMediaStream();
+                      if (stream) {
+                        const videoTracks = stream.getVideoTracks();
+                        const audioTracks = stream.getAudioTracks();
+                        
+                        const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+                        const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+                        
+                        setIsVideoEnabled(videoEnabled);
+                        setIsAudioEnabled(audioEnabled);
+                        
+                        console.log("Synced state on mini-view open - Video:", videoEnabled, "Audio:", audioEnabled);
+                      }
+                    }
                   }
                 }}
                 onMouseEnter={() => setHoveredButton("participants")}
