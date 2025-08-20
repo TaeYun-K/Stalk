@@ -192,9 +192,9 @@ const VideoConsultationPage: React.FC = () => {
   } | null>(null);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(true);
 
-  // 상담 관련 상태
-  const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
-  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
+  // 상담 관련 상태 - 초기값을 true로 설정하여 처음에 활성화 상태로 표시
+  const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
+  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const [showParticipants, setShowParticipants] = useState<boolean>(false);
   const [showChat, setShowChat] = useState<boolean>(false);
@@ -552,7 +552,7 @@ const VideoConsultationPage: React.FC = () => {
       const publisher = await openVidu.initPublisherAsync(undefined, {
         audioSource: undefined,
         videoSource: undefined,
-        publishAudio: false,
+        publishAudio: true,  // 초기값을 true로 변경
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
@@ -2225,7 +2225,7 @@ const VideoConsultationPage: React.FC = () => {
                         </div>
                         <div className="absolute top-2 right-2 flex space-x-1">
                           <div
-                            className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
                               mediaStatus.audio ? "bg-green-500" : "bg-red-500"
                             }`}
                           >
@@ -2242,8 +2242,8 @@ const VideoConsultationPage: React.FC = () => {
                             </svg>
                           </div>
                           <div
-                            className={`w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ${
-                              mediaStatus.audio ? "bg-green-500" : "bg-red-500"
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                              mediaStatus.video ? "bg-green-500" : "bg-red-500"
                             }`}
                           >
                             <svg
