@@ -873,13 +873,15 @@ const VideoConsultationPage: React.FC = () => {
   };
 
   const handleIndicatorChange = (indicators: any) => {
-    setChartIndicators(indicators);
-    // You can also signal this change if needed
+    // Create new object to ensure React detects the change
+    const newIndicators = { ...indicators };
+    setChartIndicators(newIndicators);
+    // Signal this change to other participants
     if (session) {
       session
         .signal({
           type: "chart:indicators",
-          data: JSON.stringify(indicators),
+          data: JSON.stringify(newIndicators),
         })
         .catch((err) =>
           console.error("Indicator change signaling failed", err)
@@ -1022,6 +1024,25 @@ const VideoConsultationPage: React.FC = () => {
     session.on("signal:chart:indicator", onIndicatorChange);
     return () => {
       session.off("signal:chart:indicator", onIndicatorChange);
+    };
+  }, [session]);
+
+  // 전체 지표 설정 동기화 수신 처리 (MA, EMA, Bollinger 등)
+  useEffect(() => {
+    if (!session) return;
+    const onIndicatorsChange = (e: any) => {
+      try {
+        const indicators = JSON.parse(e.data);
+        console.log("Received indicators signal:", indicators);
+        // Force new object reference to trigger React change detection
+        setChartIndicators({ ...indicators });
+      } catch (err) {
+        console.error("Failed to parse indicators signal:", err);
+      }
+    };
+    session.on("signal:chart:indicators", onIndicatorsChange);
+    return () => {
+      session.off("signal:chart:indicators", onIndicatorsChange);
     };
   }, [session]);
 
@@ -2136,6 +2157,7 @@ const VideoConsultationPage: React.FC = () => {
                                   | null
                               }
                               onDataPointsUpdate={setDataPointCount}
+                              indicators={chartIndicators}
                               key={
                                 (selectedStock?.ticker ??
                                   currentChart?.ticker) ||

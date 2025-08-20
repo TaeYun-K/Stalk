@@ -83,6 +83,7 @@ interface StockChartProps {
   onIndicatorChange?: (indicators: any) => void;
   activeIndicator?: 'volume' | 'rsi' | 'macd' | 'stochastic' | null;
   onDataPointsUpdate?: (count: number) => void;
+  indicators?: any; // External indicator settings to sync
 }
 
 type ChartType = 'line';
@@ -111,7 +112,8 @@ const StockChart: React.FC<StockChartProps> = ({
   onPeriodChange: externalPeriodChange,
   onIndicatorChange: externalIndicatorChange,
   activeIndicator,
-  onDataPointsUpdate
+  onDataPointsUpdate,
+  indicators: externalIndicators
 }) => {
 
   const [chartData, setChartData] = useState<any>(null);
@@ -184,18 +186,18 @@ const StockChart: React.FC<StockChartProps> = ({
     volume: { enabled: true }
   });
 
-  // Keep backward compatibility
-  const showVolume = indicatorSettings.volume.enabled;
-  const showMA20 = indicatorSettings.ma20.enabled;
-  const showMA50 = indicatorSettings.ma50.enabled;
-  const showEMA12 = indicatorSettings.ema12.enabled;
-  const showEMA26 = indicatorSettings.ema26.enabled;
-  const showRSI = indicatorSettings.rsi.enabled;
-  const showMACD = indicatorSettings.macd.enabled;
-  const showBollingerBands = indicatorSettings.bollinger.enabled;
-  const showStochastic = indicatorSettings.stochastic.enabled;
-  const showVWAP = indicatorSettings.vwap.enabled;
-  const showIchimoku = indicatorSettings.ichimoku.enabled;
+  // Keep backward compatibility with safe access
+  const showVolume = indicatorSettings.volume?.enabled ?? true;
+  const showMA20 = indicatorSettings.ma20?.enabled ?? false;
+  const showMA50 = indicatorSettings.ma50?.enabled ?? false;
+  const showEMA12 = indicatorSettings.ema12?.enabled ?? false;
+  const showEMA26 = indicatorSettings.ema26?.enabled ?? false;
+  const showRSI = indicatorSettings.rsi?.enabled ?? false;
+  const showMACD = indicatorSettings.macd?.enabled ?? false;
+  const showBollingerBands = indicatorSettings.bollinger?.enabled ?? false;
+  const showStochastic = indicatorSettings.stochastic?.enabled ?? false;
+  const showVWAP = indicatorSettings.vwap?.enabled ?? false;
+  const showIchimoku = indicatorSettings.ichimoku?.enabled ?? false;
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
@@ -808,6 +810,50 @@ const StockChart: React.FC<StockChartProps> = ({
       }
     }
   }, [activeIndicator, isConsultationMode]);
+
+  // Track if we're syncing from external to prevent feedback loop
+  const isSyncingFromExternalRef = useRef(false);
+
+  // Default indicator structure
+  const getDefaultIndicatorSettings = () => ({
+    ma20: { enabled: false, period: 20 },
+    ma50: { enabled: false, period: 50 },
+    ema12: { enabled: false, period: 12 },
+    ema26: { enabled: false, period: 26 },
+    rsi: { enabled: false, period: 14 },
+    macd: { enabled: false },
+    bollinger: { enabled: false, period: 20, stdDev: 2 },
+    stochastic: { enabled: false },
+    vwap: { enabled: false },
+    ichimoku: { enabled: false },
+    volume: { enabled: true }
+  });
+
+  // Sync external indicators with internal state (for MA, EMA, Bollinger, etc.)
+  useEffect(() => {
+    if (isConsultationMode && externalIndicators) {
+      console.log('Syncing external indicators:', externalIndicators);
+      
+      // Merge with defaults to ensure all properties exist
+      const mergedSettings = {
+        ...getDefaultIndicatorSettings(),
+        ...externalIndicators
+      };
+      
+      // Check if the external indicators are actually different
+      const currentJSON = JSON.stringify(indicatorSettings);
+      const mergedJSON = JSON.stringify(mergedSettings);
+      
+      if (currentJSON !== mergedJSON) {
+        isSyncingFromExternalRef.current = true;
+        setIndicatorSettings(mergedSettings);
+        // Reset flag after a short delay to handle React's batching
+        setTimeout(() => {
+          isSyncingFromExternalRef.current = false;
+        }, 100);
+      }
+    }
+  }, [externalIndicators]);
 
   // Sync external drawingMode with internal state
   useEffect(() => {
@@ -1677,6 +1723,11 @@ const StockChart: React.FC<StockChartProps> = ({
 
   // New handler for enhanced indicator settings
   const handleEnhancedIndicatorChange = (indicator: string, config: any) => {
+    // Don't send signal if we're syncing from external source
+    if (isSyncingFromExternalRef.current) {
+      return;
+    }
+
     const newSettings = {
       ...indicatorSettings,
       [indicator]: config
@@ -1684,7 +1735,9 @@ const StockChart: React.FC<StockChartProps> = ({
     setIndicatorSettings(newSettings);
 
     // Call external handler if provided (for consultation mode)
-    externalIndicatorChange?.(newSettings);
+    if (isConsultationMode && externalIndicatorChange) {
+      externalIndicatorChange(newSettings);
+    }
   };
 
   // Exclusive indicator selection - only one indicator can be active at a time
