@@ -132,7 +132,7 @@ export const useDrawingCanvas = (
             stroke: lineStroke,
             strokeWidth: lineStrokeWidth / 1.5, // 생성 시 1.5배로 만들었으므로 원래 값으로 복원
             tool: 'arrow',
-            draggable: attrs.draggable !== false,
+            draggable: false,
             rotation: attrs.rotation || 0,
             scaleX: attrs.scaleX || 1,
             scaleY: attrs.scaleY || 1,
@@ -249,7 +249,7 @@ export const useDrawingCanvas = (
             const x1 = points[0], y1 = points[1], x2 = points[2], y2 = points[3];
             
             const arrowGroup = new Konva.Group({
-              draggable: s.attrs.draggable || true,
+              draggable: false,
               x: s.attrs.x || 0,
               y: s.attrs.y || 0,
               rotation: s.attrs.rotation || 0,
@@ -471,8 +471,8 @@ export const useDrawingCanvas = (
     // @ts-ignore
     stageRef.current?.__attachNodeLifecycle?.(node as Konva.Node);
 
-    // 드래그 가능 옵션(원하면 유지)
-    node.draggable(true);
+    // 드래그 비활성화 - 그린 후 이동 불가
+    node.draggable(false);
 
     // 상태 정리
     isDrawingRef.current = false;
@@ -484,7 +484,10 @@ export const useDrawingCanvas = (
   }, [onLocalShapeCreated]);
 
   const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Click handling for selection is now always available for any tool
+    // 도형 선택 기능 비활성화 - 드로잉만 가능
+    return;
+    
+    // 아래 코드는 실행되지 않음 (선택 기능 비활성화)
     const stage = stageRef.current;
     const transformer = transformerRef.current;
     if (!stage || !transformer) return;
@@ -741,7 +744,7 @@ export const useDrawingCanvas = (
           stroke: strokeColorRef.current,
           strokeWidth: strokeWidthRef.current,
           lineCap: 'round',
-          draggable: true,
+          draggable: false,
         });
         break;
       case 'trendline':
@@ -750,7 +753,7 @@ export const useDrawingCanvas = (
           stroke: strokeColorRef.current,
           strokeWidth: strokeWidthRef.current * 1.5,
           lineCap: 'round',
-          draggable: true,
+          draggable: false,
           dash: [0],
           shadowColor: strokeColorRef.current,
           shadowBlur: 1,
@@ -763,7 +766,7 @@ export const useDrawingCanvas = (
           stroke: strokeColorRef.current,
           strokeWidth: strokeWidthRef.current,
           lineCap: 'round',
-          draggable: true,
+          draggable: false,
         });
         break;
       case 'rectangle':
@@ -775,7 +778,7 @@ export const useDrawingCanvas = (
           stroke: strokeColorRef.current,
           strokeWidth: strokeWidthRef.current * 1.5,
           fill: 'transparent',
-          draggable: true,
+          draggable: false,
           shadowColor: strokeColorRef.current,
           shadowBlur: 2,
           shadowOpacity: 0.2,
@@ -784,7 +787,7 @@ export const useDrawingCanvas = (
       case 'fibonacci':
         // Fibonacci retracement levels
         const fibGroup = new Konva.Group({
-          draggable: true,
+          draggable: false,
         });
         
         const baseY = 150;
@@ -824,7 +827,7 @@ export const useDrawingCanvas = (
       case 'arrow':
         // Create enhanced arrow shape
         const arrowGroup = new Konva.Group({
-          draggable: true,
+          draggable: false,
         });
         
         const arrowLine = new Konva.Line({
@@ -855,11 +858,11 @@ export const useDrawingCanvas = (
     }
 
     if (shape) {
-      // Make shape draggable after creation when using addShape button
+      // 도형 드래그 비활성화 - 그린 후 이동 불가
       if (shape instanceof Konva.Group) {
-        shape.draggable(true);
+        shape.draggable(false);
       } else {
-        (shape as any).draggable(true);
+        (shape as any).draggable(false);
       }
       layer.add(shape);
       shapeHistoryRef.current.push(shape);
@@ -925,14 +928,15 @@ export const useDrawingCanvas = (
     const layer = new Konva.Layer({ listening: true });
     stage.add(layer);
 
-    // Transformer 생성
+    // Transformer 생성 비활성화 (선택 기능 제거)
     const transformer = new Konva.Transformer({
       nodes: [],
       visible: false,
-      rotateEnabled: true,
-      enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      rotateEnabled: false,
+      enabledAnchors: [],
     });
-    layer.add(transformer);
+    // transformer는 생성하지만 layer에 추가하지 않음 (선택 기능 완전 제거)
+    // layer.add(transformer);
 
     // 내부 ref 연결
     stageRef.current = stage;
@@ -1015,9 +1019,8 @@ export const useDrawingCanvas = (
 
     // 생성된 노드에 lifecycle event 달기 위한 헬퍼
     const attachNodeLifecycle = (node: Konva.Node) => {
-      // 업데이트 시그널
-      node.on('dragend transformend', () => onLocalShapeUpdated(node));
-      // 필요시 단일 클릭으로 선택해서 transformer 표시하는 로직 등 추가 가능
+      // 드래그 및 변형 이벤트 비활성화 (선택/이동 기능 제거)
+      // node.on('dragend transformend', () => onLocalShapeUpdated(node));
     };  
 
     // 전역으로 접근 가능하게 저장
