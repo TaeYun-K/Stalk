@@ -1025,6 +1025,24 @@ const VideoConsultationPage: React.FC = () => {
     };
   }, [session]);
 
+  // 전체 지표 설정 동기화 수신 처리 (MA, EMA, Bollinger 등)
+  useEffect(() => {
+    if (!session) return;
+    const onIndicatorsChange = (e: any) => {
+      try {
+        const indicators = JSON.parse(e.data);
+        console.log("Received indicators signal:", indicators);
+        setChartIndicators(indicators);
+      } catch (err) {
+        console.error("Failed to parse indicators signal:", err);
+      }
+    };
+    session.on("signal:chart:indicators", onIndicatorsChange);
+    return () => {
+      session.off("signal:chart:indicators", onIndicatorsChange);
+    };
+  }, [session]);
+
   // 이미 화면공유(본인/상대) 존재하는지 체크
   const hasAnyScreen = (sess?: Session | null) => {
     if (isMyScreenActive()) return true;
@@ -2136,6 +2154,7 @@ const VideoConsultationPage: React.FC = () => {
                                   | null
                               }
                               onDataPointsUpdate={setDataPointCount}
+                              indicators={chartIndicators}
                               key={
                                 (selectedStock?.ticker ??
                                   currentChart?.ticker) ||
