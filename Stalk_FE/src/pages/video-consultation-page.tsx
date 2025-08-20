@@ -873,13 +873,15 @@ const VideoConsultationPage: React.FC = () => {
   };
 
   const handleIndicatorChange = (indicators: any) => {
-    setChartIndicators(indicators);
-    // You can also signal this change if needed
+    // Create new object to ensure React detects the change
+    const newIndicators = { ...indicators };
+    setChartIndicators(newIndicators);
+    // Signal this change to other participants
     if (session) {
       session
         .signal({
           type: "chart:indicators",
-          data: JSON.stringify(indicators),
+          data: JSON.stringify(newIndicators),
         })
         .catch((err) =>
           console.error("Indicator change signaling failed", err)
@@ -1032,7 +1034,8 @@ const VideoConsultationPage: React.FC = () => {
       try {
         const indicators = JSON.parse(e.data);
         console.log("Received indicators signal:", indicators);
-        setChartIndicators(indicators);
+        // Force new object reference to trigger React change detection
+        setChartIndicators({ ...indicators });
       } catch (err) {
         console.error("Failed to parse indicators signal:", err);
       }

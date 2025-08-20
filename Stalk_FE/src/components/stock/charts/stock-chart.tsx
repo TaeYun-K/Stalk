@@ -811,13 +811,27 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   }, [activeIndicator, isConsultationMode]);
 
+  // Track if we're syncing from external to prevent feedback loop
+  const isSyncingFromExternalRef = useRef(false);
+
   // Sync external indicators with internal state (for MA, EMA, Bollinger, etc.)
   useEffect(() => {
-    if (isConsultationMode && externalIndicators && Object.keys(externalIndicators).length > 0) {
+    if (isConsultationMode && externalIndicators) {
       console.log('Syncing external indicators:', externalIndicators);
-      setIndicatorSettings(externalIndicators);
+      // Check if the external indicators are actually different
+      const currentJSON = JSON.stringify(indicatorSettings);
+      const externalJSON = JSON.stringify(externalIndicators);
+      
+      if (currentJSON !== externalJSON) {
+        isSyncingFromExternalRef.current = true;
+        setIndicatorSettings(externalIndicators);
+        // Reset flag after a short delay to handle React's batching
+        setTimeout(() => {
+          isSyncingFromExternalRef.current = false;
+        }, 100);
+      }
     }
-  }, [externalIndicators, isConsultationMode]);
+  }, [externalIndicators]);
 
   // Sync external drawingMode with internal state
   useEffect(() => {
@@ -1687,6 +1701,11 @@ const StockChart: React.FC<StockChartProps> = ({
 
   // New handler for enhanced indicator settings
   const handleEnhancedIndicatorChange = (indicator: string, config: any) => {
+    // Don't send signal if we're syncing from external source
+    if (isSyncingFromExternalRef.current) {
+      return;
+    }
+
     const newSettings = {
       ...indicatorSettings,
       [indicator]: config
@@ -1694,7 +1713,9 @@ const StockChart: React.FC<StockChartProps> = ({
     setIndicatorSettings(newSettings);
 
     // Call external handler if provided (for consultation mode)
-    externalIndicatorChange?.(newSettings);
+    if (isConsultationMode && externalIndicatorChange) {
+      externalIndicatorChange(newSettings);
+    }
   };
 
   // Exclusive indicator selection - only one indicator can be active at a time
