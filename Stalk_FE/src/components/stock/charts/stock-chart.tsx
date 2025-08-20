@@ -83,6 +83,7 @@ interface StockChartProps {
   onIndicatorChange?: (indicators: any) => void;
   activeIndicator?: 'volume' | 'rsi' | 'macd' | 'stochastic' | null;
   onDataPointsUpdate?: (count: number) => void;
+  indicators?: any; // External indicator settings to sync
 }
 
 type ChartType = 'line';
@@ -111,7 +112,8 @@ const StockChart: React.FC<StockChartProps> = ({
   onPeriodChange: externalPeriodChange,
   onIndicatorChange: externalIndicatorChange,
   activeIndicator,
-  onDataPointsUpdate
+  onDataPointsUpdate,
+  indicators: externalIndicators
 }) => {
 
   const [chartData, setChartData] = useState<any>(null);
@@ -808,6 +810,14 @@ const StockChart: React.FC<StockChartProps> = ({
       }
     }
   }, [activeIndicator, isConsultationMode]);
+
+  // Sync external indicators with internal state (for MA, EMA, Bollinger, etc.)
+  useEffect(() => {
+    if (isConsultationMode && externalIndicators && Object.keys(externalIndicators).length > 0) {
+      console.log('Syncing external indicators:', externalIndicators);
+      setIndicatorSettings(externalIndicators);
+    }
+  }, [externalIndicators, isConsultationMode]);
 
   // Sync external drawingMode with internal state
   useEffect(() => {
