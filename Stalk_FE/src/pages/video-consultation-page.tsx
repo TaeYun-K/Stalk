@@ -74,6 +74,7 @@ interface ChartInfo {
   ticker: string;
   period: string;
   name?: string;
+  indicator?: string | null;
 }
 
 type HoveredButton =
@@ -843,7 +844,8 @@ const VideoConsultationPage: React.FC = () => {
     const info = {
       ticker: currentChart?.ticker || selectedStock?.ticker || "",
       period: String(period),
-      name: selectedStock?.name || currentChart?.name || "",
+      name: currentChart?.name || selectedStock?.name || "",
+      indicator: activeIndicator,
     };
 
     // 로컬 state도 동기화
@@ -895,6 +897,7 @@ const VideoConsultationPage: React.FC = () => {
         ticker: selectedStock.ticker,
         period: currentChart?.period ?? "7",
         name: selectedStock.name || currentChart?.name || "",
+        indicator: activeIndicator,
       };
       console.log("chartinfo : ", info);
       setCurrentChart(info);
@@ -916,6 +919,13 @@ const VideoConsultationPage: React.FC = () => {
       console.log("[chart] recv:", info);
       setCurrentChart(info);
       setShowStockChart(true);
+      // Sync period and indicator states
+      if (info.period) {
+        setChartPeriod(parseInt(info.period));
+      }
+      if (info.indicator !== undefined) {
+        setActiveIndicator(info.indicator || "volume");
+      }
     };
     session.on("signal:chart:change", onChartChange);
     return () => {
@@ -937,6 +947,8 @@ const VideoConsultationPage: React.FC = () => {
         const chartWithName = {
           ...currentChart,
           name: currentChart.name || selectedStock?.name || currentChart.ticker,
+          indicator: activeIndicator,
+          period: String(chartPeriod),
         };
         await session.signal({
           type: "chart:sync_state",
@@ -956,6 +968,14 @@ const VideoConsultationPage: React.FC = () => {
     const onSyncState = (e: any) => {
       const info = JSON.parse(e.data) as ChartInfo;
       setCurrentChart(info);
+      // Sync period and indicator states
+      if (info.period) {
+        setChartPeriod(parseInt(info.period));
+      }
+      if (info.indicator !== undefined) {
+        setActiveIndicator(info.indicator || "volume");
+      }
+      setShowStockChart(true);
     };
     session.on("signal:chart:sync_state", onSyncState);
     return () => {
@@ -982,6 +1002,26 @@ const VideoConsultationPage: React.FC = () => {
     session.on("signal:chart:drawingMode", onDrawingMode);
     return () => {
       session.off("signal:chart:drawingMode", onDrawingMode);
+    };
+  }, [session]);
+
+  // 지표 변경 시그널 수신 처리
+  useEffect(() => {
+    if (!session) return;
+    const onIndicatorChange = (e: any) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.indicator !== undefined) {
+          console.log("Received indicator signal:", msg.indicator);
+          setActiveIndicator(msg.indicator || "volume");
+        }
+      } catch (err) {
+        console.error("Failed to parse indicator signal:", err);
+      }
+    };
+    session.on("signal:chart:indicator", onIndicatorChange);
+    return () => {
+      session.off("signal:chart:indicator", onIndicatorChange);
     };
   }, [session]);
 
@@ -1499,11 +1539,15 @@ const VideoConsultationPage: React.FC = () => {
                       const newIndicator =
                         activeIndicator === "volume" ? null : "volume";
                       setActiveIndicator(newIndicator);
-                      if (session) {
+                      if (session && currentChart) {
+                        const info = {
+                          ...currentChart,
+                          indicator: newIndicator,
+                        };
                         session
                           .signal({
-                            type: "chart:indicator",
-                            data: JSON.stringify({ indicator: newIndicator }),
+                            type: "chart:change",
+                            data: JSON.stringify(info),
                           })
                           .catch(console.error);
                       }
@@ -1525,11 +1569,15 @@ const VideoConsultationPage: React.FC = () => {
                         const newIndicator =
                           activeIndicator === "rsi" ? null : "rsi";
                         setActiveIndicator(newIndicator);
-                        if (session) {
+                        if (session && currentChart) {
+                          const info = {
+                            ...currentChart,
+                            indicator: newIndicator,
+                          };
                           session
                             .signal({
-                              type: "chart:indicator",
-                              data: JSON.stringify({ indicator: newIndicator }),
+                              type: "chart:change",
+                              data: JSON.stringify(info),
                             })
                             .catch(console.error);
                         }
@@ -1594,11 +1642,15 @@ const VideoConsultationPage: React.FC = () => {
                         const newIndicator =
                           activeIndicator === "macd" ? null : "macd";
                         setActiveIndicator(newIndicator);
-                        if (session) {
+                        if (session && currentChart) {
+                          const info = {
+                            ...currentChart,
+                            indicator: newIndicator,
+                          };
                           session
                             .signal({
-                              type: "chart:indicator",
-                              data: JSON.stringify({ indicator: newIndicator }),
+                              type: "chart:change",
+                              data: JSON.stringify(info),
                             })
                             .catch(console.error);
                         }
@@ -1665,11 +1717,15 @@ const VideoConsultationPage: React.FC = () => {
                             ? null
                             : "stochastic";
                         setActiveIndicator(newIndicator);
-                        if (session) {
+                        if (session && currentChart) {
+                          const info = {
+                            ...currentChart,
+                            indicator: newIndicator,
+                          };
                           session
                             .signal({
-                              type: "chart:indicator",
-                              data: JSON.stringify({ indicator: newIndicator }),
+                              type: "chart:change",
+                              data: JSON.stringify(info),
                             })
                             .catch(console.error);
                         }
