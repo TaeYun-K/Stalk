@@ -192,9 +192,9 @@ const VideoConsultationPage: React.FC = () => {
   } | null>(null);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(true);
 
-  // 상담 관련 상태 - 초기값을 true로 설정하여 처음에 활성화 상태로 표시
-  const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
-  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
+  // 상담 관련 상태
+  const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const [showParticipants, setShowParticipants] = useState<boolean>(false);
   const [showChat, setShowChat] = useState<boolean>(false);
@@ -552,7 +552,7 @@ const VideoConsultationPage: React.FC = () => {
       const publisher = await openVidu.initPublisherAsync(undefined, {
         audioSource: undefined,
         videoSource: undefined,
-        publishAudio: true,  // 초기값을 true로 변경
+        publishAudio: false,
         publishVideo: true,
         ...DEFAULT_VIDEO_CONFIG,
       });
@@ -560,6 +560,21 @@ const VideoConsultationPage: React.FC = () => {
       // Publisher 스트림이 준비되면 발행
       publisher.on("streamCreated", () => {
         console.log("Publisher stream created");
+        // Publisher가 생성되면 실제 스트림 상태를 읽어와서 상태 업데이트
+        const stream = publisher.stream.getMediaStream();
+        if (stream) {
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          
+          // 실제 트랙 상태를 읽어와서 설정
+          const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+          const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+          
+          setIsVideoEnabled(videoEnabled);
+          setIsAudioEnabled(audioEnabled);
+          
+          console.log("Initial media state - Video:", videoEnabled, "Audio:", audioEnabled);
+        }
       });
 
       publisher.on("streamPlaying", () => {
@@ -646,6 +661,20 @@ const VideoConsultationPage: React.FC = () => {
     // 이미 publisher가 있다면 재시작하지 않음
     if (publisher) {
       console.log("Publisher already exists");
+      // 기존 publisher의 상태를 다시 읽어와서 동기화
+      const stream = publisher.stream?.getMediaStream();
+      if (stream) {
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+        
+        const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+        const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+        
+        setIsVideoEnabled(videoEnabled);
+        setIsAudioEnabled(audioEnabled);
+        
+        console.log("Synced existing publisher state - Video:", videoEnabled, "Audio:", audioEnabled);
+      }
       return;
     }
 
@@ -667,7 +696,15 @@ const VideoConsultationPage: React.FC = () => {
       return;
     }
 
-    const newVideoState = !isVideoEnabled;
+    // 실제 현재 상태를 먼저 확인
+    const stream = publisher.stream?.getMediaStream();
+    let currentVideoState = isVideoEnabled;
+    if (stream) {
+      const videoTracks = stream.getVideoTracks();
+      currentVideoState = videoTracks.length > 0 && videoTracks[0].enabled;
+    }
+    
+    const newVideoState = !currentVideoState;
 
     try {
       if (newVideoState) {
@@ -702,7 +739,15 @@ const VideoConsultationPage: React.FC = () => {
       return;
     }
 
-    const newAudioState = !isAudioEnabled;
+    // 실제 현재 상태를 먼저 확인
+    const stream = publisher.stream?.getMediaStream();
+    let currentAudioState = isAudioEnabled;
+    if (stream) {
+      const audioTracks = stream.getAudioTracks();
+      currentAudioState = audioTracks.length > 0 && audioTracks[0].enabled;
+    }
+    
+    const newAudioState = !currentAudioState;
 
     try {
       if (newAudioState) {
