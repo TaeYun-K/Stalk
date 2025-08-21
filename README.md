@@ -1,6 +1,8 @@
 # README
 
-# 📈 Stalk
+# <img src="assets/stalk.png" alt="로고" width=8%> Stalk
+
+<img src="assets/stalk.gif" alt="로고" width=80%>
 
 ## WebRTC 기반 화상 상담 차트 드로잉 서비스
 
@@ -47,7 +49,6 @@
   <img src="https://img.shields.io/badge/react-61DAFB?style=for-the-badge&logo=react&logoColor=000000">
   <img src="https://img.shields.io/badge/vite-646CFF?style=for-the-badge&logo=vite&logoColor=white">
   <img src="https://img.shields.io/badge/tailwind%20css-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white">
-  <img src="https://img.shields.io/badge/recoil-3578E5?style=for-the-badge&logo=recoil&logoColor=white">
   <img src="https://img.shields.io/badge/chart.js-FF6384?style=for-the-badge&logo=chartdotjs&logoColor=white">
   <img src="https://img.shields.io/badge/axios-5A29E4?style=for-the-badge&logo=axios&logoColor=white">
   <br/>
@@ -77,7 +78,7 @@
 
 - **언어**: TypeScript
 - **프레임워크**: React, Vite
-- **상태 관리**: Recoil
+- **상태 관리**: React Context API, React Hooks
 - **스타일링**: Tailwind CSS
 - **차트**: Chart.js (차트 호출 및 다양한 차트 구현)
 - **드로잉**: Konva.js (차트 위 실시간 드로잉)
